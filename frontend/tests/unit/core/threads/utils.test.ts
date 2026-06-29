@@ -81,8 +81,8 @@ test("derives user-visible work mode labels for thread titles", () => {
     workModeLabelOfThread({
       thread_id: "thread-custom",
       context: { workModeId: "research" },
-    }),
-  ).toBe("research");
+    }, [{ id: "research", name: "研究模式" }]),
+  ).toBe("研究模式");
 });
 
 test("prefixes display titles with the selected work mode without changing raw titles", () => {
@@ -93,4 +93,28 @@ test("prefixes display titles with the selected work mode without changing raw t
   };
 
   expect(displayTitleOfThread(thread)).toBe("[Coding 模式] 检查当前项目");
+});
+
+test("prefixes display titles with custom work mode names instead of ids", () => {
+  const thread = {
+    thread_id: "thread-stock",
+    values: { title: "当前工作模式下你有哪些技能" },
+    context: { workModeId: "stock-quant" },
+  };
+
+  expect(
+    displayTitleOfThread(thread, [{ id: "stock-quant", name: "股票量化" }]),
+  ).toBe("[股票量化] 当前工作模式下你有哪些技能");
+});
+
+test("does not expose custom work mode ids while mode names are unavailable", () => {
+  const thread = {
+    thread_id: "thread-stock",
+    values: { title: "当前工作模式下你有哪些技能" },
+    context: { workModeId: "stock-quant" },
+  };
+
+  expect(displayTitleOfThread(thread, [])).toBe(
+    "[自定义工作模式] 当前工作模式下你有哪些技能",
+  );
 });

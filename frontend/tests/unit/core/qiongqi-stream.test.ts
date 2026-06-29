@@ -346,11 +346,11 @@ describe("useQiongqiStream /v1 contract", () => {
     expect(output?.getAttribute("data-work-mode-id")).toBe("coding");
   });
 
-  test("keeps an existing thread bound to its original work mode when local settings differ", async () => {
+  test("updates an existing thread to the user-selected work mode before starting a turn", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "task" })))
       .mockResolvedValueOnce(sseResponse())
-      .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "task" })))
+      .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "coding" })))
       .mockResolvedValueOnce(
         jsonResponse(
           {
@@ -384,7 +384,7 @@ describe("useQiongqiStream /v1 contract", () => {
       await Promise.resolve();
     });
 
-    expect(output?.getAttribute("data-work-mode-id")).toBe("task");
+    expect(output?.getAttribute("data-work-mode-id")).toBe("coding");
 
     const updateThreadCall = fetchMock.mock.calls.find(
       ([url, init]) =>
@@ -396,6 +396,7 @@ describe("useQiongqiStream /v1 contract", () => {
       parseRequestBody(updateThreadCall?.[1] as RequestInit | undefined),
     ).toEqual({
       workspace: "/repo",
+      workModeId: "coding",
     });
 
     const startTurnCall = fetchMock.mock.calls.find(
@@ -407,7 +408,7 @@ describe("useQiongqiStream /v1 contract", () => {
     expect(
       parseRequestBody(startTurnCall?.[1] as RequestInit | undefined),
     ).toMatchObject({
-      workModeId: "task",
+      workModeId: "coding",
     });
   });
 

@@ -1,3 +1,5 @@
+import type { WorkMode } from "@/core/skills/type";
+import { workModeDisplayNameById } from "@/core/skills/work-modes";
 import type { AgentThreadContext } from "@/core/threads/types";
 
 export type HistoryTaskThread = {
@@ -16,13 +18,10 @@ export type HistoryTaskGroup<Thread extends HistoryTaskThread> = {
 
 const DEFAULT_WORK_MODE_ID = "task";
 const BUILTIN_WORK_MODE_ORDER = ["task", "coding"] as const;
-const WORK_MODE_LABELS: Record<string, string> = {
-  task: "日常办公",
-  coding: "Coding 模式",
-};
 
 export function groupHistoryTasksByWorkMode<Thread extends HistoryTaskThread>(
   threads: Thread[],
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
 ): Array<HistoryTaskGroup<Thread>> {
   const groups = new Map<string, Thread[]>();
   for (const thread of threads) {
@@ -31,10 +30,10 @@ export function groupHistoryTasksByWorkMode<Thread extends HistoryTaskThread>(
   }
 
   return [...groups.entries()]
-    .sort(([a], [b]) => compareWorkModeIds(a, b))
+    .sort(([a], [b]) => compareWorkModeIds(a, b, workModes))
     .map(([id, groupThreads]) => ({
       id,
-      label: historyTaskWorkModeLabel(id),
+      label: historyTaskWorkModeLabel(id, workModes),
       count: groupThreads.length,
       threads: [...groupThreads].sort(compareHistoryTasks),
     }));
@@ -47,11 +46,18 @@ export function historyTaskWorkModeId(thread: HistoryTaskThread): string {
     : DEFAULT_WORK_MODE_ID;
 }
 
-export function historyTaskWorkModeLabel(workModeId: string): string {
-  return WORK_MODE_LABELS[workModeId] ?? workModeId;
+export function historyTaskWorkModeLabel(
+  workModeId: string,
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
+): string {
+  return workModeDisplayNameById(workModeId, workModes) ?? workModeId;
 }
 
-function compareWorkModeIds(a: string, b: string): number {
+function compareWorkModeIds(
+  a: string,
+  b: string,
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
+): number {
   const aIndex = BUILTIN_WORK_MODE_ORDER.indexOf(
     a as (typeof BUILTIN_WORK_MODE_ORDER)[number],
   );
@@ -64,7 +70,9 @@ function compareWorkModeIds(a: string, b: string): number {
       (bIndex >= 0 ? bIndex : Number.MAX_SAFE_INTEGER)
     );
   }
-  return historyTaskWorkModeLabel(a).localeCompare(historyTaskWorkModeLabel(b));
+  return historyTaskWorkModeLabel(a, workModes).localeCompare(
+    historyTaskWorkModeLabel(b, workModes),
+  );
 }
 
 function compareHistoryTasks(

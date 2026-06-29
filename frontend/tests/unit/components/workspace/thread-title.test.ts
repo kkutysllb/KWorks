@@ -23,6 +23,32 @@ vi.mock("@/components/workspace/chats", () => ({
   useThreadChat: () => ({ isNewThread: false }),
 }));
 
+vi.mock("@/core/skills/hooks", () => ({
+  useWorkModes: () => ({
+    defaultModeId: "task",
+    lockedSkillIds: [],
+    isLoading: false,
+    error: null,
+    workModes: [
+      {
+        id: "task",
+        name: "日常办公",
+        skills: [],
+      },
+      {
+        id: "coding",
+        name: "Coding 模式",
+        skills: [],
+      },
+      {
+        id: "stock-quant",
+        name: "股票量化",
+        skills: [],
+      },
+    ],
+  }),
+}));
+
 vi.mock("@/components/workspace/flip-display", () => ({
   FlipDisplay: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -79,5 +105,27 @@ describe("ThreadTitle", () => {
     });
 
     expect(container.textContent).toBe("[Coding 模式] 检查当前项目");
+  });
+
+  test("prefixes custom work mode titles with the user-facing name", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        React.createElement(ThreadTitle, {
+          threadId: "thread-stock",
+          thread: streamWithValues({
+            title: "当前工作模式下你有哪些技能",
+            workModeId: "stock-quant",
+          }),
+        }),
+      );
+    });
+
+    expect(container.textContent).toBe(
+      "[股票量化] 当前工作模式下你有哪些技能",
+    );
   });
 });

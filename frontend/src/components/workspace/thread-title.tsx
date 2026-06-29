@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
+import { useWorkModes } from "@/core/skills/hooks";
 import type { AgentThreadState } from "@/core/threads";
 import type { BaseStream } from "@/core/threads/qiongqi-types";
 import { displayTitleOfThread } from "@/core/threads/utils";
@@ -18,11 +19,12 @@ export function ThreadTitle({
 }) {
   const { t } = useI18n();
   const { isNewThread } = useThreadChat();
+  const { workModes } = useWorkModes();
   const displayTitle = thread.values?.title
     ? displayTitleOfThread({
         values: thread.values,
         context: { workModeId: thread.values.workModeId },
-      })
+      }, workModes)
     : null;
 
   useEffect(() => {

@@ -138,6 +138,33 @@ describe('work mode skill runtime filtering', () => {
     expect(joinedInstructions).toContain('single-agent runtime')
   })
 
+  it('tells the model about custom user-created work modes', async () => {
+    const skillPluginHost = await SkillPluginHost.create(customConfig().skills)
+    let seenRequest: ModelRequest | undefined
+    const model: ModelClient = {
+      provider: 'fake',
+      model: 'fake',
+      async *stream(request) {
+        seenRequest = request
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const h = makeHarness(model, { skillPluginHost })
+    await bootstrapThread(h, {
+      workspace: root,
+      request: { prompt: 'what work mode am I using?', workModeId: 'stock-quant' }
+    })
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    const joinedInstructions = seenRequest?.contextInstructions?.join('\n') ?? ''
+    expect(joinedInstructions).toContain('Current Work Mode')
+    expect(joinedInstructions).toContain('id: stock-quant')
+    expect(joinedInstructions).toContain('name: 股票量化')
+    expect(joinedInstructions).toContain('Coding Skill (coding-skill)')
+    expect(joinedInstructions).not.toContain('Task Skill (task-skill)')
+  })
+
   function config() {
     return QiongqiCapabilitiesConfig.parse({
       skills: {
@@ -158,6 +185,36 @@ describe('work mode skill runtime filtering', () => {
               id: 'coding',
               name: 'Coding',
               builtin: true,
+              editable: true,
+              defaultSkillIds: ['coding-skill']
+            }
+          }
+        }
+      }
+    })
+  }
+
+  function customConfig() {
+    return QiongqiCapabilitiesConfig.parse({
+      skills: {
+        enabled: true,
+        roots: [root],
+        lockedSkillIds: [],
+        workModes: {
+          defaultModeId: 'task',
+          modes: {
+            task: {
+              id: 'task',
+              name: 'Task',
+              builtin: true,
+              editable: true,
+              defaultSkillIds: ['task-skill']
+            },
+            'stock-quant': {
+              id: 'stock-quant',
+              name: '股票量化',
+              description: '证券量化研究工作模式',
+              builtin: false,
               editable: true,
               defaultSkillIds: ['coding-skill']
             }

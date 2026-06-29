@@ -48,6 +48,7 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import type { Project } from "@/core/projects";
 import { useProjects } from "@/core/projects";
+import { useWorkModes } from "@/core/skills/hooks";
 import {
   exportThreadAsJSON,
   exportThreadAsMarkdown,
@@ -138,6 +139,7 @@ export function HistoryTaskList() {
   const agentNameFromPath = parseAgentNameFromPath(pathname);
   const { data: threads = [] } = useThreads();
   const { projects } = useProjects();
+  const { workModes } = useWorkModes();
   const routableThreads = withCodingProjectRoutes(threads, projects);
   const { mutate: deleteThread } = useDeleteThread();
   const { mutate: renameThread } = useRenameThread();
@@ -250,7 +252,7 @@ export function HistoryTaskList() {
   if (threads.length === 0) {
     return null;
   }
-  const taskGroups = groupHistoryTasksByWorkMode(routableThreads);
+  const taskGroups = groupHistoryTasksByWorkMode(routableThreads, workModes);
   return (
     <>
       <SidebarGroup>

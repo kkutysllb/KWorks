@@ -753,8 +753,8 @@ export function InputBox({
               {selectedWorkModeLabel}
             </span>
           </span>
-          <span className="bg-background text-muted-foreground shrink-0 rounded-md border px-2 py-0.5 font-mono">
-            {workModeId}
+          <span className="bg-background text-muted-foreground shrink-0 rounded-md border px-2 py-0.5">
+            当前模式
           </span>
         </div>
       )}

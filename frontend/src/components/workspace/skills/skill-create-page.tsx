@@ -21,7 +21,6 @@ import { useCreateSkill, useWorkModes } from "@/core/skills/hooks";
 import type {
   SkillCreateRequest,
   SkillCreateResponse,
-  WorkMode,
 } from "@/core/skills/type";
 import { orderedWorkModes, workModeDisplayName } from "@/core/skills/work-modes";
 import { cn } from "@/lib/utils";

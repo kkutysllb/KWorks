@@ -1,3 +1,6 @@
+import type { WorkMode } from "@/core/skills/type";
+import { workModeDisplayNameById } from "@/core/skills/work-modes";
+
 import type { Message } from "./qiongqi-types";
 import type { AgentThreadContext } from "./types";
 
@@ -58,17 +61,14 @@ export function textOfMessage(message: Message) {
   return null;
 }
 
-const WORK_MODE_LABELS: Record<string, string> = {
-  task: "日常办公",
-  coding: "Coding 模式",
-};
-
 export function workModeLabelOfThread<
   Thread extends { context?: Pick<AgentThreadContext, "workModeId"> | null },
->(thread: Thread) {
+>(
+  thread: Thread,
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
+) {
   const workModeId = thread.context?.workModeId?.trim();
-  if (!workModeId) return null;
-  return WORK_MODE_LABELS[workModeId] ?? workModeId;
+  return workModeDisplayNameById(workModeId, workModes);
 }
 
 export function titleOfThread<Thread extends Pick<ThreadTitleTarget, "values">>(
@@ -79,8 +79,9 @@ export function titleOfThread<Thread extends Pick<ThreadTitleTarget, "values">>(
 
 export function displayTitleOfThread<Thread extends ThreadTitleTarget>(
   thread: Thread,
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
 ) {
-  const workModeLabel = workModeLabelOfThread(thread);
+  const workModeLabel = workModeLabelOfThread(thread, workModes);
   const title = titleOfThread(thread);
   return workModeLabel ? `[${workModeLabel}] ${title}` : title;
 }

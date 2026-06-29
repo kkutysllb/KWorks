@@ -63,18 +63,30 @@ function renderPage() {
 }
 
 function setField(container: HTMLElement, name: string, value: string) {
-  const field = container.querySelector(`[name="${name}"]`) as
-    | HTMLInputElement
-    | HTMLTextAreaElement
-    | null;
-  expect(field).not.toBeNull();
+  const field = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `[name="${name}"]`,
+  );
+  if (!field) {
+    throw new Error(`Missing field: ${name}`);
+  }
+  const valueDescriptor = Object.getOwnPropertyDescriptor(
+    field instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype,
+    "value",
+  );
+  const setValue = Reflect.get(
+    valueDescriptor ?? {},
+    "set",
+  ) as
+    | ((this: HTMLInputElement | HTMLTextAreaElement, value: string) => void)
+    | undefined;
+  if (!setValue) {
+    throw new Error(`Missing value setter for field: ${name}`);
+  }
   act(() => {
-    const setter = Object.getOwnPropertyDescriptor(
-      field!.constructor.prototype,
-      "value",
-    )?.set;
-    setter?.call(field, value);
-    field!.dispatchEvent(new Event("input", { bubbles: true }));
+    Reflect.apply(setValue, field, [value]);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 

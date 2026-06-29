@@ -13,6 +13,7 @@ import {
   WorkspaceHeader,
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
+import { useWorkModes } from "@/core/skills/hooks";
 import { useThreads } from "@/core/threads/hooks";
 import {
   displayTitleOfThread,
@@ -24,6 +25,7 @@ import { formatTimeAgo } from "@/core/utils/datetime";
 export default function ChatsPage() {
   const { t } = useI18n();
   const { data: threads, isLoading } = useThreads();
+  const { workModes } = useWorkModes();
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -137,7 +139,7 @@ export default function ChatsPage() {
                   </div>
                 ) : (
                   filteredThreads?.map((thread) => {
-                    const displayTitle = displayTitleOfThread(thread);
+                    const displayTitle = displayTitleOfThread(thread, workModes);
                     const agentName = thread.metadata?.agent_name as string | undefined;
                     return (
                       <Link

@@ -939,16 +939,23 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         return activeThreadId;
       }
 
-      if (workspaceRoot !== ".") {
+      const currentWorkModeId = workModeIdRef.current;
+      const shouldUpdateWorkspace = workspaceRoot !== ".";
+      const shouldUpdateWorkMode =
+        requestedWorkModeId !== undefined &&
+        requestedWorkModeId !== currentWorkModeId;
+
+      if (shouldUpdateWorkspace || shouldUpdateWorkMode) {
         const previousWorkModeId = workModeIdRef.current;
         const updatedThread = await qiongqiClient.updateThread(activeThreadId, {
-          workspace: workspaceRoot,
+          ...(shouldUpdateWorkspace ? { workspace: workspaceRoot } : {}),
+          ...(shouldUpdateWorkMode ? { workModeId: requestedWorkModeId } : {}),
         });
         workModeIdRef.current =
           typeof updatedThread.workModeId === "string" &&
           updatedThread.workModeId.trim()
             ? updatedThread.workModeId.trim()
-            : previousWorkModeId;
+            : (requestedWorkModeId ?? previousWorkModeId);
         syncState();
       }
 

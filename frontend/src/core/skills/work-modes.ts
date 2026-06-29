@@ -41,6 +41,18 @@ export function workModeDisplayName(mode: Pick<WorkMode, "id" | "name">) {
   return mode.name || mode.id;
 }
 
+export function workModeDisplayNameById(
+  workModeId: string | null | undefined,
+  workModes?: readonly Pick<WorkMode, "id" | "name">[],
+): string | null {
+  const id = workModeId?.trim();
+  if (!id) return null;
+  const mode =
+    workModes?.find((candidate) => candidate.id === id) ??
+    SYSTEM_WORK_MODES.find((candidate) => candidate.id === id);
+  return mode ? workModeDisplayName(mode) : "自定义工作模式";
+}
+
 function workModeOrder(mode: Pick<WorkMode, "id">): number {
   if (mode.id === "task") return 0;
   if (mode.id === "coding") return 1;
