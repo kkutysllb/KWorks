@@ -1,3 +1,4 @@
+**中文**: [README.zh.md](./README.zh.md)
 
 <p align="center">
   <picture>
