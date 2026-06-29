@@ -167,6 +167,43 @@ describe('HTTP server', () => {
     expect(listed.models[0]?.api_key).not.toBe('sk-test-secret')
   })
 
+  it('maps legacy supports_vision requests to multimodal QiongQi profile capabilities', async () => {
+    const h = buildHarness()
+    const createResponse = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/models', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'legacy-camera',
+          model: 'custom-legacy-camera-model',
+          base_url: 'https://api.openai.com/v1',
+          api_key: 'sk-legacy-vision',
+          supports_vision: true
+        })
+      })
+    )
+    expect(createResponse.status).toBe(201)
+    const created = await readJson(createResponse) as {
+      input_modalities?: string[]
+      output_modalities?: string[]
+      message_parts?: string[]
+      supports_vision?: boolean
+    }
+    expect(created.input_modalities).toEqual(['text', 'image'])
+    expect(created.output_modalities).toEqual(['text'])
+    expect(created.message_parts).toEqual(['text', 'image_url'])
+    expect(created.supports_vision).toBe(true)
+
+    const stored = await h.runtime.configStore?.read()
+    expect(stored?.models?.profiles?.['legacy-camera']).toMatchObject({
+      providerModel: 'custom-legacy-camera-model',
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      messageParts: ['text', 'image_url']
+    })
+  })
+
   it('activates a model profile as the QiongQi runtime default model', async () => {
     const h = buildHarness()
     const createResponse = await dispatchRequest(

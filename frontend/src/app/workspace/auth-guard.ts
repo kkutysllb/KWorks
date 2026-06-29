@@ -15,6 +15,7 @@ export async function resolveWorkspaceGuardState(input: {
   try {
     const meRes = await fetchImpl(`${input.baseUrl}/api/v1/auth/me`, {
       headers: input.token ? { Authorization: `Bearer ${input.token}` } : undefined,
+      credentials: "include",
       cache: "no-store",
     });
 

@@ -25,8 +25,12 @@ import {
   resolveWorkModeDefaultSkillIds
 } from '@qiongqi/skills'
 import { bearerToken } from '../auth.js'
-import { AuthError, authSessionBody, type AuthActor } from '../auth-service.js'
+import { AuthError, authSessionBody, type AuthActor, type AuthSession } from '../auth-service.js'
 import { deriveThreadTitle, isDefaultThreadTitle } from '@qiongqi/domain'
+import {
+  VISION_MODEL_CAPABILITY_DEFAULTS,
+  inferModelCapabilityDefaults
+} from '@qiongqi/loop'
 
 const execFileAsync = promisify(execFile)
 
@@ -326,7 +330,7 @@ export async function kworksAuthLogin(runtime: ServerRuntime, request: Request):
   try {
     const email = stringValue(body.value.email) ?? stringValue(body.value.username) ?? ''
     const password = stringValue(body.value.password) ?? ''
-    return jsonResponse(authSessionBody(await runtime.authService.login({ email, password })))
+    return authSessionResponse(await runtime.authService.login({ email, password }))
   } catch (error) {
     return authErrorResponse(error)
   }
@@ -340,7 +344,7 @@ export async function kworksAuthRegister(runtime: ServerRuntime, request: Reques
   try {
     const email = stringValue(body.value.email) ?? stringValue(body.value.username) ?? ''
     const password = stringValue(body.value.password) ?? ''
-    return jsonResponse(authSessionBody(await runtime.authService.register({ email, password })))
+    return authSessionResponse(await runtime.authService.register({ email, password }))
   } catch (error) {
     return authErrorResponse(error)
   }
@@ -354,7 +358,7 @@ export async function kworksAuthInitialize(runtime: ServerRuntime, request: Requ
   try {
     const email = stringValue(body.value.email) ?? stringValue(body.value.username) ?? ''
     const password = stringValue(body.value.password) ?? ''
-    return jsonResponse(authSessionBody(await runtime.authService.initialize({ email, password })))
+    return authSessionResponse(await runtime.authService.initialize({ email, password }))
   } catch (error) {
     return authErrorResponse(error)
   }
@@ -366,7 +370,62 @@ export async function kworksAuthMe(actor: AuthActor): Promise<JsonResponse> {
 
 export async function kworksAuthLogout(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
   await runtime.authService?.logout(bearerToken(request.headers))
-  return jsonResponse({ success: true })
+  // Clear the auth cookies on logout (Web mode).
+  return {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'set-cookie': [
+        clearAuthCookie('access_token'),
+        clearAuthCookie('csrf_token')
+      ]
+    },
+    body: JSON.stringify({ success: true })
+  }
+}
+
+/**
+ * Build a JsonResponse for a successful auth session, setting both the
+ * HttpOnly ``access_token`` cookie (for browser/SSR requests) and the
+ * JS-readable ``csrf_token`` cookie (for the Double Submit Cookie pattern
+ * enforced by the frontend's fetcher wrapper).
+ *
+ * The desktop Electron client ignores these cookies and reads the token
+ * from the JSON body via ``data.access_token`` — both transport paths
+ * are served by the same response.
+ */
+function authSessionResponse(session: AuthSession): JsonResponse {
+  const body = authSessionBody(session)
+  const maxAge = Math.floor(session.expiresIn)
+  return {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'set-cookie': [
+        bakeAuthCookie('access_token', session.accessToken, { httpOnly: true, maxAge }),
+        bakeAuthCookie('csrf_token', session.accessToken, { httpOnly: false, maxAge })
+      ]
+    },
+    body: JSON.stringify(body)
+  }
+}
+
+/** Serialize a Set-Cookie value with sane defaults for the auth cookies. */
+function bakeAuthCookie(name: string, value: string, opts: { httpOnly: boolean; maxAge: number }): string {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    `Max-Age=${opts.maxAge}`,
+    'SameSite=Lax',
+    'Secure=false'
+  ]
+  if (opts.httpOnly) parts.push('HttpOnly')
+  return parts.join('; ')
+}
+
+/** Serialize a Set-Cookie value that immediately expires the cookie. */
+function clearAuthCookie(name: string): string {
+  return `${name}=; Path=/; Max-Age=0; SameSite=Lax; Secure=false`
 }
 
 export async function kworksAuthChangePassword(runtime: ServerRuntime, request: Request, actor: AuthActor): Promise<JsonResponse | Response> {
@@ -2303,6 +2362,15 @@ function modelFromProfile(
   profile: NonNullable<NonNullable<QiongqiConfig['models']>['profiles']>[string],
   config: QiongqiConfig
 ): Record<string, unknown> {
+  const inferred = inferModelCapabilityDefaults(
+    typeof profile.providerModel === 'string' && profile.providerModel.trim()
+      ? profile.providerModel
+      : name,
+    [name, ...(Array.isArray(profile.aliases) ? profile.aliases : [])]
+  )
+  const inputModalities = profile.inputModalities ?? inferred.inputModalities
+  const outputModalities = profile.outputModalities ?? inferred.outputModalities
+  const messageParts = profile.messageParts ?? inferred.messageParts
   return {
     id: name,
     name,
@@ -2317,11 +2385,11 @@ function modelFromProfile(
     aliases: profile.aliases ?? [],
     context_window_tokens: profile.contextWindowTokens ?? null,
     context_compaction: profile.contextCompaction ?? null,
-    input_modalities: profile.inputModalities ?? ['text'],
-    output_modalities: profile.outputModalities ?? ['text'],
+    input_modalities: inputModalities,
+    output_modalities: outputModalities,
     supports_tool_calling: profile.supportsToolCalling ?? true,
-    message_parts: profile.messageParts ?? ['text'],
-    supports_vision: profile.inputModalities?.includes('image') ?? false,
+    message_parts: messageParts,
+    supports_vision: inputModalities.includes('image'),
     supports_thinking: true,
     supports_reasoning_effort: true,
     reasoning_effort_values: ['auto', 'off', 'low', 'medium', 'high', 'max']
@@ -2342,17 +2410,21 @@ async function upsertModelProfile(
   const outputModalities = stringList(value.outputModalities) ?? stringList(value.output_modalities)
   const messageParts = stringList(value.messageParts) ?? stringList(value.message_parts)
   const supportsToolCalling = booleanValue(value.supportsToolCalling) ?? booleanValue(value.supports_tool_calling)
+  const supportsVision = booleanValue(value.supportsVision) ?? booleanValue(value.supports_vision)
   const contextWindowTokens = numberValue(value.contextWindowTokens) ?? numberValue(value.context_window_tokens)
+  const inferred = supportsVision
+    ? VISION_MODEL_CAPABILITY_DEFAULTS
+    : inferModelCapabilityDefaults(modelId, [name])
   const profile = {
     ...existing,
     ...(stringList(value.aliases) ? { aliases: stringList(value.aliases) } : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
     ...(isObject(value.contextCompaction) ? { contextCompaction: value.contextCompaction } : {}),
     ...(isObject(value.context_compaction) ? { contextCompaction: value.context_compaction } : {}),
-    ...(inputModalities ? { inputModalities } : {}),
-    ...(outputModalities ? { outputModalities } : {}),
+    ...(inputModalities ? { inputModalities } : supportsVision ? { inputModalities: inferred.inputModalities } : {}),
+    ...(outputModalities ? { outputModalities } : supportsVision ? { outputModalities: inferred.outputModalities } : {}),
     ...(supportsToolCalling !== undefined ? { supportsToolCalling } : {}),
-    ...(messageParts ? { messageParts } : {}),
+    ...(messageParts ? { messageParts } : supportsVision ? { messageParts: inferred.messageParts } : {}),
     providerModel: modelId,
     ...(typeof value.baseUrl === 'string' || typeof value.base_url === 'string'
       ? { baseUrl: stringValue(value.baseUrl) ?? stringValue(value.base_url) }

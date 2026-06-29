@@ -589,6 +589,91 @@ describe('cli', () => {
     expect(model.messageParts).toEqual(['text', 'image_url'])
   })
 
+  it('derives general model thresholds from context windows without manual profile tuning', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'ordinary-128k': {
+            contextWindowTokens: 128_000
+          }
+        }
+      }
+    })
+    const profile = profiles.find((candidate) => candidate.canonicalModel === 'ordinary-128k')
+
+    expect(profile?.softThreshold).toBe(102_400)
+    expect(profile?.hardThreshold).toBe(115_200)
+  })
+
+  it('keeps custom profiles usable when ordinary users leave advanced context fields blank', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'custom-provider-model': {}
+        }
+      }
+    })
+    const profile = profiles.find((candidate) => candidate.canonicalModel === 'custom-provider-model')
+
+    expect(profile?.contextWindowTokens).toBe(24_000)
+    expect(profile?.softThreshold).toBe(16_000)
+    expect(profile?.hardThreshold).toBe(24_000)
+    expect(modelCapabilitiesForModel('custom-provider-model', profiles)).toMatchObject({
+      inputModalities: ['text'],
+      messageParts: ['text']
+    })
+  })
+
+  it('infers known model context windows when advanced fields are left blank', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'gpt-4o': {}
+        }
+      }
+    })
+    const profile = profiles.find((candidate) => candidate.canonicalModel === 'gpt-4o')
+
+    expect(profile?.contextWindowTokens).toBe(128_000)
+    expect(profile?.softThreshold).toBe(102_400)
+    expect(profile?.hardThreshold).toBe(115_200)
+    expect(modelCapabilitiesForModel('gpt-4o', profiles)).toMatchObject({
+      inputModalities: ['text', 'image'],
+      messageParts: ['text', 'image_url']
+    })
+  })
+
+  it('infers multimodal capability defaults for known vision model ids', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'gpt-4o': {
+            contextWindowTokens: 128_000
+          },
+          'claude-3-5-sonnet': {
+            contextWindowTokens: 200_000
+          },
+          'plain-coding-model': {
+            contextWindowTokens: 64_000
+          }
+        }
+      }
+    })
+
+    expect(modelCapabilitiesForModel('gpt-4o', profiles)).toMatchObject({
+      inputModalities: ['text', 'image'],
+      messageParts: ['text', 'image_url']
+    })
+    expect(modelCapabilitiesForModel('claude-3-5-sonnet', profiles)).toMatchObject({
+      inputModalities: ['text', 'image'],
+      messageParts: ['text', 'image_url']
+    })
+    expect(modelCapabilitiesForModel('plain-coding-model', profiles)).toMatchObject({
+      inputModalities: ['text'],
+      messageParts: ['text']
+    })
+  })
+
   it('keeps legacy contextCompaction model profiles as a compatibility path', () => {
     const profiles = modelContextProfilesFromConfig({
       contextCompaction: {

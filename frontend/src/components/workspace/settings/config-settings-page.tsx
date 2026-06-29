@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   BoxIcon,
   BrainIcon,
+  ChevronDownIcon,
   CpuIcon,
   DatabaseIcon,
   GlobeIcon,
@@ -17,6 +18,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -149,14 +155,39 @@ const nav: Array<{
   path: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "models", label: "模型 Profiles", path: "models.profiles", icon: CpuIcon },
-  { id: "contextCompaction", label: "上下文压缩", path: "contextCompaction", icon: BrainIcon },
+  {
+    id: "models",
+    label: "模型 Profiles",
+    path: "models.profiles",
+    icon: CpuIcon,
+  },
+  {
+    id: "contextCompaction",
+    label: "上下文压缩",
+    path: "contextCompaction",
+    icon: BrainIcon,
+  },
   { id: "storage", label: "存储", path: "serve.storage", icon: DatabaseIcon },
-  { id: "observability", label: "观测", path: "serve.observability", icon: RadioTowerIcon },
+  {
+    id: "observability",
+    label: "观测",
+    path: "serve.observability",
+    icon: RadioTowerIcon,
+  },
   { id: "mcp", label: "MCP", path: "capabilities.mcp", icon: NetworkIcon },
   { id: "web", label: "Web 能力", path: "capabilities.web", icon: GlobeIcon },
-  { id: "skills", label: "技能", path: "capabilities.skills", icon: SparklesIcon },
-  { id: "subagents", label: "智能体协作", path: "capabilities.subagents", icon: BoxIcon },
+  {
+    id: "skills",
+    label: "技能",
+    path: "capabilities.skills",
+    icon: SparklesIcon,
+  },
+  {
+    id: "subagents",
+    label: "智能体协作",
+    path: "capabilities.subagents",
+    icon: BoxIcon,
+  },
 ];
 
 const labelCls = "text-sm font-medium leading-none";
@@ -182,7 +213,9 @@ export function ConfigSettingsPage({
 }: ConfigSettingsPageProps = {}) {
   const queryClient = useQueryClient();
   const [active, setActive] = useState<ConfigPage>(initialPage);
-  const [config, setConfig] = useState<QiongqiConfig>(() => clone(DEFAULT_CONFIG));
+  const [config, setConfig] = useState<QiongqiConfig>(() =>
+    clone(DEFAULT_CONFIG),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirtySections, setDirtySections] = useState<Set<ConfigPage>>(
@@ -194,7 +227,9 @@ export function ConfigSettingsPage({
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setConfig(mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig));
+      setConfig(
+        mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig),
+      );
       setDirtySections(new Set());
       onWriteStatusChange?.({ kind: "idle" });
     } catch (error) {
@@ -273,10 +308,13 @@ export function ConfigSettingsPage({
       if (version !== saveVersionRef.current) return;
       onWriteStatusChange?.({
         kind: "error",
-        message: error instanceof Error ? error.message : "配置保存失败，已重新加载",
+        message:
+          error instanceof Error ? error.message : "配置保存失败，已重新加载",
       });
       try {
-        setConfig(mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig));
+        setConfig(
+          mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig),
+        );
         setDirtySections(new Set());
       } catch {
         // Keep the original write error visible in the settings header.
@@ -312,14 +350,20 @@ export function ConfigSettingsPage({
     await refresh();
   }
 
-  const updateServeNested = (key: "storage" | "observability", value: unknown) => {
+  const updateServeNested = (
+    key: "storage" | "observability",
+    value: unknown,
+  ) => {
     const section: ConfigPage = key === "storage" ? "storage" : "observability";
     updateConfigDraft(section, (prev) => ({
       ...prev,
       serve: { ...(prev.serve ?? {}), [key]: value },
     }));
   };
-  const updateCapability = (key: keyof NonNullable<QiongqiConfig["capabilities"]>, value: unknown) => {
+  const updateCapability = (
+    key: keyof NonNullable<QiongqiConfig["capabilities"]>,
+    value: unknown,
+  ) => {
     updateConfigDraft(key, (prev) => ({
       ...prev,
       capabilities: { ...(prev.capabilities ?? {}), [key]: value },
@@ -355,14 +399,7 @@ export function ConfigSettingsPage({
         ...(prev.models ?? {}),
         profiles: {
           ...(prev.models?.profiles ?? {}),
-          [name]: {
-            providerModel: name,
-            inputModalities: ["text"],
-            outputModalities: ["text"],
-            supportsToolCalling: true,
-            messageParts: ["text"],
-            endpointFormat: "openai_compatible",
-          },
+          [name]: normalizeNewModelProfile(),
         },
       },
     }));
@@ -375,7 +412,10 @@ export function ConfigSettingsPage({
       ([name]) => name !== currentModelName,
     );
     const nextProfiles = Object.fromEntries(entries);
-    const nextActive = activeModelName === currentModelName ? firstKey(nextProfiles) : activeModelName;
+    const nextActive =
+      activeModelName === currentModelName
+        ? firstKey(nextProfiles)
+        : activeModelName;
     updateConfigDraft("models", (prev) => ({
       ...prev,
       serve: withOptionalModel(prev.serve, nextActive),
@@ -389,11 +429,14 @@ export function ConfigSettingsPage({
       case "models":
         return (
           <Section title="模型 Profiles" path="models.profiles">
-            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+            <div className="bg-muted/20 grid gap-3 rounded-lg border p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="grid min-w-0 flex-1 gap-2">
-                  <label className={labelCls}>Profile</label>
-                  <Select value={currentModelName} onValueChange={setSelectedProfile}>
+                  <label className={labelCls}>当前模型配置</label>
+                  <Select
+                    value={currentModelName}
+                    onValueChange={setSelectedProfile}
+                  >
                     <SelectTrigger className="w-full min-w-0">
                       <SelectValue placeholder="选择模型 profile" />
                     </SelectTrigger>
@@ -406,7 +449,13 @@ export function ConfigSettingsPage({
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={addProfile}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={addProfile}
+                >
                   添加 Profile
                 </Button>
                 <Button
@@ -414,53 +463,75 @@ export function ConfigSettingsPage({
                   size="sm"
                   variant="outline"
                   className="shrink-0"
-                  disabled={!currentModelName || Object.keys(profiles).length <= 1}
+                  disabled={
+                    !currentModelName || Object.keys(profiles).length <= 1
+                  }
                   onClick={deleteProfile}
                 >
                   删除 Profile
                 </Button>
               </div>
               <div className="grid gap-2">
-                <label className={labelCls}>profile key</label>
+                <label className={labelCls}>模型名称</label>
                 <Input
                   value={currentModelName}
                   onChange={(event) => {
-                    const renamed = renameProfile(config, currentModelName, event.target.value);
+                    const renamed = renameProfile(
+                      config,
+                      currentModelName,
+                      event.target.value,
+                    );
                     if (!renamed) return;
                     setSelectedProfile(renamed.name);
                     updateConfigDraft("models", () => renamed.config);
                   }}
                   className="font-mono"
                 />
+                <p className={hintCls}>
+                  用于在 KWorks 内识别这条模型配置，不会改变服务商侧真实模型
+                  ID。
+                </p>
               </div>
             </div>
             <FieldGrid>
-              <TextField label="providerModel" value={str(currentModel.providerModel)} onChange={(v) => updateModel("providerModel", v)} />
-              <TextField label="baseUrl" value={str(currentModel.baseUrl)} onChange={(v) => updateModel("baseUrl", v)} />
-              <TextField label="apiKey" value={str(currentModel.apiKey)} onChange={(v) => updateModel("apiKey", v)} />
+              <TextField
+                label="模型 ID"
+                value={str(currentModel.providerModel)}
+                onChange={(v) => updateModel("providerModel", v)}
+              />
+              <TextField
+                label="服务地址"
+                value={str(currentModel.baseUrl)}
+                onChange={(v) => updateModel("baseUrl", v)}
+              />
+              <TextField
+                label="API Key"
+                value={str(currentModel.apiKey)}
+                onChange={(v) => updateModel("apiKey", v)}
+              />
               <SelectField
-                label="协议类型"
+                label="服务商协议"
                 value={protocolValue(currentModel.endpointFormat)}
-                options={["openai_compatible", "anthropic_compatible", "responses"]}
+                options={[
+                  "openai_compatible",
+                  "anthropic_compatible",
+                  "responses",
+                ]}
                 optionLabels={{
-                  openai_compatible: "OpenAI 兼容协议 - 后端会按协议自动拼接 /v1/chat/completions",
-                  anthropic_compatible: "Anthropic 兼容协议 - 后端会按协议自动拼接 /v1/messages",
-                  responses: "OpenAI Responses API - 后端会按协议自动拼接 /v1/responses",
+                  openai_compatible: "OpenAI 兼容",
+                  anthropic_compatible: "Anthropic 兼容",
+                  responses: "OpenAI Responses",
                 }}
                 onChange={(v) => updateModel("endpointFormat", v)}
               />
               <p className="text-muted-foreground text-xs md:col-span-2">
-                baseUrl 可填写服务根地址或完整接口地址；后端会按协议自动拼接或替换为对应端点。
-                智谱 GLM-5.2/GLM-5 Coding Plan 模型会自动切换到 BigModel/Z.ai 的 coding 或 Anthropic 专用端点。
+                服务地址可填写服务根地址或完整接口地址；后端会按协议自动拼接对应端点。模型能力、图片输入格式和上下文压缩会优先使用内置模型画像。
               </p>
-              <NumberField label="contextWindowTokens" value={num(currentModel.contextWindowTokens)} onChange={(v) => updateModel("contextWindowTokens", v)} />
             </FieldGrid>
-            <ToggleField label="supportsToolCalling" checked={bool(currentModel.supportsToolCalling)} onChange={(v) => updateModel("supportsToolCalling", v)} />
-            <ListField label="aliases" value={stringArray(currentModel.aliases)} onChange={(v) => updateModel("aliases", v)} />
-            <ListField label="inputModalities" value={stringArray(currentModel.inputModalities)} onChange={(v) => updateModel("inputModalities", v)} />
-            <ListField label="outputModalities" value={stringArray(currentModel.outputModalities)} onChange={(v) => updateModel("outputModalities", v)} />
-            <ListField label="messageParts" value={stringArray(currentModel.messageParts)} onChange={(v) => updateModel("messageParts", v)} />
-            <JsonEditor label="contextCompaction" value={currentModel.contextCompaction ?? {}} onChange={(v) => updateModel("contextCompaction", v)} />
+            <AdvancedModelProfileFields
+              model={currentModel}
+              onChange={updateModel}
+            />
           </Section>
         );
       case "contextCompaction":
@@ -477,27 +548,84 @@ export function ConfigSettingsPage({
               ["summaryMaxTokens", "number"],
               ["summaryInputMaxBytes", "number"],
             ]}
-            onChange={(value) => updateConfigDraft("contextCompaction", (prev) => ({ ...prev, contextCompaction: value }))}
+            onChange={(value) =>
+              updateConfigDraft("contextCompaction", (prev) => ({
+                ...prev,
+                contextCompaction: value,
+              }))
+            }
           />
         );
       case "storage":
         return (
           <Section title="存储" path="serve.storage">
-            <SelectField label="backend" value={str((merged.serve?.storage as JsonObject)?.backend)} options={["hybrid", "file"]} onChange={(v) => updateServeNested("storage", { ...(asObject(merged.serve?.storage)), backend: v })} />
-            <TextField label="sqlitePath" value={str((merged.serve?.storage as JsonObject)?.sqlitePath)} onChange={(v) => updateServeNested("storage", { ...(asObject(merged.serve?.storage)), sqlitePath: v })} />
-            <JsonEditor label="完整 serve.storage" value={merged.serve?.storage ?? {}} onChange={(v) => updateServeNested("storage", v)} />
+            <SelectField
+              label="backend"
+              value={str((merged.serve?.storage as JsonObject)?.backend)}
+              options={["hybrid", "file"]}
+              onChange={(v) =>
+                updateServeNested("storage", {
+                  ...asObject(merged.serve?.storage),
+                  backend: v,
+                })
+              }
+            />
+            <TextField
+              label="sqlitePath"
+              value={str((merged.serve?.storage as JsonObject)?.sqlitePath)}
+              onChange={(v) =>
+                updateServeNested("storage", {
+                  ...asObject(merged.serve?.storage),
+                  sqlitePath: v,
+                })
+              }
+            />
+            <JsonEditor
+              label="完整 serve.storage"
+              value={merged.serve?.storage ?? {}}
+              onChange={(v) => updateServeNested("storage", v)}
+            />
           </Section>
         );
       case "observability":
-        return <JsonOnlySection title="观测" path="serve.observability" value={merged.serve?.observability ?? {}} onChange={(value) => updateServeNested("observability", value)} />;
+        return (
+          <JsonOnlySection
+            title="观测"
+            path="serve.observability"
+            value={merged.serve?.observability ?? {}}
+            onChange={(value) => updateServeNested("observability", value)}
+          />
+        );
       case "mcp":
-        return <CapabilityMcp value={merged.capabilities?.mcp ?? {}} onChange={(value) => updateCapability("mcp", value)} />;
+        return (
+          <CapabilityMcp
+            value={merged.capabilities?.mcp ?? {}}
+            onChange={(value) => updateCapability("mcp", value)}
+          />
+        );
       case "web":
-        return <CapabilityWeb value={merged.capabilities?.web ?? {}} onChange={(value) => updateCapability("web", value)} />;
+        return (
+          <CapabilityWeb
+            value={merged.capabilities?.web ?? {}}
+            onChange={(value) => updateCapability("web", value)}
+          />
+        );
       case "skills":
-        return <JsonOnlySection title="技能" path="capabilities.skills" value={merged.capabilities?.skills ?? {}} onChange={(value) => updateCapability("skills", value)} />;
+        return (
+          <JsonOnlySection
+            title="技能"
+            path="capabilities.skills"
+            value={merged.capabilities?.skills ?? {}}
+            onChange={(value) => updateCapability("skills", value)}
+          />
+        );
       case "subagents":
-        return <CapabilitySubagents value={merged.capabilities?.subagents ?? {}} onChange={(value) => updateCapability("subagents", value)} />;
+        return (
+          <CapabilitySubagents
+            value={merged.capabilities?.subagents ?? {}}
+            onChange={(value) => updateCapability("subagents", value)}
+          />
+        );
     }
   })();
 
@@ -511,7 +639,8 @@ export function ConfigSettingsPage({
           <div className="min-w-0">
             <h3 className="text-base font-semibold">QiongQi 引擎配置</h3>
             <p className="text-muted-foreground text-xs">
-              直接读写 QiongqiConfigSchema 的用户可操作项；模型选择会自动切换运行时核心。
+              直接读写 QiongqiConfigSchema
+              的用户可操作项；模型选择会自动切换运行时核心。
             </p>
           </div>
         </div>
@@ -534,7 +663,12 @@ export function ConfigSettingsPage({
             {saving ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
             保存当前分组
           </Button>
-          <Button size="sm" variant="outline" onClick={refresh} disabled={loading || saving}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            disabled={loading || saving}
+          >
             {loading ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
             刷新
           </Button>
@@ -584,7 +718,15 @@ export function ConfigSettingsPage({
   );
 }
 
-function Section({ title, path, children }: { title: string; path: string; children: React.ReactNode }) {
+function Section({
+  title,
+  path,
+  children,
+}: {
+  title: string;
+  path: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-4">
       <div>
@@ -598,20 +740,110 @@ function Section({ title, path, children }: { title: string; path: string; child
   );
 }
 
+function AdvancedModelProfileFields({
+  model,
+  onChange,
+}: {
+  model: JsonObject;
+  onChange: (key: string, value: unknown) => void;
+}) {
+  return (
+    <Collapsible className="bg-muted/10 rounded-lg border">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="group flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">高级配置</span>
+            <span className="text-muted-foreground block text-xs">
+              仅在模型能力识别不准确或需要覆盖上下文策略时修改
+            </span>
+          </span>
+          <ChevronDownIcon className="text-muted-foreground size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="space-y-3 border-t p-3">
+          <FieldGrid>
+            <NumberField
+              label="上下文窗口 tokens"
+              value={num(model.contextWindowTokens)}
+              onChange={(v) => onChange("contextWindowTokens", v)}
+            />
+            <ToggleField
+              label="启用工具调用"
+              checked={boolWithDefault(model.supportsToolCalling, true)}
+              onChange={(v) => onChange("supportsToolCalling", v)}
+            />
+          </FieldGrid>
+          <ListField
+            label="模型别名"
+            value={stringArray(model.aliases)}
+            onChange={(v) => onChange("aliases", v)}
+          />
+          <FieldGrid>
+            <ListField
+              label="输入模态"
+              value={stringArray(model.inputModalities)}
+              onChange={(v) => onChange("inputModalities", v)}
+            />
+            <ListField
+              label="输出模态"
+              value={stringArray(model.outputModalities)}
+              onChange={(v) => onChange("outputModalities", v)}
+            />
+          </FieldGrid>
+          <ListField
+            label="消息部件格式"
+            value={stringArray(model.messageParts)}
+            onChange={(v) => onChange("messageParts", v)}
+          />
+          <JsonEditor
+            label="单模型上下文压缩覆盖"
+            value={model.contextCompaction ?? {}}
+            onChange={(v) => onChange("contextCompaction", v)}
+          />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function FieldGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-3 md:grid-cols-2">{children}</div>;
 }
 
-function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <div className="grid gap-2">
       <label className={labelCls}>{label}</label>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} className="font-mono text-sm" />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="font-mono text-sm"
+      />
     </div>
   );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
   return (
     <div className="grid gap-2">
       <label className={labelCls}>{label}</label>
@@ -649,39 +881,67 @@ function SelectField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option} value={option}>
-            {optionLabels?.[option] ?? option}
-          </SelectItem>
-        ))}
-      </SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {optionLabels?.[option] ?? option}
+            </SelectItem>
+          ))}
+        </SelectContent>
       </Select>
     </div>
   );
 }
 
-function ToggleField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+function ToggleField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3">
+    <div className="bg-muted/20 flex items-center justify-between rounded-lg border p-3">
       <label className={labelCls}>{label}</label>
       <Switch checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }
 
-function ListField({ label, value, onChange }: { label: string; value: string[]; onChange: (value: string[]) => void }) {
+function ListField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
   const joined = value.join("\n");
 
   return (
     <div className="grid gap-2">
       <label className={labelCls}>{label}</label>
-      <Textarea value={joined} onChange={(event) => onChange(lines(event.target.value))} className="min-h-20 font-mono text-xs" />
+      <Textarea
+        value={joined}
+        onChange={(event) => onChange(lines(event.target.value))}
+        className="min-h-20 font-mono text-xs"
+      />
       <p className={hintCls}>每行一个值</p>
     </div>
   );
 }
 
-function JsonEditor({ label, value, onChange }: { label: string; value: unknown; onChange: (value: unknown) => void }) {
+function JsonEditor({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
   const [draft, setDraft] = useState(formatJson(value));
   const [error, setError] = useState<string | null>(null);
 
@@ -712,92 +972,176 @@ function JsonEditor({ label, value, onChange }: { label: string; value: unknown;
   );
 }
 
-function ObjectSection({ title, path, value, fields, onChange }: {
+function ObjectSection({
+  title,
+  path,
+  value,
+  fields,
+  onChange,
+}: {
   title: string;
   path: string;
   value: JsonObject;
   fields: Array<[string, "number" | `select:${string}`]>;
   onChange: (value: JsonObject) => void;
 }) {
-  const update = (key: string, next: unknown) => onChange({ ...value, [key]: next });
+  const update = (key: string, next: unknown) =>
+    onChange({ ...value, [key]: next });
   return (
     <Section title={title} path={path}>
       <FieldGrid>
         {fields.map(([key, kind]) =>
           kind === "number" ? (
-            <NumberField key={key} label={key} value={num(value[key])} onChange={(v) => update(key, v)} />
+            <NumberField
+              key={key}
+              label={key}
+              value={num(value[key])}
+              onChange={(v) => update(key, v)}
+            />
           ) : (
-            <SelectField key={key} label={key} value={str(value[key])} options={kind.slice(7).split(",")} onChange={(v) => update(key, v)} />
+            <SelectField
+              key={key}
+              label={key}
+              value={str(value[key])}
+              options={kind.slice(7).split(",")}
+              onChange={(v) => update(key, v)}
+            />
           ),
         )}
       </FieldGrid>
-      <JsonEditor label={`完整 ${path}`} value={value} onChange={(v) => onChange(asObject(v))} />
+      <JsonEditor
+        label={`完整 ${path}`}
+        value={value}
+        onChange={(v) => onChange(asObject(v))}
+      />
     </Section>
   );
 }
 
-function JsonOnlySection({ title, path, value, onChange }: { title: string; path: string; value: unknown; onChange: (value: JsonObject) => void }) {
+function JsonOnlySection({
+  title,
+  path,
+  value,
+  onChange,
+}: {
+  title: string;
+  path: string;
+  value: unknown;
+  onChange: (value: JsonObject) => void;
+}) {
   return (
     <Section title={title} path={path}>
-      <JsonEditor label={`完整 ${path}`} value={value} onChange={(v) => onChange(asObject(v))} />
+      <JsonEditor
+        label={`完整 ${path}`}
+        value={value}
+        onChange={(v) => onChange(asObject(v))}
+      />
     </Section>
   );
 }
 
-function CapabilityMcp({ value, onChange }: { value: JsonObject; onChange: (value: JsonObject) => void }) {
+function CapabilityMcp({
+  value,
+  onChange,
+}: {
+  value: JsonObject;
+  onChange: (value: JsonObject) => void;
+}) {
   return (
     <Section title="MCP 运行时" path="capabilities.mcp">
-      <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-muted/20 flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-medium">MCP 工具管理</p>
           <p className={hintCls}>
-            这里是引擎级高级配置。新增、编辑、删除 MCP 服务器请使用工作区里的 MCP 工具页面，保存后会刷新运行时工具目录。
+            这里是引擎级高级配置。新增、编辑、删除 MCP 服务器请使用工作区里的
+            MCP 工具页面，保存后会刷新运行时工具目录。
           </p>
         </div>
         <Button asChild size="sm" variant="outline" className="shrink-0">
           <Link href="/workspace/mcp">打开 MCP 工具管理</Link>
         </Button>
       </div>
-      <JsonEditor label="完整 capabilities.mcp" value={value} onChange={(v) => onChange(asObject(v))} />
+      <JsonEditor
+        label="完整 capabilities.mcp"
+        value={value}
+        onChange={(v) => onChange(asObject(v))}
+      />
     </Section>
   );
 }
 
-function CapabilityWeb({ value, onChange }: { value: JsonObject; onChange: (value: JsonObject) => void }) {
-  const update = (key: string, next: unknown) => onChange({ ...value, [key]: next });
+function CapabilityWeb({
+  value,
+  onChange,
+}: {
+  value: JsonObject;
+  onChange: (value: JsonObject) => void;
+}) {
+  const update = (key: string, next: unknown) =>
+    onChange({ ...value, [key]: next });
   const enabled = bool(value.enabled);
   const fetchEnabled = bool(value.fetchEnabled);
   const searchEnabled = bool(value.searchEnabled);
   return (
     <Section title="Web 能力" path="capabilities.web">
-      <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+      <div className="bg-muted/20 grid gap-3 rounded-lg border p-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">内置 Web 工具</p>
             <p className={hintCls}>
-              这里控制 qiongqi 原生的 web_fetch / web_search。具备网页访问能力的 MCP 服务器仍在 MCP 工具页配置，保存后会共同进入运行时工具目录。
+              这里控制 qiongqi 原生的 web_fetch / web_search。具备网页访问能力的
+              MCP 服务器仍在 MCP 工具页配置，保存后会共同进入运行时工具目录。
             </p>
           </div>
           <Button asChild size="sm" variant="outline" className="shrink-0">
             <Link href="/workspace/mcp">查看 MCP Web 工具</Link>
           </Button>
         </div>
-        <div className="grid gap-2 rounded-lg border bg-background/60 p-3 sm:grid-cols-3">
+        <div className="bg-background/60 grid gap-2 rounded-lg border p-3 sm:grid-cols-3">
           <RuntimePill label="Web 总开关" active={enabled} />
           <RuntimePill label="web_fetch" active={enabled && fetchEnabled} />
           <RuntimePill label="web_search" active={enabled && searchEnabled} />
         </div>
       </div>
-      <ToggleField label="enabled" checked={enabled} onChange={(v) => update("enabled", v)} />
-      <ToggleField label="fetchEnabled" checked={fetchEnabled} onChange={(v) => update("fetchEnabled", v)} />
-      <ToggleField label="searchEnabled" checked={searchEnabled} onChange={(v) => update("searchEnabled", v)} />
-      <TextField label="provider" value={str(value.provider)} onChange={(v) => update("provider", v)} />
-      <ListField label="allowDomains" value={stringArray(value.allowDomains)} onChange={(v) => update("allowDomains", v)} />
-      <ListField label="denyDomains" value={stringArray(value.denyDomains)} onChange={(v) => update("denyDomains", v)} />
+      <ToggleField
+        label="enabled"
+        checked={enabled}
+        onChange={(v) => update("enabled", v)}
+      />
+      <ToggleField
+        label="fetchEnabled"
+        checked={fetchEnabled}
+        onChange={(v) => update("fetchEnabled", v)}
+      />
+      <ToggleField
+        label="searchEnabled"
+        checked={searchEnabled}
+        onChange={(v) => update("searchEnabled", v)}
+      />
+      <TextField
+        label="provider"
+        value={str(value.provider)}
+        onChange={(v) => update("provider", v)}
+      />
+      <ListField
+        label="allowDomains"
+        value={stringArray(value.allowDomains)}
+        onChange={(v) => update("allowDomains", v)}
+      />
+      <ListField
+        label="denyDomains"
+        value={stringArray(value.denyDomains)}
+        onChange={(v) => update("denyDomains", v)}
+      />
       <p className={hintCls}>
-        allowDomains 为空时默认允许所有 HTTP/HTTPS 域名；denyDomains 会优先阻断。MCP 工具的域名策略由对应 MCP server 自己负责。
+        allowDomains 为空时默认允许所有 HTTP/HTTPS 域名；denyDomains
+        会优先阻断。MCP 工具的域名策略由对应 MCP server 自己负责。
       </p>
-      <JsonEditor label="完整 capabilities.web" value={value} onChange={(v) => onChange(asObject(v))} />
+      <JsonEditor
+        label="完整 capabilities.web"
+        value={value}
+        onChange={(v) => onChange(asObject(v))}
+      />
     </Section>
   );
 }
@@ -820,26 +1164,53 @@ function RuntimePill({ label, active }: { label: string; active: boolean }) {
   );
 }
 
-function CapabilitySubagents({ value, onChange }: { value: JsonObject; onChange: (value: JsonObject) => void }) {
-  const update = (key: string, next: unknown) => onChange({ ...value, [key]: next });
+function CapabilitySubagents({
+  value,
+  onChange,
+}: {
+  value: JsonObject;
+  onChange: (value: JsonObject) => void;
+}) {
+  const update = (key: string, next: unknown) =>
+    onChange({ ...value, [key]: next });
   return (
     <Section title="智能体协作" path="capabilities.subagents">
-      <ToggleField label="enabled" checked={bool(value.enabled)} onChange={(v) => update("enabled", v)} />
+      <ToggleField
+        label="enabled"
+        checked={bool(value.enabled)}
+        onChange={(v) => update("enabled", v)}
+      />
       <FieldGrid>
-        <NumberField label="maxParallel" value={num(value.maxParallel)} onChange={(v) => update("maxParallel", v)} />
-        <NumberField label="maxChildRuns" value={num(value.maxChildRuns)} onChange={(v) => update("maxChildRuns", v)} />
+        <NumberField
+          label="maxParallel"
+          value={num(value.maxParallel)}
+          onChange={(v) => update("maxParallel", v)}
+        />
+        <NumberField
+          label="maxChildRuns"
+          value={num(value.maxChildRuns)}
+          onChange={(v) => update("maxChildRuns", v)}
+        />
       </FieldGrid>
-      <p className={hintCls}>当前 KWorks 默认仍使用 classic 编排；这里保留多智能体能力配置入口。</p>
+      <p className={hintCls}>
+        当前 KWorks 默认仍使用 classic 编排；这里保留多智能体能力配置入口。
+      </p>
     </Section>
   );
 }
 
-function sectionToSave(section: ConfigPage, config: QiongqiConfig): { section: string; data: unknown } {
+function sectionToSave(
+  section: ConfigPage,
+  config: QiongqiConfig,
+): { section: string; data: unknown } {
   switch (section) {
     case "storage":
       return { section: "storage", data: config.serve?.storage ?? {} };
     case "observability":
-      return { section: "observability", data: config.serve?.observability ?? {} };
+      return {
+        section: "observability",
+        data: config.serve?.observability ?? {},
+      };
     case "mcp":
     case "web":
     case "skills":
@@ -859,7 +1230,7 @@ function deepMerge(base: unknown, next: unknown): unknown {
   if (!isPlainObject(base) || !isPlainObject(next)) return next ?? base;
   const out: JsonObject = { ...base };
   for (const [key, value] of Object.entries(next)) {
-    out[key] = deepMerge((base)[key], value);
+    out[key] = deepMerge(base[key], value);
   }
   return out;
 }
@@ -890,7 +1261,9 @@ function renameProfile(
         ...(config.models ?? {}),
         profiles: {
           [clean]: currentValue,
-          ...Object.fromEntries(Object.entries(profiles).filter(([key]) => key !== currentName)),
+          ...Object.fromEntries(
+            Object.entries(profiles).filter(([key]) => key !== currentName),
+          ),
         },
       },
     },
@@ -928,6 +1301,12 @@ function withOptionalModel(
     delete next.model;
   }
   return next;
+}
+
+function normalizeNewModelProfile(): JsonObject {
+  return {
+    endpointFormat: "openai_compatible",
+  };
 }
 
 function normalizeConfigForSave(config: QiongqiConfig): QiongqiConfig {
@@ -1014,12 +1393,21 @@ function bool(value: unknown): boolean {
   return typeof value === "boolean" ? value : false;
 }
 
+function boolWithDefault(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function lines(value: string): string[] {
-  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function firstKey(value: unknown): string | undefined {

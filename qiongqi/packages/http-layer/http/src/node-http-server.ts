@@ -153,7 +153,16 @@ function toFetchRequest(incoming: IncomingMessage): Request {
 
 async function writeFetchResponse(outgoing: ServerResponse, response: Response): Promise<void> {
   outgoing.statusCode = response.status
+  // Set-Cookie must be handled separately: Headers.forEach merges multiple
+  // cookies into a comma-joined string, which breaks browser parsing.
+  // getSetCookie() (Node.js undici extension) returns each cookie as a
+  // separate array element so ServerResponse emits one Set-Cookie per cookie.
+  const setCookies = (response.headers as Headers).getSetCookie?.() ?? []
+  if (setCookies.length > 0) {
+    outgoing.setHeader('set-cookie', setCookies)
+  }
   response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'set-cookie') return
     outgoing.setHeader(key, value)
   })
   if (!response.body) {
