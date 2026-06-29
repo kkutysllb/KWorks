@@ -437,6 +437,8 @@ describe("useQiongqiStream /v1 contract", () => {
             is_plan_mode: true,
             reasoning_effort: "minimal",
             model_name: "minimax-m2",
+            approvalPolicy: "manual",
+            sandboxMode: "danger-full-access",
           },
         }),
       );
@@ -464,10 +466,40 @@ describe("useQiongqiStream /v1 contract", () => {
       model: "minimax-m2",
       mode: "plan",
       reasoningEffort: "off",
+      approvalPolicy: "on-request",
+      sandboxMode: "danger-full-access",
       attachmentIds: ["att_123"],
     });
     expect(payload).not.toHaveProperty("context");
     expect(payload).not.toHaveProperty("attachments");
+  });
+
+  test("normalizes todo update events to the array shape expected by workspace UI", () => {
+    const mirror = new QiongqiThreadMirror();
+
+    mirror.applyEvent({
+      kind: "todos_updated",
+      seq: 1,
+      timestamp: "2026-01-01T00:00:00Z",
+      threadId: "thread-a",
+      todos: {
+        items: [
+          {
+            id: "todo_1",
+            content: "Review current diff",
+            status: "in_progress",
+          },
+        ],
+      },
+    });
+
+    expect(mirror.getTodos()).toEqual([
+      {
+        id: "todo_1",
+        content: "Review current diff",
+        status: "in_progress",
+      },
+    ]);
   });
 
   test("creates a requested new thread before starting its first turn", async () => {

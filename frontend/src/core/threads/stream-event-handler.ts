@@ -25,6 +25,12 @@ export type UpdateSubtaskFn = (update: {
   latestMessage: AIMessage;
 }) => void;
 
+export type DecideApprovalFn = (
+  approvalId: string,
+  decision: "allow" | "deny",
+  reason?: string,
+) => Promise<unknown>;
+
 /** All external collaborators the event handler needs. */
 export interface StreamEventDependencies {
   /** Subtask context updater from `useUpdateSubtask`. */
@@ -32,6 +38,8 @@ export interface StreamEventDependencies {
   /** Desktop bridge authorization method. When omitted (web build),
    *  `path_authorization_required` events are silently ignored. */
   authorizePath?: AuthorizePathFn;
+  /** Resolves a pending QiongQi tool approval. */
+  decideApproval?: DecideApprovalFn;
   /** Current thread id, forwarded to the desktop authorization dialog. */
   threadId?: string;
 }
@@ -52,7 +60,31 @@ export function handleStreamEvent(
   event: unknown,
   deps: StreamEventDependencies,
 ): void {
-  const { updateSubtask, authorizePath, threadId } = deps;
+  const { updateSubtask, authorizePath, decideApproval, threadId } = deps;
+
+  if (isRuntimeApprovalRequestedEvent(event)) {
+    const summary = event.summary ?? `Run ${event.toolName}`;
+    toast.info(`Agent 请求执行工具：${event.toolName}\n${summary}`, {
+      action: {
+        label: "允许",
+        onClick: () => {
+          void decideApproval?.(event.approvalId, "allow").catch(() => {
+            toast.error("工具授权提交失败");
+          });
+        },
+      },
+      cancel: {
+        label: "拒绝",
+        onClick: () => {
+          void decideApproval?.(event.approvalId, "deny").catch(() => {
+            toast.error("工具拒绝提交失败");
+          });
+        },
+      },
+      duration: Infinity,
+    });
+    return;
+  }
 
   if (!isObjectWithKey(event, "type")) {
     return;
@@ -153,5 +185,22 @@ function isObjectWithKey(value: unknown, key: string): boolean {
     typeof value === "object" &&
     value !== null &&
     key in value
+  );
+}
+
+function isRuntimeApprovalRequestedEvent(value: unknown): value is {
+  kind: "approval_requested";
+  approvalId: string;
+  toolName: string;
+  summary?: string;
+} {
+  if (typeof value !== "object" || value === null) return false;
+  const event = value as Record<string, unknown>;
+  return (
+    event.kind === "approval_requested" &&
+    typeof event.approvalId === "string" &&
+    event.approvalId.trim().length > 0 &&
+    typeof event.toolName === "string" &&
+    event.toolName.trim().length > 0
   );
 }

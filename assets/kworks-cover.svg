@@ -1,0 +1,339 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 548" width="100%" role="img">
+  <title>KWorks — Local-first AI Workspace</title>
+  <desc>KWorks project cover in cyberpunk HUD style</desc>
+
+  <defs>
+    <pattern id="bg" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="24" height="24" fill="#070714"/>
+      <line x1="0" y1="12" x2="24" y2="12" stroke="#00d4ff" stroke-width="0.3" opacity="0.06"/>
+      <line x1="12" y1="0" x2="12" y2="24" stroke="#e040fb" stroke-width="0.3" opacity="0.04"/>
+    </pattern>
+    <linearGradient id="title-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="40%" stop-color="#7c4dff"/>
+      <stop offset="75%" stop-color="#e040fb"/>
+      <stop offset="100%" stop-color="#ff5252"/>
+    </linearGradient>
+    <linearGradient id="cyan-bdr" x1="0" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00e5ff"/><stop offset="50%" stop-color="#0088cc"/><stop offset="100%" stop-color="#00e5ff" stop-opacity=".3"/>
+    </linearGradient>
+    <linearGradient id="pink-bdr" x1="0" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e040fb"/><stop offset="50%" stop-color="#aa0077"/><stop offset="100%" stop-color="#e040fb" stop-opacity=".3"/>
+    </linearGradient>
+    <filter id="gc"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="gs"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="680" height="548" fill="url(#bg)"/>
+
+  <g opacity=".05">
+    <circle cx="90" cy="420" r="130" fill="none" stroke="#00e5ff" stroke-width=".6"/>
+    <circle cx="90" cy="420" r="100" fill="none" stroke="#00e5ff" stroke-width=".4"/>
+    <circle cx="600" cy="130" r="160" fill="none" stroke="#e040fb" stroke-width=".6"/>
+    <circle cx="600" cy="130" r="120" fill="none" stroke="#e040fb" stroke-width=".4"/>
+  </g>
+
+  <text x="340" y="46" text-anchor="middle" font-family="'Courier New',monospace" font-size="9" fill="#00e5ff" letter-spacing="8" opacity=".55">PROJECT COVER</text>
+
+  <text x="340" y="96" text-anchor="middle" font-family="Impact,'Arial Black',sans-serif" font-size="58" font-weight="900" fill="url(#title-grad)" filter="url(#gs)" letter-spacing="5">KWORKS</text>
+
+  <rect x="185" y="106" width="310" height="18" rx="9" fill="#fff" opacity=".03"/>
+  <text x="340" y="119" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="500" fill="#fff" letter-spacing="3">LOCAL-FIRST AI WORKSPACE</text>
+
+  <rect x="218" y="128" width="244" height="16" rx="8" fill="none" stroke="#00e5ff" stroke-width=".6" opacity=".25"/>
+  <text x="340" y="140" text-anchor="middle" font-family="'Courier New',monospace" font-size="8.5" fill="#8899aa" letter-spacing="2.5">BUILD  ·  RUN  ·  DEVELOP</text>
+
+  <g transform="translate(22,168)">
+    <rect width="195" height="86" rx="10" fill="#001830" fill-opacity=".85" stroke="url(#cyan-bdr)" stroke-width="1" filter="url(#gc)"/>
+    <rect width="195" height="86" rx="10" fill="none" stroke="#00e5ff" stroke-width=".4" opacity=".35"/>
+
+    <g transform="translate(44,43)">
+      <circle r="20" fill="#002240" stroke="#00e5ff" stroke-width=".9" opacity=".7"/>
+      <polygon points="0,-9 6,3 17,3 11,9 13,19 0,13 -13,19 -11,9 -17,3 -6,3" fill="none" stroke="#00e5ff" stroke-width="1"/>
+      <text y="3" text-anchor="middle" font-family="monospace" font-size="6" fill="#00e5ff">CORE</text>
+    </g>
+
+    <text x="78" y="32" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#00e5ff">QIONGQI</text>
+    <text x="78" y="48" font-family="system-ui,sans-serif" font-size="9" fill="#90caf9">Runtime &amp; API Gateway</text>
+    <text x="78" y="63" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">TypeScript core · Port :9193</text>
+    <text x="78" y="76" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">pnpm serve · Event-driven</text>
+    <path d="M180,6 L188,6 L184,10 Z" fill="#00e5ff" opacity=".45"/>
+  </g>
+
+  <g transform="translate(463,168)">
+    <rect width="195" height="86" rx="10" fill="#20001a" fill-opacity=".85" stroke="url(#pink-bdr)" stroke-width="1" filter="url(#gc)"/>
+    <rect width="195" height="86" rx="10" fill="none" stroke="#e040fb" stroke-width=".4" opacity=".35"/>
+
+    <g transform="translate(44,43)">
+      <rect x="-5" y="-15" width="42" height="30" rx="3" fill="#28001a" stroke="#e040fb" stroke-width=".9" opacity=".7"/>
+      <text y="3" text-anchor="middle" font-family="monospace" font-size="7" fill="#e040fb">&lt;/&gt;</text>
+    </g>
+
+    <text x="82" y="32" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#e040FB">DESKTOP</text>
+    <text x="82" y="48" font-family="system-ui,sans-serif" font-size="9" fill="#ce93d8">Electron Shell</text>
+    <text x="82" y="63" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">Native desktop wrapper</text>
+    <text x="82" y="76" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">electron-builder package</text>
+    <path d="M180,6 L188,6 L184,10 Z" fill="#e040fb" opacity=".45"/>
+  </g>
+
+  <g transform="translate(22,270)">
+    <rect width="195" height="86" rx="10" fill="#001830" fill-opacity=".85" stroke="url(#cyan-bdr)" stroke-width="1" filter="url(#gc)"/>
+    <rect width="195" height="86" rx="10" fill="none" stroke="#00e5ff" stroke-width=".4" opacity=".35"/>
+
+    <g transform="translate(44,43)">
+      <rect x="-5" y="-16" width="42" height="32" rx="3" fill="#002240" stroke="#00e5ff" stroke-width=".9" opacity=".7"/>
+      <circle r="9" fill="none" stroke="#00e5ff" stroke-width=".9"/>
+      <circle r="4" fill="#00e5ff" opacity=".45"/>
+      <line x1="12" y1="-7" x2="21" y2="-12" stroke="#00e5ff" stroke-width=".8"/>
+      <line x1="12" y1="7" x2="21" y2="12" stroke="#00e5ff" stroke-width=".8"/>
+    </g>
+
+    <text x="84" y="32" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#00e5ff">FRONTEND</text>
+    <text x="84" y="48" font-family="system-ui,sans-serif" font-size="9" fill="#90caf9">Next.js Web UI</text>
+    <text x="84" y="63" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">User interface layer</text>
+    <text x="84" y="76" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">Port :9192 · React · MDX</text>
+    <path d="M180,6 L188,6 L184,10 Z" fill="#00e5ff" opacity=".45"/>
+  </g>
+
+  <g transform="translate(463,270)">
+    <rect width="195" height="86" rx="10" fill="#20001a" fill-opacity=".85" stroke="url(#pink-bdr)" stroke-width="1" filter="url(#gc)"/>
+    <rect width="195" height="86" rx="10" fill="none" stroke="#e040fb" stroke-width=".4" opacity=".35"/>
+
+    <g transform="translate(44,43)">
+      <circle r="20" fill="#28001a" stroke="#e040fb" stroke-width=".9" opacity=".7"/>
+      <rect x="-9" y="-9" width="18" height="18" rx="2" fill="none" stroke="#e040fb" stroke-width="1"/>
+      <line x1="-5" y1="-3" x2="5" y2="-3" stroke="#e040fb" stroke-width=".65"/>
+      <line x1="-5" y1="2" x2="3" y2="2" stroke="#e040fb" stroke-width=".65"/>
+      <line x1="-5" y1="7" x2="1" y2="7" stroke="#e040fb" stroke-width=".65"/>
+    </g>
+
+    <text x="82" y="32" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#e040FB">SKILLS</text>
+    <text x="82" y="48" font-family="system-ui,sans-serif" font-size="9" fill="#ce93d8">Extensible Capabilities</text>
+    <text x="82" y="63" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">Plug. Play. Perform.</text>
+    <text x="82" y="76" font-family="system-ui,sans-serif" font-size="8.5" fill="#607d8b">Reusable skill modules</text>
+    <path d="M180,6 L188,6 L184,10 Z" fill="#e040fb" opacity=".45"/>
+  </g>
+
+  <g transform="translate(250,178)">
+    <!-- 底座光晕 -->
+    <ellipse cx="90" cy="105" rx="85" ry="22" fill="#7c4dff" opacity=".04" filter="url(#gs)"/>
+    
+    <!-- 外层旋转光环 -->
+    <g transform="translate(90,62)" opacity=".08">
+      <circle r="78" fill="none" stroke="#00e5ff" stroke-width=".5" stroke-dasharray="4 8">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="40s" repeatCount="indefinite"/>
+      </circle>
+      <circle r="68" fill="none" stroke="#e040fb" stroke-width=".4" stroke-dasharray="3 6">
+        <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="30s" repeatCount="indefinite"/>
+      </circle>
+      <circle r="88" fill="none" stroke="#b388ff" stroke-width=".3" stroke-dasharray="2 10">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="50s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- ====== 大K字LOGO (核心视觉) ====== -->
+    <g transform="translate(90,52)">
+      <!-- K字背景发光底 -->
+      <rect x="-46" y="-48" width="92" height="96" rx="16" fill="#0a0618" stroke="url(#title-grad)" stroke-width="1.8" filter="url(#gc)" opacity=".9"/>
+      <rect x="-44" y="-46" width="88" height="92" rx="14" fill="none" stroke="#00e5ff" stroke-width=".35" opacity=".25"/>
+      
+      <!-- K字主体 - 粗体几何风格 -->
+      <text x="0" y="18" text-anchor="middle" font-family="Impact,'Arial Black',sans-serif" font-size="72" font-weight="900" fill="url(#title-grad)" filter="url(#gs)" letter-spacing="-2">K</text>
+      
+      <!-- K字内部电路纹理 -->
+      <line x1="-22" y1="-20" x2="12" y2="14" stroke="#00e5ff" stroke-width=".6" opacity=".3"/>
+      <line x1="-22" y1="10" x2="8" y2="-18" stroke="#e040fb" stroke-width=".6" opacity=".25"/>
+      <circle cx="-24" cy="-28" r="1.5" fill="#00e5ff" opacity=".5"/>
+      <circle cx="20" cy="22" r="1.5" fill="#e040fb" opacity=".4"/>
+    </g>
+
+    <!-- ====== 机器人身体 ====== -->
+    <g transform="translate(90,118)">
+      <!-- 头部 -->
+      <rect x="-18" y="-32" width="36" height="28" rx="8" fill="#101828" stroke="url(#cyan-bdr)" stroke-width="1.2" filter="url(#gc)"/>
+      <rect x="-15" y="-29" width="30" height="22" rx="5" fill="#0a1020" stroke="#00e5ff" stroke-width=".4" opacity=".3"/>
+      
+      <!-- 眼睛 - 发光LED -->
+      <ellipse cx="-7" cy="-18" rx="5" ry="4" fill="#001a33" stroke="#00e5ff" stroke-width=".9"/>
+      <ellipse cx="-7" cy="-18" rx="2.5" ry="2" fill="#00e5ff" filter="url(#gc)">
+        <animate attributeName="opacity" values="1;.5;1" dur="2s" repeatCount="indefinite"/>
+      </ellipse>
+      <ellipse cx="7" cy="-18" rx="5" ry="4" fill="#001a33" stroke="#e040fb" stroke-width=".9"/>
+      <ellipse cx="7" cy="-18" rx="2.5" ry="2" fill="#e040fb" filter="url(#gc)">
+        <animate attributeName="opacity" values="1;.5;1" dur="2.5s" repeatCount="indefinite"/>
+      </ellipse>
+      
+      <!-- 天线 -->
+      <line x1="0" y1="-32" x2="0" y2="-42" stroke="#888" stroke-width="1.5"/>
+      <circle cx="0" cy="-44" r="3" fill="#e040fb" filter="url(#gc)">
+        <animate attributeName="fill" values="#e040fb;#00e5ff;#e040fb" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- 嘴巴/面板 -->
+      <rect x="-10" y="-8" width="20" height="4" rx="2" fill="#0a1628" stroke="#333" stroke-width=".5"/>
+      <rect x="-8" y="-7" width="4" height="2" rx="1" fill="#00e5ff" opacity=".6">
+        <animate attributeName="opacity" values=".6;.2;.8;.3;.6" dur="1.5s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="-2" y="-7" width="5" height="2" rx="1" fill="#00e5ff" opacity=".4"/>
+      <rect x="4" y="-7" width="3" height="2" rx="1" fill="#00e5ff" opacity=".7">
+        <animate attributeName="opacity" values=".7;.3;.9;.4;.7" dur="1.2s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- 耳朵/侧板 -->
+      <rect x="-23" y="-26" width="5" height="16" rx="2" fill="#141c2c" stroke="#00e5ff" stroke-width=".6" opacity=".6"/>
+      <rect x="18" y="-26" width="5" height="16" rx="2" fill="#141c2c" stroke="#e040fb" stroke-width=".6" opacity=".6"/>
+
+      <!-- 脖子 -->
+      <rect x="-6" y="-4" width="12" height="6" rx="2" fill="#1a2035" stroke="#333" stroke-width=".5"/>
+
+      <!-- 身体/躯干 -->
+      <path d="M-22,2 L22,2 L18,38 L-18,38Z" fill="#101828" stroke="url(#title-grad)" stroke-width="1" filter="url(#gc)"/>
+      <path d="M-19,5 L19,5 L16,35 L-16,35Z" fill="#0a1020" stroke="#00e5ff" stroke-width=".3" opacity=".2"/>
+      
+      <!-- 胸部核心 - 小K标志 -->
+      <circle cx="0" cy="18" r="9" fill="#080c18" stroke="#7c4dff" stroke-width="1"/>
+      <text x="0" y="22" text-anchor="middle" font-family="Impact,sans-serif" font-size="11" font-weight="900" fill="#b388ff" filter="url(#gc)">K</text>
+      <circle cx="0" cy="18" r="12" fill="none" stroke="#7c4dff" stroke-width=".3" opacity=".3" stroke-dasharray="2 3"/>
+
+      <!-- 能量指示条 -->
+      <rect x="-14" y="28" width="28" height="4" rx="2" fill="#080c18" stroke="#333" stroke-width=".4"/>
+      <rect x="-13" y="29" width="18" height="2" rx="1" fill="#00e5ff" opacity=".7">
+        <animate attributeName="width" values="18;14;20;16;18" dur="4s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- 左臂 -->
+      <path d="M-22,6 L-34,16 L-32,30" fill="none" stroke="#182035" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M-22,6 L-34,16 L-32,30" fill="none" stroke="url(#cyan-bdr)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- 左手 - 工具/扳手 -->
+      <g transform="translate(-32,33)">
+        <rect x="-3" y="0" width="6" height="12" rx="1.5" fill="#2a3045" stroke="#00e5ff" stroke-width=".6"/>
+        <rect x="-5" y="10" width="10" height="4" rx="1" fill="#3a4560" stroke="#00e5ff" stroke-width=".5"/>
+      </g>
+
+      <!-- 右臂 -->
+      <path d="M22,6 L34,14 L36,28" fill="none" stroke="#182035" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M22,6 L34,14 L36,28" fill="none" stroke="url(#pink-bdr)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- 右手 - 全息屏幕 -->
+      <g transform="translate(37,26)">
+        <rect x="0" y="-8" width="14" height="20" rx="2" fill="#100520" stroke="#e040fb" stroke-width=".6" opacity=".85"/>
+        <line x1="2" y1="-4" x2="12" y2="-4" stroke="#e040fb" stroke-width=".6" opacity=".5"/>
+        <line x1="2" y1="0" x2="10" y2="0" stroke="#e040fb" stroke-width=".6" opacity=".4"/>
+        <line x1="2" y1="4" x2="8" y2="4" stroke="#e040fb" stroke-width=".6" opacity=".3"/>
+        <circle cx="10" cy="8" r="1.5" fill="#00e5ff" opacity=".6">
+          <animate attributeName="opacity" values=".6;.2;.8" dur="2s" repeatCount="indefinite"/>
+        </circle>
+      </g>
+
+      <!-- 腿部 -->
+      <rect x="-14" y="38" width="10" height="18" rx="3" fill="#151d30" stroke="#00e5ff" stroke-width=".7"/>
+      <rect x="4" y="38" width="10" height="18" rx="3" fill="#151d30" stroke="#e040fb" stroke-width=".7"/>
+      
+      <!-- 脚 -->
+      <rect x="-16" y="54" width="14" height="6" rx="3" fill="#1a2540" stroke="#444" stroke-width=".5"/>
+      <rect x="2" y="54" width="14" height="6" rx="3" fill="#1a2540" stroke="#444" stroke-width=".5"/>
+    </g>
+
+    <!-- ====== 装饰粒子/数据流 ====== -->
+    <g opacity=".55">
+      <!-- 围绕机器人的浮动数据点 -->
+      <circle cx="28" cy="50" r="2.5" fill="#00e5ff" filter="url(#gc)">
+        <animate attributeName="cy" values="50;42;50" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".8;.3;.8" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="152" cy="70" r="2" fill="#e040fb" filter="url(#gc)">
+        <animate attributeName="cy" values="70;78;70" dur="2.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="42" cy="140" r="2.2" fill="#b388ff" filter="url(#gc)">
+        <animate attributeName="cy" values="140;134;140" dur="3.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="138" cy="145" r="1.8" fill="#00e5ff" filter="url(#gc)">
+        <animate attributeName="cy" values="145;150;145" dur="2.8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="155" cy="110" r="1.5" fill="#7c4dff">
+        <animate attributeName="opacity" values=".6;.2;.6" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="25" cy="95" r="1.6" fill="#00f0ff">
+        <animate attributeName="opacity" values=".5;.1;.5" dur="2.2s" repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- 连接线 -->
+      <line x1="30" y1="54" x2="65" y2="75" stroke="#00e5ff" stroke-width=".4" opacity=".25" stroke-dasharray="2 3"/>
+      <line x1="148" y1="72" x2="120" y2="95" stroke="#e040fb" stroke-width=".4" opacity=".2" stroke-dasharray="2 3"/>
+      <line x1="45" y1="142" x2="74" y2="130" stroke="#b388ff" stroke-width=".4" opacity=".2" stroke-dasharray="2 3"/>
+      <line x1="135" y1="147" x2="106" y2="132" stroke="#00e5ff" stroke-width=".4" opacity=".2" stroke-dasharray="2 3"/>
+    </g>
+
+    <!-- AI WORKSPACE 文字标签 -->
+    <g transform="translate(90,195)">
+      <rect x="-52" y="-9" width="104" height="17" rx="8.5" fill="#080c18" fill-opacity=".8" stroke="url(#title-grad)" stroke-width=".5" opacity=".6"/>
+      <text x="0" y="3" text-anchor="middle" font-family="'Courier New',monospace" font-size="8" font-weight="600" fill="#aaa" letter-spacing="2">AI  WORKSPACE</text>
+    </g>
+  </g>
+
+  <rect x="120" y="400" width="440" height="20" rx="10" fill="#0a1020" stroke="#00e5ff" stroke-width=".6" opacity=".55"/>
+  <text x="134" y="414" font-family="system-ui,sans-serif" font-size="8.5" font-weight="600" fill="#ddd">BUILT FOR LOCAL-FIRST.</text>
+  <text x="298" y="414" font-family="system-ui,sans-serif" font-size="8.5" fill="#78909c">BY THE COMMUNITY.</text>
+  <text x="430" y="414" font-family="system-ui,sans-serif" font-size="8.5" fill="#78909c">FOR THE FUTURE.</text>
+
+  <rect x="22" y="432" width="636" height="48" rx="8" fill="#08081a" stroke="#15203a" stroke-width=".8"/>
+
+  <g transform="translate(34,440)">
+    <rect width="105" height="29" rx="5" fill="#0a1628" stroke="#00e5ff" stroke-width=".65" opacity=".6"/>
+    <text x="12" y="19" font-family="monospace" font-size="11" font-weight="700" fill="#ffd700">TS</text>
+    <text x="30" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">TypeScript</text>
+    <text x="30" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Language</text>
+  </g>
+
+  <g transform="translate(148,440)">
+    <rect width="95" height="29" rx="5" fill="#0a1628" stroke="#00e5ff" stroke-width=".65" opacity=".6"/>
+    <text x="10" y="19" font-family="monospace" font-size="10" font-weight="700" fill="#00e5ff">Nx</text>
+    <text x="26" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">Next.js</text>
+    <text x="26" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Framework</text>
+  </g>
+
+  <g transform="translate(252,440)">
+    <rect width="92" height="29" rx="5" fill="#16102a" stroke="#e040fb" stroke-width=".65" opacity=".6"/>
+    <text x="10" y="19" font-family="monospace" font-size="10" font-weight="700" fill="#e040fb">{e}</text>
+    <text x="26" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">Electron</text>
+    <text x="26" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Desktop</text>
+  </g>
+
+  <g transform="translate(353,440)">
+    <rect width="82" height="29" rx="5" fill="#0a1628" stroke="#00e5ff" stroke-width=".65" opacity=".6"/>
+    <text x="10" y="19" font-family="monospace" font-size="10" font-weight="700" fill="#00e5ff">P</text>
+    <text x="20" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">pnpm</text>
+    <text x="20" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Package</text>
+  </g>
+
+  <g transform="translate(444,440)">
+    <rect width="82" height="29" rx="5" fill="#16102a" stroke="#e040fb" stroke-width=".65" opacity=".6"/>
+    <text x="10" y="19" font-family="monospace" font-size="10" font-weight="700" fill="#e040fb">⚡</text>
+    <text x="22" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">Skills</text>
+    <text x="22" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Plugins</text>
+  </g>
+
+  <g transform="translate(535,440)">
+    <rect width="107" height="29" rx="5" fill="#101030" stroke="#b388ff" stroke-width=".65" opacity=".6"/>
+    <text x="10" y="19" font-family="monospace" font-size="9.5" font-weight="700" fill="#b388ff">MIT</text>
+    <text x="28" y="13" font-family="system-ui,sans-serif" font-size="8.5" font-weight="700" fill="#eee">Open Source</text>
+    <text x="28" y="24" font-family="system-ui,sans-serif" font-size="7" fill="#607d8b">Licensed</text>
+  </g>
+
+  <g transform="translate(22,492)" font-family="'Courier New',monospace" font-size="7.5" fill="#4a5568">
+    <g opacity=".45">
+      <text y="0" fill="#00e5ff">◈</text>
+      <text x="14" y="0" fill="#607d8b">MODULAR ARCHITECTURE</text>
+      <text x="150" y="0" fill="#e040fb">◈</text>
+      <text x="164" y="0" fill="#607d8b">LOCAL-FIRST</text>
+      <text x="260" y="0" fill="#00e5ff">◈</text>
+      <text x="274" y="0" fill="#607d8b">EVENT-DRIVEN</text>
+      <text x="365" y="0" fill="#b388ff">◈</text>
+      <text x="379" y="0" fill="#607d8b">TYPE SAFE</text>
+      <text x="450" y="0" fill="#e040fb">◈</text>
+      <text x="464" y="0" fill="#607d8b">SCALABLE</text>
+    </g>
+  </g>
+
+  <g opacity=".035"><rect width="2.5" height="548" fill="#00e5ff"/><rect x="677.5" width="2.5" height="548" fill="#e040fb"/></g>
+  <text x="668" y="538" text-anchor="end" font-family="monospace" font-size="6.5" fill="#222" opacity=".35">KWorks Cover v3</text>
+</svg>

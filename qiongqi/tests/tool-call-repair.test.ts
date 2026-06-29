@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairDispatchToolArguments } from '@qiongqi/loop'
+import {
+  repairDispatchToolArguments,
+  repairDispatchToolCall
+} from '@qiongqi/loop'
 
 describe('tool call dispatch repair', () => {
   it('flattens common wrapper argument objects', () => {
@@ -45,5 +48,34 @@ describe('tool call dispatch repair', () => {
     )
     expect(preserved.arguments).toEqual({ content: 'a'.repeat(32) })
     expect(preserved.notes).toEqual([])
+  })
+
+  it('normalizes a safe bare pwd tool call into bash command execution', () => {
+    const repaired = repairDispatchToolCall({
+      callId: 'call_pwd',
+      toolName: 'pwd',
+      arguments: {}
+    })
+
+    expect(repaired.call).toEqual({
+      callId: 'call_pwd',
+      toolName: 'bash',
+      toolKind: 'command_execution',
+      arguments: {
+        command: 'pwd'
+      }
+    })
+    expect(repaired.notes).toEqual(['normalized bare shell command tool name pwd to bash'])
+  })
+
+  it('does not normalize arbitrary unknown tool names into shell commands', () => {
+    const repaired = repairDispatchToolCall({
+      callId: 'call_rm',
+      toolName: 'rm',
+      arguments: {}
+    })
+
+    expect(repaired.call.toolName).toBe('rm')
+    expect(repaired.notes).toEqual([])
   })
 })

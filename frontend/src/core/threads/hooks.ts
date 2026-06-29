@@ -412,6 +412,8 @@ export function useThreadStream({
           typeof window !== "undefined" && window.kworksDesktop
             ? (params) => window.kworksDesktop!.authorizePath(params)
             : undefined,
+        decideApproval: (approvalId, decision, reason) =>
+          qiongqiClient.decideApproval(approvalId, decision, reason),
         threadId: threadIdRef.current ?? undefined,
       });
       listeners.current.onQiongqiEvent?.(event);

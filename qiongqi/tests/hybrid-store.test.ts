@@ -157,7 +157,9 @@ describe('HybridThreadStore', () => {
         prompt: 'describe this data',
         model: 'deepseek-v4-pro',
         attachmentIds: ['att_image'],
-        mode: 'agent'
+        mode: 'agent',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write'
       }
     })
     const fetched = await threadStore.get(thread.id)
@@ -169,6 +171,8 @@ describe('HybridThreadStore', () => {
       attachmentIds: ['att_image'],
       model: 'deepseek-v4-pro'
     })
+    expect(fetched?.approvalPolicy).toBe('on-request')
+    expect(fetched?.sandboxMode).toBe('workspace-write')
     expect(fetched?.turns[0]?.items[0]).toMatchObject({
       kind: 'user_message',
       attachmentIds: ['att_image']

@@ -123,6 +123,16 @@ describe('contracts', () => {
     expect(parsed.reasoningEffort).toBe('max')
   })
 
+  it('accepts per-turn approval and sandbox policy on start turn payloads', () => {
+    const parsed = StartTurnRequest.parse({
+      prompt: 'Run pwd',
+      approvalPolicy: 'on-request',
+      sandboxMode: 'danger-full-access'
+    })
+    expect(parsed.approvalPolicy).toBe('on-request')
+    expect(parsed.sandboxMode).toBe('danger-full-access')
+  })
+
   it('accepts turn failure lifecycle messages', () => {
     const event = RuntimeEvent.parse({
       kind: 'turn_failed',

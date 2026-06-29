@@ -39,15 +39,18 @@ function makeDeps(
 ): StreamEventDependencies & {
   updateSubtask: ReturnType<typeof vi.fn>;
   authorizePath: ReturnType<typeof vi.fn>;
+  decideApproval: ReturnType<typeof vi.fn>;
 } {
   return {
     updateSubtask: vi.fn(),
     authorizePath: vi.fn(),
+    decideApproval: vi.fn(),
     threadId: "thread-123",
     ...overrides,
   } as StreamEventDependencies & {
     updateSubtask: ReturnType<typeof vi.fn>;
     authorizePath: ReturnType<typeof vi.fn>;
+    decideApproval: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -206,6 +209,57 @@ describe("handleStreamEvent", () => {
       const msg = toastSpies.error.mock.calls[0]?.[0] as string;
       // Should be exactly the label with no trailing 「：」
       expect(msg).toBe("子任务执行失败");
+    });
+  });
+
+  // ── approval_requested ──────────────────────────────────────────────
+  describe("approval_requested", () => {
+    test("shows a confirmation toast and allows the tool when action is clicked", async () => {
+      deps.decideApproval.mockResolvedValue(undefined);
+
+      handleStreamEvent(
+        {
+          kind: "approval_requested",
+          approvalId: "appr_1",
+          toolName: "bash",
+          summary: 'Run bash(command="pwd")',
+        },
+        deps,
+      );
+
+      expect(toastSpies.info).toHaveBeenCalledTimes(1);
+      const [message, options] = toastSpies.info.mock.calls[0] ?? [];
+      expect(String(message)).toContain("bash");
+      const action = (options as { action?: { onClick?: () => void } }).action;
+      expect(action?.onClick).toBeTypeOf("function");
+
+      action?.onClick?.();
+      await vi.waitFor(() => {
+        expect(deps.decideApproval).toHaveBeenCalledWith("appr_1", "allow");
+      });
+    });
+
+    test("denies the tool when cancel is clicked", async () => {
+      deps.decideApproval.mockResolvedValue(undefined);
+
+      handleStreamEvent(
+        {
+          kind: "approval_requested",
+          approvalId: "appr_2",
+          toolName: "bash",
+          summary: 'Run bash(command="pwd")',
+        },
+        deps,
+      );
+
+      const [, options] = toastSpies.info.mock.calls[0] ?? [];
+      const cancel = (options as { cancel?: { onClick?: () => void } }).cancel;
+      expect(cancel?.onClick).toBeTypeOf("function");
+
+      cancel?.onClick?.();
+      await vi.waitFor(() => {
+        expect(deps.decideApproval).toHaveBeenCalledWith("appr_2", "deny");
+      });
     });
   });
 

@@ -74,6 +74,8 @@ export class TurnService {
       return {
         ...touchThread(current, this.deps.nowIso()),
         ...titlePatch,
+        ...(input.request.approvalPolicy ? { approvalPolicy: input.request.approvalPolicy } : {}),
+        ...(input.request.sandboxMode ? { sandboxMode: input.request.sandboxMode } : {}),
         status: 'running',
         turns: [...current.turns, startTurnRecord(appendTurnItem(turn, userItem))]
       }

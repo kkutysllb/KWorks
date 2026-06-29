@@ -16,6 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { Todo } from "@/core/todos";
+
 import { fetch } from "../api/fetcher";
 import { getBackendBaseURL, isDesktop } from "../config";
 
@@ -105,6 +107,27 @@ function parseSseBlock(raw: string): ParsedSse | null {
   return { id, event, data: dataLines.join("\n") };
 }
 
+function normalizeTodos(value: unknown): Todo[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.items)
+      ? value.items
+      : [];
+  return rawItems.filter(isRecord).map((item) => ({
+    ...(typeof item.id === "string" ? { id: item.id } : {}),
+    ...(typeof item.content === "string" ? { content: item.content } : {}),
+    ...(item.status === "pending" ||
+    item.status === "in_progress" ||
+    item.status === "completed"
+      ? { status: item.status }
+      : {}),
+  }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // ---------------------------------------------------------------------------
 // localStorage helpers (persist lastSeq per thread for resumption)
 // ---------------------------------------------------------------------------
@@ -167,7 +190,7 @@ export class QiongqiThreadMirror {
   private turnStatus = new Map<string, string>();
   private displayLengths = new Map<string, number>();
   private title = "";
-  private todos: unknown = null;
+  private todos: Todo[] = [];
   private lastSeq = 0;
 
   get currentSeq(): number {
@@ -188,6 +211,10 @@ export class QiongqiThreadMirror {
       this.items.set(item.id, item);
       this.order.push(item.id);
     }
+  }
+
+  setTodos(todos: unknown): void {
+    this.todos = normalizeTodos(todos);
   }
 
   setTurnStatus(turnId: string, status: string): void {
@@ -249,7 +276,9 @@ export class QiongqiThreadMirror {
     // Todos
     if (event.kind === "todos_updated") {
       const e = event as { todos?: unknown };
-      if (e.todos !== undefined) this.todos = e.todos;
+      if (e.todos !== undefined) this.todos = normalizeTodos(e.todos);
+    } else if (event.kind === "todos_cleared") {
+      this.todos = [];
     }
   }
 
@@ -271,7 +300,7 @@ export class QiongqiThreadMirror {
     return this.title;
   }
 
-  getTodos(): unknown {
+  getTodos(): Todo[] {
     return this.todos;
   }
 
@@ -344,7 +373,7 @@ export class QiongqiThreadMirror {
     this.turnStatus.clear();
     this.displayLengths.clear();
     this.title = "";
-    this.todos = null;
+    this.todos = [];
     this.lastSeq = 0;
   }
 
@@ -433,6 +462,37 @@ function qiongqiReasoningEffortFromContext(
     value === "medium" ||
     value === "high" ||
     value === "max"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function qiongqiApprovalPolicyFromContext(
+  context: Record<string, unknown>,
+): "on-request" | "untrusted" | "never" | "auto" | "suggest" | undefined {
+  const value = context.approvalPolicy;
+  if (value === "manual") return "on-request";
+  if (
+    value === "auto" ||
+    value === "never" ||
+    value === "on-request" ||
+    value === "untrusted" ||
+    value === "suggest"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function qiongqiSandboxModeFromContext(
+  context: Record<string, unknown>,
+): "read-only" | "workspace-write" | "danger-full-access" | undefined {
+  const value = context.sandboxMode;
+  if (
+    value === "read-only" ||
+    value === "workspace-write" ||
+    value === "danger-full-access"
   ) {
     return value;
   }
@@ -539,7 +599,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       messages: msgs,
       artifacts: [],
       ...(workModeIdRef.current ? { workModeId: workModeIdRef.current } : {}),
-      ...(mirror.getTodos() != null ? { todos: mirror.getTodos() } : {}),
+      ...(mirror.getTodos().length > 0 ? { todos: mirror.getTodos() } : {}),
     } as unknown as StateType);
     setIsLoading(mirror.hasActiveTurn() || mirror.hasDisplayBacklog());
   }, []);
@@ -768,6 +828,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         // Build initial state from thread items
         const allItems = thread.turns.flatMap((t) => t.items);
         mirrorRef.current.setInitialItems(allItems);
+        mirrorRef.current.setTodos(thread.todos);
         if (typeof thread.latestSeq === "number") {
           mirrorRef.current.setCurrentSeq(thread.latestSeq);
           setStoredSeq(threadId, thread.latestSeq);
@@ -977,6 +1038,8 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         mode: qiongqiModeFromContext(context),
         workModeId: turnWorkModeId,
         reasoningEffort: qiongqiReasoningEffortFromContext(context),
+        approvalPolicy: qiongqiApprovalPolicyFromContext(context),
+        sandboxMode: qiongqiSandboxModeFromContext(context),
         ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
         ...(additionalKwargs.hide_from_ui === true ? { displayText: "" } : {}),
       });

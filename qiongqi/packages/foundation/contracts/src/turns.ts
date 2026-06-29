@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { TurnItem } from './items.js'
 import { isGuiPlanRelativePath } from './gui-plan.js'
-import { ApprovalPolicySchema } from './policy.js'
+import { ApprovalPolicySchema, SandboxModeSchema } from './policy.js'
 
 /**
  * Mode enum, inlined here (instead of importing `ThreadMode` from
@@ -88,6 +88,7 @@ export const StartTurnRequest = z.object({
   model: z.string().optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
   approvalPolicy: ApprovalPolicySchema.optional(),
+  sandboxMode: SandboxModeSchema.optional(),
   workModeId: z.string().min(1).optional(),
   /**
    * Optional per-turn mode. Overrides the thread mode for this turn so

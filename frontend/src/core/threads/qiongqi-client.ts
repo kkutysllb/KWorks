@@ -15,6 +15,8 @@
  *     pattern: qiongqi exposes turns on the thread itself.
  */
 
+import type { Todo } from "@/core/todos";
+
 import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
 
@@ -78,6 +80,8 @@ export interface StartTurnPayload {
   mode?: "agent" | "plan";
   workModeId?: string;
   reasoningEffort?: "off" | "low" | "medium" | "high" | "max";
+  approvalPolicy?: "on-request" | "untrusted" | "never" | "auto" | "suggest";
+  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   attachmentIds?: string[];
 }
 
@@ -250,6 +254,20 @@ export const qiongqiClient = {
       encodePath`/v1/threads/${threadId}/turns/${turnId}`,
     );
   },
+
+  async decideApproval(
+    approvalId: string,
+    decision: "allow" | "deny",
+    reason?: string,
+  ): Promise<{ approvalId: string; decision: "allow" | "deny"; status: string }> {
+    return request(encodePath`/v1/approvals/${approvalId}`, {
+      method: "POST",
+      body: JSON.stringify({
+        decision,
+        ...(reason ? { reason } : {}),
+      }),
+    });
+  },
 };
 
 function encodedTodosPath(threadId: string) {
@@ -401,11 +419,24 @@ export function threadRecordToAgentThread(
       title: thread.title,
       messages,
       artifacts: [],
-      ...(thread.todos ? { todos: thread.todos } : {}),
+      ...(thread.todos ? { todos: todoItemsFromThreadTodos(thread.todos) } : {}),
       thread_data: { runtime: "qiongqi", thread_id: thread.id },
     },
     interrupts: {},
   };
+}
+
+function todoItemsFromThreadTodos(todos: unknown): Todo[] {
+  if (Array.isArray(todos)) return todos as Todo[];
+  if (
+    typeof todos === "object" &&
+    todos !== null &&
+    !Array.isArray(todos) &&
+    Array.isArray((todos as { items?: unknown }).items)
+  ) {
+    return (todos as { items: Todo[] }).items;
+  }
+  return [];
 }
 
 export function threadSummaryToAgentThread(
