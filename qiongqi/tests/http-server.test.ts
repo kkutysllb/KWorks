@@ -1823,6 +1823,10 @@ describe('HTTP server', () => {
     expect(thread?.turns.at(-1)?.prompt).toContain('/skill:skill-creator')
     expect(thread?.turns.at(-1)?.prompt).toContain('Skill intent: create')
     expect(thread?.turns.at(-1)?.prompt).toContain('Target skill: report-search')
+    expect(thread?.turns.at(-1)?.prompt).toContain('KWorks skill creation contract:')
+    expect(thread?.turns.at(-1)?.prompt).toContain(
+      'Ask for user input only when the skill goal, activation scenario, or expected output is genuinely missing.'
+    )
   })
 
   it('streams KWorks compatibility assistant deltas as messages-tuple frames', async () => {

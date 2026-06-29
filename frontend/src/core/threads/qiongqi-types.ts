@@ -123,17 +123,9 @@ export type RemoveMessage = BaseMessage & {
   type: "remove";
 };
 
-export type UserInputMessage = BaseMessage & {
-  type: "ai";
-  additional_kwargs: MessageAdditionalKwargs & {
-    qiongqi_user_input: UserInputTurnItem;
-  };
-};
-
 export type Message<ToolCall = DefaultToolCall> =
   | HumanMessage
   | AIMessage<ToolCall>
-  | UserInputMessage
   | ToolMessage
   | SystemMessage
   | FunctionMessage
@@ -288,7 +280,7 @@ export type ApprovalTurnItem = TurnItemBase & {
   status: "pending" | "allowed" | "denied" | "expired";
 };
 
-export type UserInputTurnItem = TurnItemBase & {
+export type UserInputTurnItem = Omit<TurnItemBase, "status"> & {
   kind: "user_input";
   inputId: string;
   prompt: string;
