@@ -9,7 +9,7 @@ const DESKTOP_DIR = resolve(SCRIPT_DIR, "..");
 const REPO_ROOT = resolve(DESKTOP_DIR, "..");
 
 const FRONTEND_OUT_DIR = join(REPO_ROOT, "frontend", "out");
-const QIONGQI_DIR = join(REPO_ROOT, "third_party", "qiongqi");
+const QIONGQI_DIR = join(REPO_ROOT, "qiongqi");
 const SKILLS_DIR = join(REPO_ROOT, "skills");
 
 const checks = [];

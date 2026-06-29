@@ -42,7 +42,9 @@ export function groupHistoryTasksByWorkMode<Thread extends HistoryTaskThread>(
 
 export function historyTaskWorkModeId(thread: HistoryTaskThread): string {
   const workModeId = thread.context?.workModeId?.trim();
-  return workModeId || DEFAULT_WORK_MODE_ID;
+  return workModeId !== undefined && workModeId.length > 0
+    ? workModeId
+    : DEFAULT_WORK_MODE_ID;
 }
 
 export function historyTaskWorkModeLabel(workModeId: string): string {
@@ -73,6 +75,9 @@ function compareHistoryTasks(
 }
 
 function timestampOfTask(thread: HistoryTaskThread): number {
-  const timestamp = thread.updated_at ? Date.parse(thread.updated_at) : 0;
+  const timestamp =
+    thread.updated_at !== undefined && thread.updated_at !== null
+      ? Date.parse(thread.updated_at)
+      : Number.NaN;
   return Number.isFinite(timestamp) ? timestamp : 0;
 }

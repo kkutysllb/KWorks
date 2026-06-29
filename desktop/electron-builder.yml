@@ -1,0 +1,33 @@
+appId: com.kworks.desktop
+productName: KWorks
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: ../frontend/out
+    to: frontend-out
+  - from: ../qiongqi
+    to: qiongqi
+    filter:
+      - '**/*'
+      - '!node_modules/.cache/**'
+      - '!**/.turbo/**'
+      - '!**/.DS_Store'
+  - from: ../skills
+    to: skills
+  - from: build/icons
+    to: icons
+    filter:
+      - 16x16.png
+      - 32x32.png
+  - from: build/icon.png
+    to: icon.png
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+win:
+  icon: build/icon.ico
+linux:
+  icon: build/icon.png

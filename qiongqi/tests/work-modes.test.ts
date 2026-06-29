@@ -23,7 +23,7 @@ function skillDirectoryIds(root: string): string[] {
 }
 
 function bundledCodingSkillIds(): string[] {
-  const publicCodingRoot = resolve(HERE, '../../../skills/public/coding')
+  const publicCodingRoot = resolve(HERE, '../../skills/public/coding')
   const qiongqiCodingRoot = resolve(HERE, '../skills')
   return [
     ...new Set([

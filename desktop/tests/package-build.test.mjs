@@ -18,7 +18,7 @@ test("package resource verifier rejects stale or incomplete Node QiongQi bundles
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /resources\/qiongqi/);
   assert.match(verifierSource, /frontend\/out/);
-  assert.match(verifierSource, /backend-build", "config\.embedded\.yaml/);
+  assert.match(verifierSource, /join\(REPO_ROOT, "qiongqi"\)/);
   assert.match(verifierSource, /join\(SKILLS_DIR, "public"\)/);
   assert.match(verifierSource, /serve-entry\.js/);
   assert.match(verifierSource, /node_modules/);
@@ -42,6 +42,6 @@ test("packaged app ships the vendored qiongqi runtime source", () => {
     new URL("../electron-builder.yml", import.meta.url),
     "utf8",
   );
-  assert.match(builderConfig, /from: \.\.\/third_party\/qiongqi/);
+  assert.match(builderConfig, /from: \.\.\/qiongqi/);
   assert.match(builderConfig, /to: qiongqi/);
 });

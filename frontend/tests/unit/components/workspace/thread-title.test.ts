@@ -41,8 +41,8 @@ function streamWithValues(
     isLoading: false,
     isThreadLoading: false,
     messages: [],
-    stop: vi.fn(async () => {}),
-    submit: vi.fn(async () => {}),
+    stop: vi.fn(async () => undefined),
+    submit: vi.fn(async () => undefined),
   };
 }
 

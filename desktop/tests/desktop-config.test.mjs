@@ -29,10 +29,12 @@ test("desktop paths use the KWorks workspace root instead of old kkworks yaml ho
   assert.doesNotMatch(pathsSource, /getBundledConfigTemplatePath/);
 });
 
-test("desktop backend uses an isolated extensions config instead of repo MCP config", () => {
-  assert.match(backendSource, /KWorks_EXTENSIONS_CONFIG_PATH/);
-  assert.match(backendSource, /getDesktopExtensionsConfigPath\(\)/);
-  assert.match(backendSource, /initExtensionsConfig\(\)/);
+test("desktop backend uses a generated QiongQi config instead of repo MCP config", () => {
+  assert.match(backendSource, /writeQiongqiLaunchConfig/);
+  assert.match(backendSource, /qiongqi-config\.json/);
+  assert.match(backendSource, /"--config"/);
+  assert.doesNotMatch(backendSource, /KWorks_EXTENSIONS_CONFIG_PATH/);
+  assert.doesNotMatch(backendSource, /extensions_config\.json/);
 });
 
 test("desktop backend injects the bundled qiongqi runtime path", () => {
@@ -77,10 +79,13 @@ test("desktop backend defaults QiongQi storage to file unless hybrid is explicit
 
 test("desktop seeds public skills and allows user-created custom skills", () => {
   // Still seed bundled public skills so first run has a non-empty skill set.
-  assert.match(backendSource, /publicTarget/);
+  assert.match(backendSource, /getBuiltinCoreSkillsDir/);
+  assert.match(backendSource, /getBuiltinTaskSkillsDir/);
+  assert.match(backendSource, /getBuiltinCodingSkillsDir/);
   // Create an empty custom/ dir so users can author their own skills at
   // runtime (web-to-desktop migration also depends on this).
-  assert.match(backendSource, /mkdirSync\(join\(skillsRoot,\s*"custom"\)/);
+  assert.match(backendSource, /getCustomSharedSkillsDir/);
+  assert.match(backendSource, /customSharedTarget/);
   // Intentionally do NOT set KWorks_PUBLIC_SKILLS_ONLY at runtime — that
   // flag was for bundling-time, not for forbidding user-created skills.
   assert.doesNotMatch(backendSource, /KWorks_PUBLIC_SKILLS_ONLY:\s*"1"/);

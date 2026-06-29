@@ -100,7 +100,7 @@ test("desktop dev launcher uses isolated empty extensions config", () => {
 });
 
 test("desktop dev launcher prepares vendored qiongqi before starting gateway", () => {
-  assert.match(devLauncherSource, /const QIONGQI_DIR = resolve\(REPO_ROOT, "third_party", "qiongqi"\)/);
+  assert.match(devLauncherSource, /const QIONGQI_DIR = resolve\(REPO_ROOT, "qiongqi"\)/);
   assert.match(devLauncherSource, /function ensureVendoredQiongqiRuntime\(\)/);
   assert.match(devLauncherSource, /packages", "cli-layer", "cli", "src", "serve-entry\.ts"/);
   assert.match(devLauncherSource, /packages", "cli-layer", "cli", "dist", "serve-entry\.js"/);

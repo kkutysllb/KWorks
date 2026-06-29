@@ -16,11 +16,11 @@ import { join, resolve } from "node:path";
  * The repo root when running in development.
  *
  * `app.getAppPath()` returns the directory containing `package.json`,
- * i.e. `desktop-electron/` itself. The repo root is one level above.
+ * i.e. `desktop/` itself. The repo root is one level above.
  *
  * (Previously this used `"..", ".."` which incorrectly pointed two
  * levels above the package dir — e.g. `kk_Projects/` instead of
- * `kk_KWorks/` — causing dev-mode icon/resource resolution to silently
+ * `KWorks/` — causing dev-mode icon/resource resolution to silently
  * fail because every candidate path was off by one directory.)
  */
 const REPO_ROOT = resolve(app.getAppPath(), "..");
@@ -151,7 +151,7 @@ export function getQiongqiRuntimeDir(): string {
   if (isPackaged()) {
     return join(process.resourcesPath, "qiongqi");
   }
-  return join(REPO_ROOT, "third_party", "qiongqi");
+  return join(REPO_ROOT, "qiongqi");
 }
 
 /**

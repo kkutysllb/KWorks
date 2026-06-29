@@ -46,15 +46,13 @@ describe("i18n default locale", () => {
 
     await act(async () => {
       root!.render(
-        React.createElement(
-          I18nProvider,
-          { initialLocale: DEFAULT_LOCALE, children: null },
-          React.createElement(LocaleProbe, {
-            onLocale: (locale) => {
+        <I18nProvider initialLocale={DEFAULT_LOCALE}>
+          <LocaleProbe
+            onLocale={(locale) => {
               seen.push(locale);
-            },
-          }),
-        ),
+            }}
+          />
+        </I18nProvider>,
       );
       await Promise.resolve();
     });

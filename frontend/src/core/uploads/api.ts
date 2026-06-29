@@ -56,9 +56,7 @@ async function readErrorDetail(
     }
   }
 
-  if (!detail) {
-    detail = response.statusText || fallback;
-  }
+  detail ??= response.statusText || fallback;
 
   return `${fallback} (${response.status}): ${detail}`;
 }
