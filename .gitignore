@@ -94,13 +94,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# ═══════════════════════════════════════
-# Project runtime data
-# ═══════════════════════════════════════
-.kkworks/threads/
-.kkworks/channels/
-.kkworks/agents/*/memory.json
-.langgraph_api/
 
 # ═══════════════════════════════════════
 # Local config (sensitive)

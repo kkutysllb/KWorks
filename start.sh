@@ -9,23 +9,23 @@ MODE="${2:-dev}"
 
 case "$COMMAND" in
   start)
-    node scripts/serve.mjs start "$MODE"
+    node --env-file=.env scripts/serve.mjs start "$MODE"
     ;;
   stop)
-    node scripts/serve.mjs stop
+    node --env-file=.env scripts/serve.mjs stop
     ;;
   restart)
-    node scripts/serve.mjs stop
-    node scripts/serve.mjs start "$MODE"
+    node --env-file=.env scripts/serve.mjs stop
+    node --env-file=.env scripts/serve.mjs start "$MODE"
     ;;
   status)
-    node scripts/serve.mjs status
+    node --env-file=.env scripts/serve.mjs status
     ;;
   logs)
     tail -f logs/gateway.log logs/frontend.log
     ;;
   help|--help|-h)
-    node scripts/serve.mjs help
+    node --env-file=.env scripts/serve.mjs help
     ;;
   *)
     echo "Unknown command: $COMMAND" >&2

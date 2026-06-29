@@ -119,7 +119,7 @@ function spawnManaged(name, command, args, options = {}) {
 function ensureQiongqiEntry() {
   const entry = join(QIONGQI_DIR, "packages", "cli-layer", "cli", "dist", "serve-entry.js");
   if (!existsSync(entry)) {
-    throw new Error(`QiongQi serve entry not found: ${entry}. Run: cd third_party/qiongqi && pnpm run build`);
+    throw new Error(`QiongQi serve entry not found: ${entry}. Run: cd qiongqi && pnpm run build`);
   }
   return entry;
 }
