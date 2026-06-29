@@ -486,9 +486,11 @@ export class ModelCompatClient implements ModelClient {
       ? limitHistoryPreservingCompaction(request.history, windowSize)
       : request.history
     const repairedItems = repairModelHistoryItems([...request.prefix, ...history])
-    const thinkingMode = (!isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
-      requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)) ||
-      (endpointFormat === 'messages' && hasAssistantReasoning(repairedItems))
+    const thinkingMode = endpointFormat === 'messages'
+      ? supportsAnthropicThinkingBlocks(this.config.baseUrl, model) &&
+        (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
+      : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
+        requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
     out.push(...this.itemsToMessages(
       repairedItems,
       thinkingMode
@@ -1613,6 +1615,17 @@ function isGlmOpenAiCompatRequest(
   model: string | undefined
 ): boolean {
   return endpointFormat === 'chat_completions' && isBigModelProvider(baseUrl) && isGlmModel(model)
+}
+
+function supportsAnthropicThinkingBlocks(baseUrl: string, model: string | undefined): boolean {
+  const normalizedModel = normalizeModelId(model)
+  if (normalizedModel.startsWith('claude-')) return true
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase()
+    return host === 'api.anthropic.com' || host.endsWith('.anthropic.com')
+  } catch {
+    return /\banthropic\.com\b/i.test(baseUrl)
+  }
 }
 
 function stripKnownEndpointPath(baseUrl: string): string {

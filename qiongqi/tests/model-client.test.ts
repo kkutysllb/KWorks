@@ -619,6 +619,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.reasoningEffort = 'high'
     request.history = [
       makeAssistantReasoningItem({
@@ -674,6 +675,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.reasoningEffort = 'high'
     request.history = [
       {
@@ -736,6 +738,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.history = [
       {
         ...makeAssistantReasoningItem({
@@ -772,6 +775,64 @@ describe('DeepseekCompatModelClient', () => {
     ])
   })
 
+  it('does not auto-send Anthropic thinking blocks to compatible messages providers', async () => {
+    const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'next' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 4, output_tokens: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimax.io/v1/messages',
+      apiKey: 'anthropic-compatible-key',
+      model: 'MiniMax-M1',
+      endpointFormat: 'messages',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M1'
+    request.history = [
+      {
+        ...makeAssistantReasoningItem({
+          id: 'assistant_reasoning_1',
+          turnId: 'turn_1',
+          threadId: 'thr_1',
+          text: 'Provider-compatible history reasoning must not become a thinking content block.',
+          status: 'completed'
+        }),
+        signature: 'sig_opaque'
+      },
+      makeAssistantTextItem({
+        id: 'assistant_text_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Here is the answer.',
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
+
+    expect(assistantMessage?.content).toEqual([
+      { type: 'text', text: 'Here is the answer.' }
+    ])
+    expect(JSON.stringify(sentBodies[0]?.messages ?? [])).not.toContain('"type":"thinking"')
+  })
+
   it('does not synthesize Anthropic thinking for unrelated assistant text when preserving prior thinking', async () => {
     const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
     const fetchImpl: typeof fetch = async (_url, init) => {
@@ -797,6 +858,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.history = [
       makeAssistantTextItem({
         id: 'assistant_text_0',
@@ -868,6 +930,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.reasoningEffort = 'high'
     request.history = [
       makeAssistantTextItem({
@@ -2154,6 +2217,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
     request.history = [
       {
         ...makeAssistantReasoningItem({
@@ -2237,6 +2301,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-opus-4-7'
     request.history = [
       {
         ...makeAssistantReasoningItem({
@@ -2320,6 +2385,7 @@ describe('DeepseekCompatModelClient', () => {
       nonStreaming: true
     })
     const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-opus-4-7'
     request.history = [
       {
         ...makeAssistantReasoningItem({

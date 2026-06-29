@@ -199,6 +199,8 @@ async function start(mode) {
     QIONGQI_STORAGE_BACKEND: storageBackend,
     QIONGQI_API_KEY: qiongqiLaunchConfig.apiKey,
     QIONGQI_BASE_URL: qiongqiLaunchConfig.baseUrl,
+    // Allow the Next.js frontend origin to make credentialed cross-origin requests
+    CORS_ORIGINS: `http://127.0.0.1:${FRONTEND_PORT}`,
     ...(qiongqiLaunchConfig.model ? { QIONGQI_MODEL: qiongqiLaunchConfig.model } : {})
   };
   spawnManaged(
