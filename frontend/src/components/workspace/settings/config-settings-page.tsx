@@ -14,7 +14,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,9 +199,25 @@ export function ConfigSettingsPage({
   const [selectedProfile, setSelectedProfile] = useState("");
   const saveVersionRef = useRef(0);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      setConfig(mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig));
+      setDirtySections(new Set());
+      onWriteStatusChange?.({ kind: "idle" });
+    } catch (error) {
+      onWriteStatusChange?.({
+        kind: "error",
+        message: error instanceof Error ? error.message : "加载配置失败",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [onWriteStatusChange]);
+
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     setActive(initialPage);
@@ -214,7 +230,10 @@ export function ConfigSettingsPage({
   }, [active, dirtySections, onWriteStatusChange]);
 
   const merged = useMemo(() => mergeConfig(DEFAULT_CONFIG, config), [config]);
-  const profiles = merged.models?.profiles ?? {};
+  const profiles = useMemo(
+    () => merged.models?.profiles ?? {},
+    [merged.models?.profiles],
+  );
   const activeModelName = str(merged.serve?.model);
   const currentModelName =
     selectedProfile && profiles[selectedProfile]
@@ -234,22 +253,6 @@ export function ConfigSettingsPage({
         : (firstKey(profiles) ?? ""),
     );
   }, [activeModelName, profiles, selectedProfile]);
-
-  async function refresh() {
-    setLoading(true);
-    try {
-      setConfig(mergeConfig(DEFAULT_CONFIG, (await loadConfig()) as QiongqiConfig));
-      setDirtySections(new Set());
-      onWriteStatusChange?.({ kind: "idle" });
-    } catch (error) {
-      onWriteStatusChange?.({
-        kind: "error",
-        message: error instanceof Error ? error.message : "加载配置失败",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function saveSection(section: ConfigPage, nextConfig: QiongqiConfig) {
     const version = ++saveVersionRef.current;

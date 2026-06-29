@@ -2957,7 +2957,7 @@ function legacyCodingSkillEntry(skill: Record<string, unknown>): Record<string, 
 
 function skillFamily(id: string, root: string, source?: string, category?: string): string {
   if (isBuiltinSkill(id)) return 'kworks-management'
-  if (isQiongqiCodingSkill(id) || root.includes('/third_party/qiongqi/skills') || (source === 'official' && (category === 'development' || category === 'review'))) {
+  if (isQiongqiCodingSkill(id) || root.includes('/qiongqi/skills') || (source === 'official' && (category === 'development' || category === 'review'))) {
     return 'qiongqi-coding'
   }
   if (root.includes('/custom/') || root.endsWith('/custom')) return 'user-custom'

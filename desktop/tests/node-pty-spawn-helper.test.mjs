@@ -56,7 +56,7 @@ test("package.json declares a postinstall that re-applies +x to spawn-helper", (
   const scripts = pkg.scripts ?? {};
   assert.ok(
     typeof scripts.postinstall === "string",
-    "expected desktop-electron/package.json to define scripts.postinstall",
+    "expected desktop/package.json to define scripts.postinstall",
   );
   // The postinstall delegates to scripts/fix-node-pty-permissions.mjs;
   // the contract is the file name, not the literal string "spawn-helper"

@@ -9,6 +9,9 @@ export default tseslint.config(
   {
     ignores: [
       ".next",
+      "out",
+      "coverage",
+      "test-results",
       "src/components/ui/**",
       "src/components/ai-elements/**",
       "*.js",

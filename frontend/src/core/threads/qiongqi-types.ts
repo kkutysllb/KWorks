@@ -8,9 +8,9 @@
  * This file is the single source of truth for thread/message types.
  *
  * Sources mirrored:
- *   - qiongqi message mapping: third_party/qiongqi/packages/http-layer/http/src/routes/kworks-compat.ts (itemToLangGraphMessage)
- *   - qiongqi TurnItem:  third_party/qiongqi/packages/foundation/contracts/src/items.ts
- *   - qiongqi events:    third_party/qiongqi/packages/foundation/contracts/src/events.ts
+ *   - qiongqi message mapping: qiongqi/packages/http-layer/http/src/routes/kworks-compat.ts (itemToLangGraphMessage)
+ *   - qiongqi TurnItem:  qiongqi/packages/foundation/contracts/src/items.ts
+ *   - qiongqi events:    qiongqi/packages/foundation/contracts/src/events.ts
  */
 
 // ---------------------------------------------------------------------------

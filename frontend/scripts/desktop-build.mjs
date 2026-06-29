@@ -66,10 +66,10 @@ console.log(`[desktop-build] using GATEWAY_PORT=${GATEWAY_PORT} (from shared .en
 // pre-renders /workspace/chats/new. Other thread IDs are handled at runtime
 // by the Electron protocol handler fallback + client-side useParams().
 //
-// NOTE: workspace/coding/[projectId]/ is NOT moved aside — it is kept and
-// given a generateStaticParams layout (created via NEW_FILES) so the dynamic
-// route survives the static export. The page.tsx is a client component that
-// reads projectId from usePathname() at runtime.
+// NOTE: workspace/coding/[projectId]/ is NOT moved aside — its checked-in
+// layout exports generateStaticParams so the dynamic route survives the static
+// export. The page.tsx is a client component that reads projectId from
+// usePathname() at runtime.
 const CONFLICT_DIRS = [
   "api",
   "mock",
@@ -79,35 +79,6 @@ const CONFLICT_DIRS = [
 // ── Files to move aside (incompatible with static export) ──────────────────
 // (none currently — using --webpack avoids the Turbopack _global-error bug)
 const CONFLICT_FILES = [];
-
-// ── Temporary files to create for the build, then remove afterwards ────────
-// NOTE: _chat-providers.tsx used to be listed here as a "temp file", but both
-// web and desktop layouts now permanently import it. It lives in the source
-// tree as a normal file and must NOT be created/deleted by this script —
-// doing so deletes a tracked source file and breaks `next dev` on web.
-const NEW_FILES = [
-  {
-    // Server-component layout for the coding project dynamic route.
-    // page.tsx is "use client" and reads projectId from usePathname(), so it
-    // cannot export generateStaticParams itself. This layout is a server
-    // component that satisfies Next.js `output: export` by pre-rendering a
-    // single placeholder. At runtime the client router loads the page.tsx
-    // chunk for ANY projectId and resolves it client-side.
-    file: join(APP_DIR, "workspace", "coding", "[projectId]", "layout.tsx"),
-    content: `export function generateStaticParams() {
-  return [{ projectId: "__init__" }];
-}
-
-export default function CodingProjectLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
-`,
-  },
-];
 
 // ── Other source files to patch for static export compatibility ──────────
 const SOURCE_PATCHES = [
@@ -519,15 +490,6 @@ function main() {
     writeFileSync(patch.file, patch.content, "utf-8");
   }
 
-  // 2c. Create temporary new files needed by patched layouts
-  const createdFiles = [];
-  for (const entry of NEW_FILES) {
-    console.log(`[desktop-build] Creating temp file: ${entry.file}`);
-    mkdirSync(join(entry.file, ".."), { recursive: true });
-    writeFileSync(entry.file, entry.content, "utf-8");
-    createdFiles.push(entry.file);
-  }
-
   try {
     console.log("[desktop-build] Running next build --webpack with DESKTOP_BUILD=true...");
     try {
@@ -586,12 +548,6 @@ function main() {
       `[desktop-build] Top-level output: ${topFiles.slice(0, 15).join(", ")}...`,
     );
   } finally {
-    // Delete temporary new files
-    for (const file of createdFiles) {
-      console.log(`[desktop-build] Removing temp file: ${file}`);
-      rmSync(file, { force: true });
-    }
-
     // Restore patched layouts
     for (const { file, content } of patchedLayouts) {
       console.log(`[desktop-build] Restoring: ${file}`);

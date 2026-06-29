@@ -1341,7 +1341,7 @@ async function resolveQiongqiCodingSkillRoot(): Promise<string | undefined> {
   const candidates = [
     join(here, '../../../../skills'),
     join(process.cwd(), 'skills'),
-    join(process.cwd(), 'third_party/qiongqi/skills')
+    join(process.cwd(), 'qiongqi/skills')
   ]
   for (const candidate of candidates) {
     if (await hasSkillPackages(candidate)) return candidate

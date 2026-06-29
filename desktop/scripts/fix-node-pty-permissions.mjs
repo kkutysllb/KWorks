@@ -19,7 +19,7 @@
  * `spawn-helper`. It's idempotent — files that are already executable are
  * skipped — and a no-op when node-pty isn't installed yet.
  *
- * Wired up from `desktop-electron/package.json` as the `postinstall` hook.
+ * Wired up from `desktop/package.json` as the `postinstall` hook.
  */
 
 import { accessSync, chmodSync, readdirSync, statSync } from "node:fs";

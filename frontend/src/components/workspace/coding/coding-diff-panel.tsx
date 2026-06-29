@@ -50,7 +50,7 @@ export function CodingDiffPanel({
   const [diffViewMode, setDiffViewMode] = useState<"side-by-side" | "unified">(
     "side-by-side",
   );
-  const files = diff?.files ?? [];
+  const files = useMemo(() => diff?.files ?? [], [diff?.files]);
   const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
   const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
 

@@ -106,7 +106,7 @@ describe('KWorks public lifecycle skills', () => {
 })
 
 describe('KWorks unified skill roots', () => {
-  it('prefers explicit KWorks roots without scanning the third-party QiongQi fallback', async () => {
+  it('prefers explicit KWorks roots without scanning stale third-party QiongQi fallbacks', async () => {
     const explicitRoot = [
       resolve(HERE, '../../../skills/public'),
       resolve(process.cwd(), '../skills/public'),

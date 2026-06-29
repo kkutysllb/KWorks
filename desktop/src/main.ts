@@ -77,16 +77,16 @@ function isBackendAutolaunchEnabled(): boolean {
 // ── Icon resolution ──────────────────────────────────────────────────────
 
 function resolveIcon(): Electron.NativeImage | undefined {
-  // __dirname (compiled main.js) lives in desktop-electron/dist/.
-  // "../build/icon.png" resolves to desktop-electron/build/icon.png —
+  // __dirname (compiled main.js) lives in desktop/dist/.
+  // "../build/icon.png" resolves to desktop/build/icon.png —
   // the most reliable path that doesn't depend on REPO_ROOT.
   const candidates = [
     join(__dirname, "..", "build", "icon.png"),
     // Packaged: icon bundled by electron-builder.
     join(process.resourcesPath, "icon.png"),
     // Dev fallbacks via REPO_ROOT (now correctly = repo root).
-    join(REPO_ROOT, "desktop-electron", "build", "icon.png"),
-    join(REPO_ROOT, "desktop-electron", "resources", "icon.png"),
+    join(REPO_ROOT, "desktop", "build", "icon.png"),
+    join(REPO_ROOT, "desktop", "resources", "icon.png"),
   ];
   for (const path of candidates) {
     if (existsSync(path)) return nativeImage.createFromPath(path);
@@ -100,8 +100,8 @@ function resolveTrayIcon(): Electron.NativeImage | undefined {
     join(__dirname, "..", "build", "icons", "32x32.png"),
     join(process.resourcesPath, "icons", "16x16.png"),
     join(process.resourcesPath, "icons", "32x32.png"),
-    join(REPO_ROOT, "desktop-electron", "build", "icons", "16x16.png"),
-    join(REPO_ROOT, "desktop-electron", "build", "icons", "32x32.png"),
+    join(REPO_ROOT, "desktop", "build", "icons", "16x16.png"),
+    join(REPO_ROOT, "desktop", "build", "icons", "32x32.png"),
   ];
   for (const path of candidates) {
     if (!existsSync(path)) continue;

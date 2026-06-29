@@ -20,7 +20,6 @@ import {
   titleOfThread,
 } from "@/core/threads/utils";
 import { formatTimeAgo } from "@/core/utils/datetime";
-import { cn } from "@/lib/utils";
 
 export default function ChatsPage() {
   const { t } = useI18n();

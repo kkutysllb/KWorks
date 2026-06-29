@@ -290,7 +290,7 @@ export function useThreadStream({
   threadId,
   context,
   isMock,
-  assistantId = "lead_agent",
+  assistantId: _assistantId = "lead_agent",
   onSend,
   onStart,
   onFinish,
@@ -342,7 +342,6 @@ export function useThreadStream({
     hasMore: hasMoreHistory,
     loadMore: loadMoreHistory,
     loading: isHistoryLoading,
-    appendMessages,
   } = useThreadHistory(onStreamThreadId ?? "", {
     deferInitialLoad: (restoredStateRef.current?.messages.length ?? 0) > 0,
   });
@@ -535,7 +534,7 @@ export function useThreadStream({
         });
       }
     }
-  }, [isMock, onStreamThreadId, queryClient]);
+  }, [onStreamThreadId, queryClient]);
 
   // useQiongqiStream handles reconnection internally via:
   //   • Initial thread fetch + SSE subscription on mount
@@ -754,7 +753,7 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, t.uploads.uploadingFiles, context, queryClient],
+    [thread, t.uploads.uploadingFiles, context, queryClient, threadId],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,

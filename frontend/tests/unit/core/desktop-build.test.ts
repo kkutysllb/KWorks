@@ -7,6 +7,13 @@ const desktopBuildScript = readFileSync(
   resolve(__dirname, "../../../scripts/desktop-build.mjs"),
   "utf-8",
 );
+const codingProjectLayout = readFileSync(
+  resolve(
+    __dirname,
+    "../../../src/app/workspace/coding/[projectId]/layout.tsx",
+  ),
+  "utf-8",
+);
 const desktopPathsSource = readFileSync(
   resolve(__dirname, "../../../../desktop/src/paths.ts"),
   "utf-8",
@@ -32,5 +39,12 @@ describe("desktop static build", () => {
     expect(desktopBackendSource).toContain("getBuiltinCodingSkillsDir");
     expect(desktopBackendSource).toContain("getCustomSharedSkillsDir");
     expect(desktopPathsSource).toContain(".migration-v2.json");
+  });
+
+  test("keeps coding dynamic route layout checked in instead of creating temporary route files", () => {
+    expect(desktopBuildScript).not.toContain("const NEW_FILES");
+    expect(desktopBuildScript).not.toContain("Creating temp file");
+    expect(codingProjectLayout).toContain("generateStaticParams");
+    expect(codingProjectLayout).toContain('projectId: "__init__"');
   });
 });

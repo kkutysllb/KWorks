@@ -6,7 +6,6 @@ import {
   CpuIcon,
   GlobeIcon,
   MessageSquareIcon,
-  SparklesIcon,
   TerminalIcon,
   WrenchIcon,
 } from "lucide-react";
@@ -54,12 +53,6 @@ export function Welcome({
     () => collaborationPolicy === "auto",
     [collaborationPolicy],
   );
-  const colors = useMemo(() => {
-    if (isCollaborative) {
-      return ["#efefbb", "#e9c665", "#e3a812"];
-    }
-    return ["#22d3ee", "#a855f7", "#ec4899"];
-  }, [isCollaborative]);
   useEffect(() => {
     waved = true;
   }, []);

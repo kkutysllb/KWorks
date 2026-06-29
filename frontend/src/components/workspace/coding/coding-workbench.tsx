@@ -35,7 +35,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -1065,19 +1065,19 @@ function EmbeddedXtermViewport({
   onWriteRef.current = onWrite;
 
   /** Read the actual computed CSS custom-property value at runtime. */
-  const readCssVar = (name: string): string => {
+  const readCssVar = useCallback((name: string): string => {
     if (typeof document === "undefined") return "";
     return getComputedStyle(document.documentElement)
       .getPropertyValue(name)
       .trim();
-  };
+  }, []);
 
-  const getTerminalTheme = () => ({
+  const getTerminalTheme = useCallback(() => ({
     background: readCssVar("--background") || "#0a0a0a",
     foreground: readCssVar("--foreground") || "#fafafa",
     cursor: readCssVar("--foreground") || "#fafafa",
     selectionBackground: readCssVar("--muted") || "#333333",
-  });
+  }), [readCssVar]);
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -1124,7 +1124,7 @@ function EmbeddedXtermViewport({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [tab.id]);
+  }, [getTerminalTheme, tab.id]);
 
   useEffect(() => {
     if (!active) return;
@@ -1145,7 +1145,7 @@ function EmbeddedXtermViewport({
     const terminal = terminalRef.current;
     if (!terminal) return;
     terminal.options.theme = getTerminalTheme();
-  }, [resolvedTheme]);
+  }, [getTerminalTheme, resolvedTheme]);
 
   return (
     <div
@@ -2908,15 +2908,6 @@ function MetricGrid({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function Fingerprint({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-2 text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="truncate font-mono">{value}</span>
     </div>
   );
 }

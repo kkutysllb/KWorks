@@ -13,7 +13,7 @@ import "@/core/desktop/types";
  */
 const DESKTOP_BRIDGE_KEY = "kworksDesktop";
 // Historical Electron dev port; kept only as a final fallback for shells that
-// never set `frontendPort` on the bridge (e.g. older desktop-electron builds).
+// never set `frontendPort` on the bridge.
 const LEGACY_ELECTRON_DEV_PORT = "18659";
 
 let _desktopPort: number =

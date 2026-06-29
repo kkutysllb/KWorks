@@ -6,6 +6,7 @@ const backendSource = readFileSync(
   new URL("../src/backend.ts", import.meta.url),
   "utf8",
 );
+const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
 const pathsSource = readFileSync(new URL("../src/paths.ts", import.meta.url), "utf8");
 const builderSource = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8");
 const verifyResourcesSource = readFileSync(
@@ -27,6 +28,12 @@ test("desktop paths use the KWorks workspace root instead of old kkworks yaml ho
   assert.doesNotMatch(pathsSource, /\.kkworks-desktop/);
   assert.doesNotMatch(pathsSource, /getDesktopConfigPath/);
   assert.doesNotMatch(pathsSource, /getBundledConfigTemplatePath/);
+});
+
+test("desktop icon resolution no longer references the old desktop-electron folder", () => {
+  assert.match(mainSource, /join\(REPO_ROOT,\s*"desktop",\s*"build",\s*"icon\.png"\)/);
+  assert.match(mainSource, /join\(REPO_ROOT,\s*"desktop",\s*"build",\s*"icons"/);
+  assert.doesNotMatch(mainSource, /desktop-electron/);
 });
 
 test("desktop backend uses a generated QiongQi config instead of repo MCP config", () => {

@@ -164,7 +164,7 @@ export interface DetectedSource {
  * The bridge exposed on `window.kworksDesktop` by the Electron preload.
  *
  * Every member maps 1:1 to an `ipcMain.handle` channel (or a native call)
- * implemented in `desktop-electron/preload.ts`.
+ * implemented in `desktop/src/preload.ts`.
  */
 export interface DesktopBridge {
   /** Gateway port the embedded backend listens on. */

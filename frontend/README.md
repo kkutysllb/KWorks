@@ -6,7 +6,7 @@
 
 - **框架**: [Next.js 16](https://nextjs.org/) with [App Router](https://nextjs.org/docs/app)
 - **UI**: [React 19](https://react.dev/), [Tailwind CSS 4](https://tailwindcss.com/), [Shadcn UI](https://ui.shadcn.com/), [MagicUI](https://magicui.design/) and [React Bits](https://reactbits.dev/)
-- **AI 集成**: [qiongqi 原生引擎](../third_party/qiongqi/) `/v1/` API + RuntimeEvent SSE and [Vercel AI Elements](https://vercel.com/ai-sdk/ai-elements)
+- **AI 集成**: [qiongqi 原生引擎](../qiongqi/) `/v1/` API + RuntimeEvent SSE and [Vercel AI Elements](https://vercel.com/ai-sdk/ai-elements)
 
 ## 快速开始
 

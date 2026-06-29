@@ -2,7 +2,7 @@
 
 ## Overview
 
-KWorks is built on a sophisticated agent-based architecture powered by the [qiongqi](../third_party/qiongqi/) runtime engine to enable intelligent, stateful AI interactions. This document outlines the agent system architecture, patterns, and best practices for working with agents in the frontend application.
+KWorks is built on a sophisticated agent-based architecture powered by the [qiongqi](../qiongqi/) runtime engine to enable intelligent, stateful AI interactions. This document outlines the agent system architecture, patterns, and best practices for working with agents in the frontend application.
 
 ## Architecture Overview
 
@@ -87,7 +87,7 @@ src/
 
 ## Resources
 
-- [qiongqi Engine](../third_party/qiongqi/)
+- [qiongqi Engine](../qiongqi/)
 - [LangChain Core Concepts](https://js.langchain.com/docs/concepts)
 - [TanStack Query Documentation](https://tanstack.com/query/latest)
 - [Next.js App Router](https://nextjs.org/docs/app)
