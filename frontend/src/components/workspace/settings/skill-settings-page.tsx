@@ -115,12 +115,9 @@ function SkillSettingsList({
   const handleCreateSkill = () => {
     onClose?.();
     const params = new URLSearchParams({
-      mode: "skill",
-      skill: "skill-creator",
-      intent: "create",
       workModeId: activeWorkModeId,
     });
-    router.push(`/workspace/chats/new?${params.toString()}`);
+    router.push(`/workspace/skills/create?${params.toString()}`);
   };
   const openSkillTask = (skill: string, intent: string, target?: Skill) => {
     onClose?.();

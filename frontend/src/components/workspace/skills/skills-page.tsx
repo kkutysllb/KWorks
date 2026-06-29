@@ -489,12 +489,9 @@ export function SkillsPage() {
 
   const handleCreateSkill = () => {
     const params = new URLSearchParams({
-      mode: "skill",
-      skill: "skill-creator",
-      intent: "create",
       workModeId: activeWorkModeId,
     });
-    router.push(`/workspace/chats/new?${params.toString()}`);
+    router.push(`/workspace/skills/create?${params.toString()}`);
   };
 
   const handleSkillEnabledChange = (skill: WorkModeSkill, enabled: boolean) => {

@@ -52,3 +52,25 @@ export interface WorkModeWriteRequest {
 }
 
 export type WorkModeUpdateRequest = Partial<WorkModeWriteRequest>;
+
+export interface SkillCreateRequest {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  output: string;
+  procedure?: string;
+  examples?: string[];
+  workModeId?: string;
+  install?: boolean;
+}
+
+export interface SkillCreateResponse {
+  success: boolean;
+  installed: boolean;
+  skill_id: string;
+  skill_name: string;
+  workModeId?: string;
+  root: string;
+  message: string;
+}

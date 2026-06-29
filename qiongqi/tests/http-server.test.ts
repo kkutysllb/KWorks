@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dispatchRequest } from '@qiongqi/http'
@@ -2456,6 +2456,95 @@ describe('HTTP server', () => {
     expect(register.status).toBe(200)
     await expect(readJson(register)).resolves.toMatchObject({
       skill: { id: 'xlsx-creator', enabled: true, status: 'registered' }
+    })
+  })
+
+  it('creates a KWorks skill through the deterministic create endpoint', async () => {
+    const h = buildHarness()
+    const session = await h.runtime.authService?.initialize({
+      email: 'skill-create@example.com',
+      password: 'password123'
+    })
+    let refreshCount = 0
+    h.runtime.refreshRuntimeTools = async () => {
+      refreshCount += 1
+    }
+    await rm(join('/tmp/kun', 'skills', 'custom', 'shared', 'report-search'), { recursive: true, force: true })
+
+    const response = await dispatchRequest(h.router, new Request('http://localhost/api/skills/create', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${session?.accessToken}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: 'report-search',
+        name: '研报搜索',
+        description: '搜索和整理证券研究资料',
+        trigger: '用户需要搜索研报或整理证券研究资料',
+        output: 'Markdown 摘要，包含来源、要点和后续问题',
+        procedure: '1. 明确主题和范围\n2. 检索资料\n3. 输出结构化摘要',
+        workModeId: 'task'
+      })
+    }))
+
+    expect(response.status).toBe(201)
+    const body = await readJson(response) as { success: boolean; skill_id: string; root: string; workModeId: string }
+    expect(body).toMatchObject({
+      success: true,
+      skill_id: 'report-search',
+      workModeId: 'task'
+    })
+    expect(body.root.endsWith('/skills/custom/shared/report-search')).toBe(true)
+    const skillMd = await readFile(join(body.root, 'SKILL.md'), 'utf8')
+    expect(skillMd).toContain('name: report-search')
+    expect(skillMd).toContain('description: 搜索和整理证券研究资料')
+    expect(skillMd).toContain('## When To Use')
+    expect(skillMd).toContain('用户需要搜索研报或整理证券研究资料')
+    expect(skillMd).toContain('## Output Contract')
+
+    const config = await h.runtime.configStore?.read()
+    expect(config?.capabilities?.skills?.enabled).toBe(true)
+    expect(config?.capabilities?.skills?.roots).toContain('/tmp/kun/skills/custom/shared')
+    expect(config?.capabilities?.skills?.enabledSkills).toMatchObject({
+      'report-search': true
+    })
+    expect(config?.capabilities?.skills?.modeSkillOverrides?.task?.addedSkillIds).toContain('report-search')
+    const saved = await h.runtime.kworksUserDataStore?.getUserSetting(session!.user.id, 'capabilities.skills')
+    expect(saved).toMatchObject({
+      enabled: true,
+      enabledSkills: {
+        'report-search': true
+      }
+    })
+    expect(refreshCount).toBe(1)
+  })
+
+  it('rejects invalid KWorks skill ids before creating files', async () => {
+    const h = buildHarness()
+    const session = await h.runtime.authService?.initialize({
+      email: 'skill-create-invalid@example.com',
+      password: 'password123'
+    })
+
+    const response = await dispatchRequest(h.router, new Request('http://localhost/api/skills/create', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${session?.accessToken}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: '../ReportSearch',
+        name: 'Bad',
+        description: 'bad skill',
+        trigger: 'bad trigger',
+        output: 'bad output'
+      })
+    }))
+
+    expect(response.status).toBe(400)
+    await expect(readJson(response)).resolves.toMatchObject({
+      detail: 'id must start with a lowercase English letter or number and contain only lowercase English letters, numbers, or hyphens'
     })
   })
 

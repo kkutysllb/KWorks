@@ -82,6 +82,7 @@ import {
   kworksDeleteProject,
   kworksDeleteThread,
   kworksDeliveryStages,
+  kworksCreateSkill,
   kworksDiscardProjectFileChange,
   kworksDismissProjectStageSuggestion,
   kworksEmptyList,
@@ -326,6 +327,11 @@ export function buildRouter(runtime: ServerRuntime): Router {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
     return kworksSkills(runtime, actor, request, ctx.params.name)
+  })
+  router.add('POST', '/api/skills/create', async (request) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return kworksCreateSkill(runtime, actor, request)
   })
   router.add('POST', '/api/skills/install', async (request) => {
     const actor = await authenticateOrInternal(request, runtime)

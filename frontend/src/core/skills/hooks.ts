@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   addSkillToWorkMode,
+  createSkill,
   createWorkMode,
   deleteWorkMode,
   deleteSkill,
@@ -14,7 +15,11 @@ import {
   updateWorkMode,
   unregisterSkill,
 } from "./api";
-import type { WorkModeUpdateRequest, WorkModeWriteRequest } from "./type";
+import type {
+  SkillCreateRequest,
+  WorkModeUpdateRequest,
+  WorkModeWriteRequest,
+} from "./type";
 
 export function useSkills() {
   const { data, isLoading, error } = useQuery({
@@ -87,6 +92,22 @@ export function useUnregisterSkill() {
 
 export function useDeleteSkill() {
   return useSkillLifecycleMutation(deleteSkill);
+}
+
+export function useCreateSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SkillCreateRequest) => createSkill(request),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+      void queryClient.invalidateQueries({ queryKey: ["work-modes"] });
+      if (result.workModeId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["work-mode-skills", result.workModeId],
+        });
+      }
+    },
+  });
 }
 
 type WorkModeSkillMutationInput = {

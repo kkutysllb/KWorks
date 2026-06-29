@@ -824,41 +824,57 @@ export async function kworksInstallSkill(
     await writeFile(join(targetRoot, 'SKILL.md'), await readFile(source.absolutePath))
   }
 
-  const config = await readEffectiveRuntimeConfig(runtime, actor)
-  const currentSkills = config.capabilities?.skills ?? DEFAULT_QIONGQI_CAPABILITIES_CONFIG.skills
-  const installRoot = customSharedSkillRoot(runtime)
-  const roots = new Set(currentSkills.roots ?? [])
-  roots.add(installRoot)
-  const withRoot: SkillsConfig = {
-    ...currentSkills,
-    enabled: true,
-    roots: [...roots].sort((a, b) => a.localeCompare(b)),
-    enabledSkills: {
-      ...(currentSkills.enabledSkills ?? {}),
-      [skillId]: true
-    }
-  }
-
   const requestedWorkModeId = normalizeWorkModeId(
     stringValue(body.value.workModeId) ?? stringValue(body.value.work_mode_id)
   )
-  const workModeId = requestedWorkModeId && withRoot.workModes.modes[requestedWorkModeId]
-    ? requestedWorkModeId
-    : withRoot.workModes.defaultModeId
-  const updated = updateModeSkillOverride(withRoot, workModeId, skillId, 'add')
-  if (!updated.ok) return updated.response
-  const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, ownerUserId(actor), updated.skills)
-  if (!synced.ok) return synced.response
-  await refreshRuntimeTools(runtime)
+  const registered = await enableUserSkillForActor(runtime, actor, skillId, requestedWorkModeId)
+  if (!registered.ok) return registered.response
 
   return jsonResponse({
     success: true,
     skill_name: skillId,
     skill_id: skillId,
+    workModeId: registered.workModeId,
+    root: targetRoot,
+    message: `技能 ${skillId} 已安装并绑定到 ${registered.workModeId}`
+  })
+}
+
+export async function kworksCreateSkill(
+  runtime: ServerRuntime,
+  actor: AuthActor | undefined,
+  request: Request
+): Promise<JsonResponse | Response> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = parseSkillCreateRequestBody(body.value)
+  if (!parsed.ok) return parsed.response
+
+  const { skill } = parsed
+  const targetRoot = userSkillInstallRoot(runtime, skill.id)
+  await rm(targetRoot, { recursive: true, force: true })
+  await mkdir(targetRoot, { recursive: true })
+  await writeFile(join(targetRoot, 'SKILL.md'), renderCreatedSkillMarkdown(skill), 'utf8')
+  await writeFile(join(targetRoot, 'skill.json'), `${JSON.stringify(skillManifestForCreatedSkill(skill), null, 2)}\n`, 'utf8')
+
+  let workModeId = skill.workModeId
+  if (skill.install) {
+    const registered = await enableUserSkillForActor(runtime, actor, skill.id, skill.workModeId)
+    if (!registered.ok) return registered.response
+    workModeId = registered.workModeId
+  }
+
+  return jsonResponse({
+    success: true,
+    installed: skill.install,
+    skill_name: skill.id,
+    skill_id: skill.id,
     workModeId,
     root: targetRoot,
-    message: `技能 ${skillId} 已安装并绑定到 ${workModeId}`
-  })
+    message: skill.install
+      ? `技能 ${skill.id} 已创建并绑定到 ${workModeId}`
+      : `技能 ${skill.id} 已创建`
+  }, 201)
 }
 
 export async function kworksEmptyList(key: string): Promise<JsonResponse> {
@@ -2786,6 +2802,179 @@ async function kworksSkillEntries(runtime: ServerRuntime, state: SkillCompatConf
 type SkillsConfig = NonNullable<NonNullable<QiongqiConfig['capabilities']>['skills']>
 type WorkModeConfigValue = SkillsConfig['workModes']['modes'][string]
 
+type ParsedSkillCreateRequest = {
+  id: string
+  name: string
+  description: string
+  trigger: string
+  output: string
+  procedure: string | undefined
+  examples: string[]
+  workModeId: string | undefined
+  install: boolean
+}
+
+function parseSkillCreateRequestBody(
+  value: unknown
+): { ok: true; skill: ParsedSkillCreateRequest } | { ok: false; response: JsonResponse } {
+  if (!isObject(value)) {
+    return { ok: false, response: jsonResponse({ detail: 'skill create request body must be an object' }, 400) }
+  }
+
+  const id = stringValue(value.id) ?? stringValue(value.skill_id) ?? stringValue(value.skillId)
+  if (!id) return { ok: false, response: jsonResponse({ detail: 'id is required' }, 400) }
+  if (!isValidCustomSkillId(id)) {
+    return {
+      ok: false,
+      response: jsonResponse({
+        detail: 'id must start with a lowercase English letter or number and contain only lowercase English letters, numbers, or hyphens'
+      }, 400)
+    }
+  }
+
+  const name = stringValue(value.name)
+  if (!name) return { ok: false, response: jsonResponse({ detail: 'name is required' }, 400) }
+  const description = stringValue(value.description)
+  if (!description) return { ok: false, response: jsonResponse({ detail: 'description is required' }, 400) }
+  const trigger = stringValue(value.trigger) ?? stringValue(value.whenToUse) ?? stringValue(value.when_to_use)
+  if (!trigger) return { ok: false, response: jsonResponse({ detail: 'trigger is required' }, 400) }
+  const output = stringValue(value.output) ?? stringValue(value.outputContract) ?? stringValue(value.output_contract)
+  if (!output) return { ok: false, response: jsonResponse({ detail: 'output is required' }, 400) }
+
+  const examples = stringList(value.examples)
+    ?.map((item) => item.trim())
+    .filter(Boolean) ?? []
+
+  return {
+    ok: true,
+    skill: {
+      id,
+      name,
+      description,
+      trigger,
+      output,
+      procedure: stringValue(value.procedure) ?? stringValue(value.steps),
+      examples,
+      workModeId: normalizeWorkModeId(stringValue(value.workModeId) ?? stringValue(value.work_mode_id)),
+      install: booleanValue(value.install) ?? true
+    }
+  }
+}
+
+async function enableUserSkillForActor(
+  runtime: ServerRuntime,
+  actor: AuthActor | undefined,
+  skillId: string,
+  requestedWorkModeId: string | undefined
+): Promise<{ ok: true; workModeId: string; skills: SkillsConfig } | { ok: false; response: JsonResponse }> {
+  const config = await readEffectiveRuntimeConfig(runtime, actor)
+  const currentSkills = config.capabilities?.skills ?? DEFAULT_QIONGQI_CAPABILITIES_CONFIG.skills
+  const installRoot = customSharedSkillRoot(runtime)
+  const roots = new Set(currentSkills.roots ?? [])
+  roots.add(installRoot)
+  const withRoot: SkillsConfig = {
+    ...currentSkills,
+    enabled: true,
+    roots: [...roots].sort((a, b) => a.localeCompare(b)),
+    enabledSkills: {
+      ...(currentSkills.enabledSkills ?? {}),
+      [skillId]: true
+    }
+  }
+  const workModeId = requestedWorkModeId && withRoot.workModes.modes[requestedWorkModeId]
+    ? requestedWorkModeId
+    : withRoot.workModes.defaultModeId
+  const updated = updateModeSkillOverride(withRoot, workModeId, skillId, 'add')
+  if (!updated.ok) return updated
+  const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, ownerUserId(actor), updated.skills)
+  if (!synced.ok) return synced
+  await refreshRuntimeTools(runtime)
+  return { ok: true, workModeId, skills: updated.skills }
+}
+
+function skillManifestForCreatedSkill(skill: ParsedSkillCreateRequest): Record<string, unknown> {
+  return {
+    specVersion: '1.0',
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    version: '0.1.0',
+    entry: 'SKILL.md',
+    category: 'workflow',
+    activation: {
+      commands: [],
+      promptPatterns: [escapeRegExp(skill.trigger)],
+      fileTypes: [],
+      autoActivate: false
+    },
+    commands: [],
+    tools: {
+      allowed: [],
+      declarations: [],
+      mcpServers: {}
+    },
+    contributes: {
+      chatMenu: [],
+      quickTask: []
+    },
+    permissions: {
+      workspace: 'write',
+      network: false,
+      exec: 'none',
+      requiresApproval: 'on-request'
+    },
+    assets: []
+  }
+}
+
+function renderCreatedSkillMarkdown(skill: ParsedSkillCreateRequest): string {
+  const procedure = skill.procedure
+    ? normalizeMarkdownBlock(skill.procedure)
+    : [
+        '- Confirm the user goal, required inputs, and constraints before doing work.',
+        '- Follow the workflow described in the trigger and keep actions scoped to the current user, task, and workspace.',
+        '- Produce the requested output contract and call out missing information or external limitations clearly.'
+      ].join('\n')
+  const examples = skill.examples.length
+    ? `\n\n## Examples\n${skill.examples.map((example) => `- ${frontmatterLine(example)}`).join('\n')}`
+    : ''
+  return [
+    '---',
+    `name: ${skill.id}`,
+    `description: ${frontmatterLine(skill.description)}`,
+    '---',
+    '',
+    `# ${skill.name}`,
+    '',
+    '## When To Use',
+    normalizeMarkdownBlock(skill.trigger),
+    '',
+    '## Procedure',
+    procedure,
+    '',
+    '## Output Contract',
+    normalizeMarkdownBlock(skill.output),
+    '',
+    '## Failure Handling',
+    '- If required inputs are missing, ask one concise clarification question.',
+    '- If external dependencies are unavailable, explain the limitation and provide the best partial result.',
+    '- Do not reuse memory, files, credentials, or task context across users or unrelated tasks.',
+    examples
+  ].join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n'
+}
+
+function normalizeMarkdownBlock(value: string): string {
+  return value.replace(/\r\n/g, '\n').trim()
+}
+
+function frontmatterLine(value: string): string {
+  return value.replace(/\r?\n/g, ' ').trim()
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function parseWorkModeRequestBody(
   value: unknown,
   options: {
@@ -2862,6 +3051,10 @@ function normalizeWorkModeId(id: string | undefined): string | undefined {
 }
 
 function isValidCustomWorkModeId(id: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,63}$/.test(id)
+}
+
+function isValidCustomSkillId(id: string): boolean {
   return /^[a-z0-9][a-z0-9-]{0,63}$/.test(id)
 }
 

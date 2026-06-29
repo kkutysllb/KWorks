@@ -518,14 +518,14 @@ export function ConfigSettingsPage({
                   "responses",
                 ]}
                 optionLabels={{
-                  openai_compatible: "OpenAI 兼容",
-                  anthropic_compatible: "Anthropic 兼容",
+                  openai_compatible: "OpenAI 兼容协议",
+                  anthropic_compatible: "Anthropic 兼容协议",
                   responses: "OpenAI Responses",
                 }}
                 onChange={(v) => updateModel("endpointFormat", v)}
               />
               <p className="text-muted-foreground text-xs md:col-span-2">
-                服务地址可填写服务根地址或完整接口地址；后端会按协议自动拼接对应端点。模型能力、图片输入格式和上下文压缩会优先使用内置模型画像。
+                服务地址可填写服务根地址或完整接口地址；后端会按协议自动拼接对应端点。模型能力、图片输入格式和上下文压缩会优先使用内置模型画像，包含 GLM-5.2/GLM-5 Coding Plan。
               </p>
             </FieldGrid>
             <AdvancedModelProfileFields

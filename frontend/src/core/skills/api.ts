@@ -3,6 +3,8 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type {
   Skill,
+  SkillCreateRequest,
+  SkillCreateResponse,
   WorkMode,
   WorkModeSkill,
   WorkModesResponse,
@@ -196,6 +198,25 @@ export async function deleteSkill(skillName: string) {
     throw new Error(`Failed to delete skill (${response.status})`);
   }
   return response.json();
+}
+
+export async function createSkill(
+  request: SkillCreateRequest,
+): Promise<SkillCreateResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/skills/create`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(
+      (await responseDetail(response)) ??
+        `Failed to create skill (${response.status})`,
+    );
+  }
+  return response.json() as Promise<SkillCreateResponse>;
 }
 
 export interface InstallSkillRequest {
