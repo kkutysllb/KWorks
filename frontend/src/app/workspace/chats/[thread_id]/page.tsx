@@ -157,6 +157,13 @@ export default function ChatPage() {
               </div>
             </header>
             <main className="flex min-h-0 max-w-full grow flex-col">
+              <div className="pointer-events-none absolute top-14 right-4 left-4 z-40 flex justify-end sm:right-6 sm:left-auto">
+                <TodoList
+                  className="pointer-events-auto"
+                  todos={thread.values.todos}
+                  variant="floating"
+                />
+              </div>
               <div className="flex size-full justify-center">
                 <MessageList
                   className={cn("size-full", !isNewThread && "pt-10")}
@@ -178,18 +185,6 @@ export default function ChatPage() {
                       : "max-w-[min(68rem,calc(100vw-2rem))]",
                   )}
                 >
-                  <div className="absolute -top-4 right-0 left-0 z-0">
-                    <div className="absolute right-0 bottom-0 left-0">
-                      <TodoList
-                        className="bg-background/5"
-                        todos={thread.values.todos ?? []}
-                        hidden={
-                          !thread.values.todos ||
-                          thread.values.todos.length === 0
-                        }
-                      />
-                    </div>
-                  </div>
                   {isNewThread && (
                     <div
                       className={cn(

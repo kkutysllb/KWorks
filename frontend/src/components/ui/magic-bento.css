@@ -12,9 +12,9 @@
 
 .card-grid {
   display: grid;
-  gap: 0.5em;
+  gap: 0.75em;
   padding: 0.75em;
-  max-width: 54em;
+  max-width: min(74rem, 100%);
   font-size: clamp(1rem, 0.9rem + 0.5vw, 1.5rem);
 }
 
@@ -24,7 +24,7 @@
   justify-content: space-between;
   position: relative;
   aspect-ratio: 4/3;
-  min-height: 200px;
+  min-height: 300px;
   width: 100%;
   max-width: 100%;
   padding: 1.25em;
@@ -187,6 +187,81 @@
   opacity: 0.9;
 }
 
+.capability-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.68rem;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.capability-card__summary {
+  margin: 0;
+  max-width: 30rem;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.capability-card__metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-block: 1px solid rgba(255, 255, 255, 0.09);
+  padding-block: 0.5rem;
+}
+
+.capability-card__metric span:first-child {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.capability-card__metric span:last-child {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.72rem;
+}
+
+.capability-card__flow {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.capability-card__flow-item {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.36rem 0.5rem;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.capability-card__flow-index {
+  color: rgba(255, 255, 255, 0.36);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+}
+
+.capability-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.capability-card__tag {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.24rem 0.48rem;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
 .magic-bento-card--text-autohide .magic-bento-card__title,
 .magic-bento-card--text-autohide .magic-bento-card__description {
   display: -webkit-box;
@@ -215,7 +290,7 @@
 
   .magic-bento-card {
     width: 100%;
-    min-height: 180px;
+    min-height: 320px;
   }
 }
 
