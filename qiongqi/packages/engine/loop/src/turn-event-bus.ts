@@ -159,6 +159,7 @@ export async function runStepViaEventBus(ctx: StepContext, stepIndex: number): P
       const dispatched = await deps.coordinator.dispatch({
         calls: [decision.planCall], threadId, turnId,
         workspace: promptCtx.thread?.workspace ?? '',
+        ...(promptCtx.thread?.ownerUserId ? { ownerUserId: promptCtx.thread.ownerUserId } : {}),
         threadMode: promptCtx.effectiveMode,
         ...(promptCtx.activePlanContext ? { activePlanContext: promptCtx.activePlanContext } : {}),
         modelCapabilities: promptCtx.modelCapabilities,
@@ -174,6 +175,7 @@ export async function runStepViaEventBus(ctx: StepContext, stepIndex: number): P
       const dispatched = await deps.coordinator.dispatch({
         calls: stepResult.completedToolCalls, threadId, turnId,
         workspace: promptCtx.thread?.workspace ?? '',
+        ...(promptCtx.thread?.ownerUserId ? { ownerUserId: promptCtx.thread.ownerUserId } : {}),
         threadMode: promptCtx.effectiveMode,
         ...(promptCtx.activePlanContext ? { activePlanContext: promptCtx.activePlanContext } : {}),
         modelCapabilities: promptCtx.modelCapabilities,

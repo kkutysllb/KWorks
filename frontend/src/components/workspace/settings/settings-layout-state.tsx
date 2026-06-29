@@ -11,7 +11,6 @@ import {
   PaletteIcon,
   RadioTowerIcon,
   SparklesIcon,
-  SlidersHorizontalIcon,
   UserIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -40,7 +39,6 @@ export type SettingsSection =
   | "qiongqi-web"
   | "qiongqi-skills"
   | "qiongqi-subagents"
-  | "qiongqi-memory"
   | "import";
 
 export type QiongqiSettingsSection = Extract<
@@ -73,7 +71,6 @@ const KNOWN_SECTIONS: SettingsSection[] = [
   "qiongqi-web",
   "qiongqi-skills",
   "qiongqi-subagents",
-  "qiongqi-memory",
   "import",
 ];
 
@@ -87,7 +84,6 @@ export const QIONGQI_SECTION_PAGE: Record<QiongqiSettingsSection, ConfigPage> =
     "qiongqi-web": "web",
     "qiongqi-skills": "skills",
     "qiongqi-subagents": "subagents",
-    "qiongqi-memory": "memory",
   };
 
 export const SETTINGS_SECTION_COLORS: Record<
@@ -144,11 +140,6 @@ export const SETTINGS_SECTION_COLORS: Record<
     bar: "from-cyan-400 to-blue-500",
     bg: "bg-cyan-500/10",
   },
-  "qiongqi-memory": {
-    iconActive: "text-cyan-400",
-    bar: "from-cyan-400 to-blue-500",
-    bg: "bg-cyan-500/10",
-  },
   import: {
     iconActive: "text-emerald-400",
     bar: "from-emerald-400 to-teal-500",
@@ -195,11 +186,6 @@ function useSettingsSections(): SettingsSectionItem[] {
       { id: "qiongqi-web", label: "Web 能力", icon: GlobeIcon },
       { id: "qiongqi-skills", label: "技能", icon: SparklesIcon },
       { id: "qiongqi-subagents", label: "智能体协作", icon: BoxIcon },
-      {
-        id: "qiongqi-memory",
-        label: "QiongQi 记忆",
-        icon: SlidersHorizontalIcon,
-      },
     ];
     if (isDesktop()) {
       base.push({

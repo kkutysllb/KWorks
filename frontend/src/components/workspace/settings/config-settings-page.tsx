@@ -43,8 +43,7 @@ export type ConfigPage =
   | "mcp"
   | "web"
   | "skills"
-  | "subagents"
-  | "memory";
+  | "subagents";
 
 type JsonObject = Record<string, unknown>;
 type QiongqiConfig = {
@@ -57,7 +56,6 @@ type QiongqiConfig = {
     web?: JsonObject;
     skills?: JsonObject;
     subagents?: JsonObject;
-    memory?: JsonObject;
   };
 };
 
@@ -142,11 +140,6 @@ const DEFAULT_CONFIG: QiongqiConfig = {
       maxParallel: 0,
       maxChildRuns: 0,
     },
-    memory: {
-      enabled: false,
-      scopes: ["user", "workspace", "project"],
-      maxInjectedRecords: 8,
-    },
   },
 };
 
@@ -164,7 +157,6 @@ const nav: Array<{
   { id: "web", label: "Web 能力", path: "capabilities.web", icon: GlobeIcon },
   { id: "skills", label: "技能", path: "capabilities.skills", icon: SparklesIcon },
   { id: "subagents", label: "智能体协作", path: "capabilities.subagents", icon: BoxIcon },
-  { id: "memory", label: "记忆", path: "capabilities.memory", icon: BrainIcon },
 ];
 
 const labelCls = "text-sm font-medium leading-none";
@@ -506,13 +498,11 @@ export function ConfigSettingsPage({
         return <JsonOnlySection title="技能" path="capabilities.skills" value={merged.capabilities?.skills ?? {}} onChange={(value) => updateCapability("skills", value)} />;
       case "subagents":
         return <CapabilitySubagents value={merged.capabilities?.subagents ?? {}} onChange={(value) => updateCapability("subagents", value)} />;
-      case "memory":
-        return <CapabilityMemory value={merged.capabilities?.memory ?? {}} onChange={(value) => updateCapability("memory", value)} />;
     }
   })();
 
   return (
-    <div className="flex min-h-[500px] min-w-0 flex-col gap-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-500">
@@ -551,7 +541,7 @@ export function ConfigSettingsPage({
         </div>
       </div>
 
-      <div className="flex min-w-0 gap-4">
+      <div className="flex min-h-0 min-w-0 flex-1 gap-4">
         {showNav && (
           <nav className="w-48 shrink-0 space-y-1">
             {nav.map((item) => {
@@ -577,7 +567,7 @@ export function ConfigSettingsPage({
           </nav>
         )}
 
-        <ScrollArea className="h-[calc(75vh-10rem)] min-h-[420px] min-w-0 flex-1 rounded-lg border">
+        <ScrollArea className="min-h-[420px] min-w-0 flex-1 rounded-lg border">
           <div className="space-y-4 p-5">
             {loading ? (
               <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -844,18 +834,6 @@ function CapabilitySubagents({ value, onChange }: { value: JsonObject; onChange:
   );
 }
 
-function CapabilityMemory({ value, onChange }: { value: JsonObject; onChange: (value: JsonObject) => void }) {
-  const update = (key: string, next: unknown) => onChange({ ...value, [key]: next });
-  return (
-    <Section title="记忆" path="capabilities.memory">
-      <ToggleField label="enabled" checked={bool(value.enabled)} onChange={(v) => update("enabled", v)} />
-      <NumberField label="maxInjectedRecords" value={num(value.maxInjectedRecords)} onChange={(v) => update("maxInjectedRecords", v)} />
-      <ListField label="scopes" value={stringArray(value.scopes)} onChange={(v) => update("scopes", v)} />
-      <JsonEditor label="完整 capabilities.memory" value={value} onChange={(v) => onChange(asObject(v))} />
-    </Section>
-  );
-}
-
 function sectionToSave(section: ConfigPage, config: QiongqiConfig): { section: string; data: unknown } {
   switch (section) {
     case "storage":
@@ -866,7 +844,6 @@ function sectionToSave(section: ConfigPage, config: QiongqiConfig): { section: s
     case "web":
     case "skills":
     case "subagents":
-    case "memory":
       return { section, data: config.capabilities?.[section] ?? {} };
     default:
       return { section, data: config[section as keyof QiongqiConfig] ?? {} };

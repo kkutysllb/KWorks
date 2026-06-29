@@ -78,7 +78,7 @@ export function SettingsPageShell({
             activeSection={activeSection}
             onWriteStatusChange={setConfigWriteStatus}
             onOpenImportWizard={() => setWizardOpen(true)}
-            className="h-full min-h-0 min-w-0 rounded-xl border"
+            className="flex h-full min-h-0 min-w-0 flex-col rounded-xl border"
           />
         </div>
       ) : (
@@ -127,7 +127,7 @@ export function SettingsPageShell({
             activeSection={activeSection}
             onWriteStatusChange={setConfigWriteStatus}
             onOpenImportWizard={() => setWizardOpen(true)}
-            className="h-full min-h-0 min-w-0 rounded-lg border"
+            className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border"
           />
         </div>
       )}
@@ -152,7 +152,7 @@ function SettingsSectionContent({
 }) {
   return (
     <ScrollArea className={className}>
-      <div className="min-w-0 space-y-8 p-6">
+      <div className="flex min-h-full min-w-0 flex-1 flex-col p-6">
         {activeSection === "account" && <AccountSettingsPage />}
         {activeSection === "appearance" && <AppearanceSettingsPage />}
         {isQiongqiSection(activeSection) && (

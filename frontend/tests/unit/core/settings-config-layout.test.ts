@@ -24,9 +24,11 @@ describe("settings config layout", () => {
     );
 
     expect(source).toContain(
-      'className="h-full min-h-0 min-w-0 rounded-xl border"',
+      'className="flex h-full min-h-0 min-w-0 flex-col rounded-xl border"',
     );
-    expect(source).toContain('className="min-w-0 space-y-8 p-6"');
+    expect(source).toContain(
+      'className="flex min-h-full min-w-0 flex-1 flex-col p-6"',
+    );
     expect(source).toContain('className="min-h-0 min-w-0 flex-1 px-8 py-8"');
     expect(source).toContain("{!isPage && (");
     expect(source).not.toContain("SidebarTrigger");
@@ -40,11 +42,12 @@ describe("settings config layout", () => {
       "src/components/workspace/settings/config-settings-page.tsx",
     );
 
-    expect(source).toContain("flex min-h-[500px] min-w-0 flex-col gap-4");
-    expect(source).toContain("flex min-w-0 gap-4");
+    expect(source).toContain("flex min-h-0 min-w-0 flex-1 flex-col gap-4");
+    expect(source).toContain("flex min-h-0 min-w-0 flex-1 gap-4");
     expect(source).toContain(
-      'className="h-[calc(75vh-10rem)] min-h-[420px] min-w-0 flex-1 rounded-lg border"',
+      'className="min-h-[420px] min-w-0 flex-1 rounded-lg border"',
     );
+    expect(source).not.toContain("h-[calc(75vh-10rem)]");
   });
 
   test("wraps config header actions before they can push content sideways", () => {

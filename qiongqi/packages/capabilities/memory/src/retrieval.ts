@@ -4,6 +4,7 @@ export type RankMemoryRecordsInput = {
   query: string
   records: MemoryRecord[]
   workspace?: string
+  threadId?: string
   limit: number
 }
 
@@ -36,7 +37,7 @@ export function rankMemoryRecords(input: RankMemoryRecordsInput): MemoryRecord[]
   if (queryTokens.size === 0) return []
   return input.records
     .filter((record) => !record.deletedAt && !record.disabledAt)
-    .filter((record) => inActiveScope(record, input.workspace))
+    .filter((record) => inActiveScope(record, input.workspace, input.threadId))
     .map((record) => ({
       record,
       score: scoreRecord(record, queryTokens)
@@ -64,10 +65,17 @@ function scoreRecord(record: MemoryRecord, queryTokens: Set<string>): number {
   return (overlap + technicalExact * 2) * Math.max(record.confidence, 0)
 }
 
-function inActiveScope(record: MemoryRecord, workspace: string | undefined): boolean {
+function inActiveScope(record: MemoryRecord, workspace: string | undefined, threadId: string | undefined): boolean {
+  if (threadId && record.sourceThreadId !== threadId) return false
   if (record.scope === 'user') return true
   if (record.scope === 'workspace') return Boolean(workspace && record.workspace === workspace)
-  return true
+  if (record.scope === 'project') {
+    return Boolean(
+      workspace &&
+      record.workspace === workspace
+    )
+  }
+  return false
 }
 
 function addToken(tokens: Set<string>, token: string): void {

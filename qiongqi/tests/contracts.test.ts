@@ -531,6 +531,8 @@ describe('cli', () => {
     expect(config.attachments.textFallbackMaxBase64Bytes).toBe(512 * 1024)
     expect(config.attachments.textFallbackMaxImageDimension).toBe(1280)
     expect(config.attachments.textFallbackPreferredMimeType).toBe('image/webp')
+    expect(config.memory.enabled).toBe(true)
+    expect(QiongqiCapabilitiesConfig.parse({ memory: { enabled: false } }).memory.enabled).toBe(true)
     expect(config.memory.scopes).toEqual(['user', 'workspace', 'project'])
   })
 

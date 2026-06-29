@@ -292,7 +292,9 @@ export class PromptBuilder {
     }
     const memories = await this.retrieveMemories({
       prompt: turn?.prompt ?? '',
-      workspace: thread?.workspace ?? ''
+      workspace: thread?.workspace ?? '',
+      threadId,
+      ownerUserId: thread?.ownerUserId
     })
     const planTurnActive = effectiveMode === 'plan' || Boolean(activePlanContext)
     const activeGoalInstruction = planTurnActive
@@ -307,6 +309,7 @@ export class PromptBuilder {
       threadId,
       turnId,
       workspace: thread?.workspace ?? '',
+      ...(thread?.ownerUserId ? { ownerUserId: thread.ownerUserId } : {}),
       threadMode: effectiveMode,
       ...(activePlanContext ? { guiPlan: activePlanContext } : {}),
       model: modelCapabilities,
@@ -606,11 +609,15 @@ export class PromptBuilder {
   private async retrieveMemories(input: {
     prompt: string
     workspace: string
+    threadId: string
+    ownerUserId?: string
   }) {
     if (!this.deps.memoryStore) return []
     const memories = await this.deps.memoryStore.retrieve({
       query: input.prompt,
       workspace: input.workspace,
+      threadId: input.threadId,
+      ownerUserId: input.ownerUserId,
       limit: 8
     })
     this.deps.memoryStore.setLastInjected(memories.map((memory) => memory.id))

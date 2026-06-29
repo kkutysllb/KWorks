@@ -52,6 +52,8 @@ export type ToolHostContext = {
   threadId: string
   turnId: string
   workspace: string
+  /** Owner of the thread, used by providers that persist user-scoped state. */
+  ownerUserId?: string
   /**
    * Thread mode advertised by the GUI. Qiongqi restricts plan tools
    * to `plan` threads plus `planDraft`/`planRefine` turn kinds. The

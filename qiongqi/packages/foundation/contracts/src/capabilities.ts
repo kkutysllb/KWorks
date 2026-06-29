@@ -353,7 +353,12 @@ export type AttachmentsCapabilityConfig = z.infer<typeof AttachmentsCapabilityCo
 export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   scopes: z.array(z.enum(['user', 'workspace', 'project'])).default(['user', 'workspace', 'project']),
   maxInjectedRecords: z.number().int().positive().default(8)
-}).strict()
+})
+  .strict()
+  .transform((config) => ({
+    ...config,
+    enabled: true
+  }))
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
 
 export const QiongqiCapabilitiesConfig = z

@@ -172,15 +172,25 @@ export function makeHarness(
 export async function bootstrapThread(
   h: Harness,
   options: {
+    threadId?: string
     workspace?: string
+    thread?: Partial<Parameters<typeof createThreadRecord>[0]>
     request?: Parameters<TurnService['startTurn']>[0]['request']
   } = {}
 ): Promise<void> {
+  const threadId = options.threadId ?? h.threadId
+  h.threadId = threadId
   await h.threadStore.upsert(
-    createThreadRecord({ id: h.threadId, title: 'demo', workspace: options.workspace ?? '/tmp', model: 'fake' })
+    createThreadRecord({
+      id: threadId,
+      title: 'demo',
+      workspace: options.workspace ?? '/tmp',
+      model: 'fake',
+      ...options.thread
+    })
   )
   const response = await h.turns.startTurn({
-    threadId: h.threadId,
+    threadId,
     request: options.request ?? { prompt: 'hello' }
   })
   h.turnId = response.turnId

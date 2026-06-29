@@ -2398,7 +2398,6 @@ function sectionValue(config: QiongqiConfig, section: string): unknown {
     case 'run_events': return config.serve?.observability ?? {}
     case 'token_economy': return config.serve?.tokenEconomy ?? {}
     case 'sandbox': return config.serve?.sandboxMode ?? 'workspace-write'
-    case 'memory': return config.capabilities?.memory ?? {}
     case 'uploads':
     case 'attachments': return config.capabilities?.attachments ?? {}
     case 'mcp':
@@ -2425,7 +2424,6 @@ function withSectionValue(config: QiongqiConfig, section: string, data: unknown)
     case 'run_events': return { ...config, serve: { ...(config.serve ?? {}), observability: isObject(data) ? data : {} } }
     case 'token_economy': return { ...config, serve: { ...(config.serve ?? {}), tokenEconomy: isObject(data) ? data : {} } }
     case 'sandbox': return { ...config, serve: { ...(config.serve ?? {}), sandboxMode: typeof data === 'string' ? data : config.serve?.sandboxMode } }
-    case 'memory': return { ...config, capabilities: { ...(config.capabilities ?? {}), memory: isObject(data) ? data : {} } }
     case 'uploads':
     case 'attachments': return { ...config, capabilities: { ...(config.capabilities ?? {}), attachments: isObject(data) ? data : {} } }
     case 'mcp':
@@ -2445,7 +2443,6 @@ function usesRuntimeSectionWrite(section: string): boolean {
     'web',
     'skills',
     'capabilities',
-    'memory',
     'subagents',
     'collaboration'
   ].includes(section)
