@@ -611,7 +611,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -667,7 +667,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -730,7 +730,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -833,6 +833,76 @@ describe('DeepseekCompatModelClient', () => {
     expect(JSON.stringify(sentBodies[0]?.messages ?? [])).not.toContain('"type":"thinking"')
   })
 
+  it('does not infer Anthropic thinking support from Claude-named models on compatible messages providers', async () => {
+    const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'next' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 4, output_tokens: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://gateway.example/v1/messages',
+      apiKey: 'anthropic-compatible-key',
+      model: 'claude-sonnet-4-5',
+      endpointFormat: 'messages',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'claude-sonnet-4-5'
+    request.reasoningEffort = 'high'
+    request.history = [
+      {
+        ...makeAssistantReasoningItem({
+          id: 'assistant_reasoning_1',
+          turnId: 'turn_1',
+          threadId: 'thr_1',
+          text: 'Compatible gateways may use Claude model names without accepting thinking blocks.',
+          status: 'completed'
+        }),
+        signature: 'sig_opaque'
+      },
+      makeAssistantTextItem({
+        id: 'assistant_text_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Here is the answer.',
+        status: 'completed'
+      }),
+      makeToolCallItem({
+        id: 'call_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        arguments: { text: 'a' }
+      }),
+      makeToolResultItem({
+        id: 'result_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        output: 'a'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    expect(JSON.stringify(sentBodies[0]?.messages ?? [])).not.toContain('"type":"thinking"')
+  })
+
   it('does not synthesize Anthropic thinking for unrelated assistant text when preserving prior thinking', async () => {
     const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
     const fetchImpl: typeof fetch = async (_url, init) => {
@@ -850,7 +920,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -922,7 +992,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -1034,7 +1104,7 @@ describe('DeepseekCompatModelClient', () => {
       headers: { 'content-type': 'text/event-stream' }
     })
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'k',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -1081,7 +1151,7 @@ describe('DeepseekCompatModelClient', () => {
       headers: { 'content-type': 'text/event-stream' }
     })
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'k',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -1115,7 +1185,7 @@ describe('DeepseekCompatModelClient', () => {
       headers: { 'content-type': 'application/json' }
     })
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -2209,7 +2279,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-5',
       endpointFormat: 'messages',
@@ -2293,7 +2363,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-opus-4-7',
       endpointFormat: 'messages',
@@ -2377,7 +2447,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://claude.example',
+      baseUrl: 'https://api.anthropic.com',
       apiKey: 'anthropic-key',
       model: 'claude-opus-4-7',
       endpointFormat: 'messages',

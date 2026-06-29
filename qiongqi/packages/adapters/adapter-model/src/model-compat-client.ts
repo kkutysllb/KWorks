@@ -487,7 +487,7 @@ export class ModelCompatClient implements ModelClient {
       : request.history
     const repairedItems = repairModelHistoryItems([...request.prefix, ...history])
     const thinkingMode = endpointFormat === 'messages'
-      ? supportsAnthropicThinkingBlocks(this.config.baseUrl, model) &&
+      ? supportsAnthropicThinkingBlocks(this.config.baseUrl) &&
         (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
       : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
         requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
@@ -1617,9 +1617,7 @@ function isGlmOpenAiCompatRequest(
   return endpointFormat === 'chat_completions' && isBigModelProvider(baseUrl) && isGlmModel(model)
 }
 
-function supportsAnthropicThinkingBlocks(baseUrl: string, model: string | undefined): boolean {
-  const normalizedModel = normalizeModelId(model)
-  if (normalizedModel.startsWith('claude-')) return true
+function supportsAnthropicThinkingBlocks(baseUrl: string): boolean {
   try {
     const host = new URL(baseUrl).hostname.toLowerCase()
     return host === 'api.anthropic.com' || host.endsWith('.anthropic.com')
