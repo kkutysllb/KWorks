@@ -84,7 +84,7 @@ export const zhCN: Translations = {
   inputBox: {
     placeholder: "今天我能为你做些什么？",
     createSkillPrompt:
-      "我们一起用 skill-creator 技能来创建一个技能吧。先问问我希望这个技能能做什么。",
+      "使用 skill-creator 为 KWorks 创建一个可安装的新技能。若我已经提供目标或上下文，请直接整理需求并生成技能草稿；只有缺少技能目标、触发场景或交付形式等关键信息时，才向我提出简短问题。",
     createCronPrompt:
       "我们一起创建一个自动化任务吧。请告诉我：你想在什么时间、执行什么任务？例如每天早上9点生成工作总结。",
     addAttachments: "添加附件",
@@ -159,7 +159,7 @@ export const zhCN: Translations = {
       {
         suggestion: "技能",
         prompt:
-          "我们一起用 skill-creator 技能来创建一个技能吧。先问问我希望这个技能能做什么。",
+          "使用 skill-creator 为 KWorks 创建一个可安装的新技能。若我已经提供目标或上下文，请直接整理需求并生成技能草稿；只有缺少技能目标、触发场景或交付形式等关键信息时，才向我提出简短问题。",
         icon: SparklesIcon,
       },
     ],
@@ -399,6 +399,19 @@ export const zhCN: Translations = {
     clickToViewContent: "点击查看文件内容",
     writeTodos: "更新 To-do 列表",
     skillInstallTooltip: "安装技能并使其可在 KWorks 中使用",
+  },
+
+  userInput: {
+    title: "需要你的确认",
+    pending: "等待你补充信息，提交后模型会继续执行。",
+    submitted: "已提交，模型正在继续执行。",
+    cancelled: "已取消本次输入请求。",
+    answerPlaceholder: "输入你的回答",
+    detailsPlaceholder: "补充说明（可选）",
+    submit: "提交",
+    submitting: "提交中...",
+    cancel: "取消",
+    error: "提交失败，请稍后重试。",
   },
 
   uploads: {

@@ -436,7 +436,9 @@ export class ModelCompatClient implements ModelClient {
     messages: ChatMessage[],
     stream: boolean
   ): Record<string, unknown> {
-    const converted = messagesToAnthropic(messages)
+    const converted = messagesToAnthropic(messages, {
+      includeBlankThinkingPlaceholders: isDeepSeekHost(this.config.baseUrl)
+    })
     const body: Record<string, unknown> = {
       model,
       stream,
@@ -487,7 +489,7 @@ export class ModelCompatClient implements ModelClient {
       : request.history
     const repairedItems = repairModelHistoryItems([...request.prefix, ...history])
     const thinkingMode = endpointFormat === 'messages'
-      ? supportsAnthropicThinkingBlocks(this.config.baseUrl) &&
+      ? supportsMessagesThinkingBlocks(this.config.baseUrl) &&
         (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
       : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
         requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
@@ -1365,7 +1367,10 @@ function messagesToResponsesInput(messages: ChatMessage[]): Array<Record<string,
   return input
 }
 
-function messagesToAnthropic(messages: ChatMessage[]): { system: string; messages: AnthropicMessage[] } {
+function messagesToAnthropic(
+  messages: ChatMessage[],
+  options: { includeBlankThinkingPlaceholders?: boolean } = {}
+): { system: string; messages: AnthropicMessage[] } {
   const system: string[] = []
   const out: AnthropicMessage[] = []
   for (const message of messages) {
@@ -1397,7 +1402,8 @@ function messagesToAnthropic(messages: ChatMessage[]): { system: string; message
     )
     const thinking = anthropicThinkingFromReasoningContent(
       message.reasoning_content,
-      message.reasoning_signature
+      message.reasoning_signature,
+      { includeBlankThinkingPlaceholder: options.includeBlankThinkingPlaceholders }
     )
     if (message.role === 'assistant' && redactedThinking) {
       blocks.unshift(redactedThinking)
@@ -1423,11 +1429,15 @@ function messagesToAnthropic(messages: ChatMessage[]): { system: string; message
 
 function anthropicThinkingFromReasoningContent(
   reasoningContent: string | undefined,
-  signature: string | undefined
+  signature: string | undefined,
+  options: { includeBlankThinkingPlaceholder?: boolean } = {}
 ): Extract<AnthropicContentBlock, { type: 'thinking' }> | null {
   if (signature?.startsWith(REDACTED_THINKING_SIGNATURE_PREFIX)) return null
   const hasSignature = typeof signature === 'string' && signature.length > 0
-  if (!hasSignature && !reasoningContent?.trim()) return null
+  const hasReasoningContent = typeof reasoningContent === 'string'
+  if (!hasSignature && !reasoningContent?.trim() && !(options.includeBlankThinkingPlaceholder && hasReasoningContent)) {
+    return null
+  }
   return {
     type: 'thinking',
     thinking: reasoningContent?.trim() ? reasoningContent : '',
@@ -1624,6 +1634,10 @@ function supportsAnthropicThinkingBlocks(baseUrl: string): boolean {
   } catch {
     return /\banthropic\.com\b/i.test(baseUrl)
   }
+}
+
+function supportsMessagesThinkingBlocks(baseUrl: string): boolean {
+  return supportsAnthropicThinkingBlocks(baseUrl) || isDeepSeekHost(baseUrl)
 }
 
 function stripKnownEndpointPath(baseUrl: string): string {
@@ -2003,7 +2017,8 @@ function messageToDeepSeekThinkingContentBlocks(message: ChatMessage): ChatMessa
 function deepSeekThinkingPartFromMessage(message: ChatMessage): Extract<ChatMessageContentPart, { type: 'thinking' }> | null {
   if (message.reasoning_signature?.startsWith(REDACTED_THINKING_SIGNATURE_PREFIX)) return null
   const hasSignature = typeof message.reasoning_signature === 'string' && message.reasoning_signature.length > 0
-  if (!hasSignature && !message.reasoning_content?.trim()) return null
+  const hasReasoningContent = typeof message.reasoning_content === 'string'
+  if (!hasSignature && !hasReasoningContent) return null
   return {
     type: 'thinking',
     thinking: message.reasoning_content?.trim() ? message.reasoning_content : '',

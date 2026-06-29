@@ -90,6 +90,23 @@ export interface StartTurnResponse {
   userMessageItemId: string;
 }
 
+export interface UserInputAnswer {
+  id: string;
+  label: string;
+  value: string;
+}
+
+export interface ResolveUserInputPayload {
+  answers?: UserInputAnswer[];
+  cancelled?: boolean;
+}
+
+export interface ResolveUserInputResponse {
+  inputId: string;
+  status: "submitted" | "cancelled";
+  answers?: UserInputAnswer[];
+}
+
 // ---------------------------------------------------------------------------
 // Internal request helper
 // ---------------------------------------------------------------------------
@@ -268,6 +285,19 @@ export const qiongqiClient = {
       }),
     });
   },
+
+  async resolveUserInput(
+    inputId: string,
+    payload: ResolveUserInputPayload,
+  ): Promise<ResolveUserInputResponse> {
+    return request<ResolveUserInputResponse>(
+      encodePath`/v1/user-inputs/${inputId}`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
 };
 
 function encodedTodosPath(threadId: string) {
@@ -337,6 +367,15 @@ export function turnItemToMessage(item: TurnItem): Message {
         { id: item.callId, name: item.toolName, args: item.arguments },
       ],
       additional_kwargs,
+    };
+  }
+  if (item.kind === "user_input") {
+    return {
+      id,
+      type: "ai",
+      role: "assistant",
+      content: "",
+      additional_kwargs: { ...additional_kwargs, qiongqi_user_input: item },
     };
   }
   if (item.kind === "error") {

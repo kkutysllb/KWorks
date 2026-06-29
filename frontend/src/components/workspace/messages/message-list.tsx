@@ -182,7 +182,11 @@ export function MessageList({
           loadMore={loadMoreHistory}
         />
         {groupMessages(messages, (group) => {
-          if (group.type === "human" || group.type === "assistant") {
+          if (
+            group.type === "human" ||
+            group.type === "assistant" ||
+            group.type === "assistant:user-input"
+          ) {
             return group.messages.map((msg) => {
               return (
                 <MessageListItem

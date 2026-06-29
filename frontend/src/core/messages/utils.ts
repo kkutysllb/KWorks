@@ -18,13 +18,16 @@ interface AssistantClarificationGroup extends GenericMessageGroup<"assistant:cla
 
 interface AssistantSubagentGroup extends GenericMessageGroup<"assistant:subagent"> {}
 
+interface AssistantUserInputGroup extends GenericMessageGroup<"assistant:user-input"> {}
+
 type MessageGroup =
   | HumanMessageGroup
   | AssistantProcessingGroup
   | AssistantMessageGroup
   | AssistantPresentFilesGroup
   | AssistantClarificationGroup
-  | AssistantSubagentGroup;
+  | AssistantSubagentGroup
+  | AssistantUserInputGroup;
 
 export function groupMessages<T>(
   messages: Message[],
@@ -102,6 +105,12 @@ export function groupMessages<T>(
         groups.push({
           id: nextGroupId(message.id),
           type: "assistant:present-files",
+          messages: [message],
+        });
+      } else if (hasUserInput(message)) {
+        groups.push({
+          id: nextGroupId(message.id),
+          type: "assistant:user-input",
           messages: [message],
         });
       } else if (hasSubagent(message)) {
@@ -288,6 +297,14 @@ export function hasReasoning(message: Message) {
 export function hasToolCalls(message: Message) {
   return (
     message.type === "ai" && message.tool_calls && message.tool_calls.length > 0
+  );
+}
+
+export function hasUserInput(message: Message) {
+  return (
+    message.type === "ai" &&
+    typeof message.additional_kwargs?.qiongqi_user_input === "object" &&
+    message.additional_kwargs.qiongqi_user_input !== null
   );
 }
 

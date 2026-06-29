@@ -123,10 +123,17 @@ export type RemoveMessage = BaseMessage & {
   type: "remove";
 };
 
- 
+export type UserInputMessage = BaseMessage & {
+  type: "ai";
+  additional_kwargs: MessageAdditionalKwargs & {
+    qiongqi_user_input: UserInputTurnItem;
+  };
+};
+
 export type Message<ToolCall = DefaultToolCall> =
   | HumanMessage
   | AIMessage<ToolCall>
+  | UserInputMessage
   | ToolMessage
   | SystemMessage
   | FunctionMessage

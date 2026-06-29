@@ -46,12 +46,13 @@ import {
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { humanMessagePlugins } from "@/core/streamdown";
-import type { Message } from "@/core/threads/qiongqi-types";
+import type { Message, UserInputTurnItem } from "@/core/threads/qiongqi-types";
 import { cn } from "@/lib/utils";
 
 import { CopyButton } from "../copy-button";
 
 import { MarkdownContent } from "./markdown-content";
+import { UserInputCard } from "./user-input-card";
 
 function FeedbackButtons({
   threadId,
@@ -269,6 +270,7 @@ function MessageContent_({
 
   const rawContent = extractContentFromMessage(message);
   const reasoningContent = extractReasoningContentFromMessage(message);
+  const userInput = getUserInputFromMessage(message);
 
   const files = useMemo(() => {
     const files = message.additional_kwargs?.files;
@@ -306,6 +308,14 @@ function MessageContent_({
             </div>
           </TaskTrigger>
         </Task>
+      </AIElementMessageContent>
+    );
+  }
+
+  if (userInput) {
+    return (
+      <AIElementMessageContent className={className}>
+        <UserInputCard userInput={userInput} />
       </AIElementMessageContent>
     );
   }
@@ -523,6 +533,18 @@ function RichFileCard({
       </div>
     </div>
   );
+}
+
+function getUserInputFromMessage(message: Message): UserInputTurnItem | null {
+  const item = message.additional_kwargs?.qiongqi_user_input;
+  if (
+    item &&
+    typeof item === "object" &&
+    (item as { kind?: unknown }).kind === "user_input"
+  ) {
+    return item as UserInputTurnItem;
+  }
+  return null;
 }
 
 const MessageContent = memo(MessageContent_);

@@ -84,7 +84,7 @@ export const enUS: Translations = {
   inputBox: {
     placeholder: "How can I assist you today?",
     createSkillPrompt:
-      "We're going to build a new skill step by step with `skill-creator`. To start, what do you want this skill to do?",
+      "Use `skill-creator` to create an installable KWorks skill. If I already provided the goal or context, summarize the requirements and generate a skill draft directly; ask a short question only when the skill goal, trigger conditions, or expected output are missing.",
     createCronPrompt:
       "Let's create an automation together. Tell me: when should it run and what should it do? For example, generate a daily summary every morning at 9 AM.",
     addAttachments: "Add attachments",
@@ -165,7 +165,7 @@ export const enUS: Translations = {
       {
         suggestion: "Skill",
         prompt:
-          "We're going to build a new skill step by step with `skill-creator`. To start, what do you want this skill to do?",
+          "Use `skill-creator` to create an installable KWorks skill. If I already provided the goal or context, summarize the requirements and generate a skill draft directly; ask a short question only when the skill goal, trigger conditions, or expected output are missing.",
         icon: SparklesIcon,
       },
     ],
@@ -412,6 +412,19 @@ export const enUS: Translations = {
     clickToViewContent: "Click to view file content",
     writeTodos: "Update to-do list",
     skillInstallTooltip: "Install skill and make it available to the agent",
+  },
+
+  userInput: {
+    title: "Input needed",
+    pending: "Add the missing details. The model will continue after you submit.",
+    submitted: "Submitted. The model is continuing.",
+    cancelled: "This input request was cancelled.",
+    answerPlaceholder: "Type your answer",
+    detailsPlaceholder: "Optional details",
+    submit: "Submit",
+    submitting: "Submitting...",
+    cancel: "Cancel",
+    error: "Submission failed. Please try again.",
   },
 
   // Subtasks

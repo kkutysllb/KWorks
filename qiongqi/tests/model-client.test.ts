@@ -2095,7 +2095,66 @@ describe('DeepseekCompatModelClient', () => {
 
     expect(body?.thinking).toEqual({ type: 'enabled' })
     expect(body?.reasoning_effort).toBeUndefined()
-    expect(assistantMessage?.reasoning_content).toBe(' ')
+    expect(assistantMessage?.content).toEqual([
+      { type: 'thinking', thinking: '' },
+      { type: 'text', text: 'Done.' }
+    ])
+    expect(assistantMessage?.reasoning_content).toBeUndefined()
+  })
+
+  it('round-trips blank DeepSeek v4 thinking placeholders as chat-completions content blocks', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; thinking?: unknown }> = []
+    const response = {
+      id: 'r1',
+      model: 'deepseek-v4-pro',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    request.history = [
+      makeAssistantTextItem({
+        id: 'assistant_text',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Done.',
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
+
+    expect(sentBodies[0]?.thinking).toEqual({ type: 'enabled' })
+    expect(assistantMessage?.content).toEqual([
+      { type: 'thinking', thinking: '' },
+      { type: 'text', text: 'Done.' }
+    ])
+    expect(assistantMessage?.reasoning_content).toBeUndefined()
   })
 
   it('round-trips signed DeepSeek v4 thinking in chat-completions content blocks', async () => {
@@ -2185,6 +2244,110 @@ describe('DeepseekCompatModelClient', () => {
     expect(assistantMessage?.reasoning_signature).toBeUndefined()
     expect((assistantMessage?.tool_calls as Array<{ id?: string }> | undefined)?.map((call) => call.id))
       .toEqual(['call_a'])
+  })
+
+  it('round-trips official DeepSeek thinking on Anthropic-compatible endpoints', async () => {
+    const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'next' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 4, output_tokens: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'deepseek-key',
+      model: 'deepseek-v4-pro',
+      endpointFormat: 'messages',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    request.history = [
+      makeAssistantReasoningItem({
+        id: 'assistant_reasoning_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'I need to preserve this thought for the next request.',
+        status: 'completed'
+      }),
+      makeAssistantTextItem({
+        id: 'assistant_text_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Here is the answer.',
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
+
+    expect(assistantMessage?.content).toEqual([
+      { type: 'thinking', thinking: 'I need to preserve this thought for the next request.' },
+      { type: 'text', text: 'Here is the answer.' }
+    ])
+  })
+
+  it('round-trips blank official DeepSeek thinking placeholders on Anthropic-compatible endpoints', async () => {
+    const sentBodies: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'next' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 4, output_tokens: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'deepseek-key',
+      model: 'deepseek-v4-pro',
+      endpointFormat: 'messages',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    request.reasoningEffort = 'high'
+    request.history = [
+      makeAssistantTextItem({
+        id: 'assistant_text_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Here is the answer.',
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
+
+    expect(assistantMessage?.content).toEqual([
+      { type: 'thinking', thinking: '' },
+      { type: 'text', text: 'Here is the answer.' }
+    ])
   })
 
   it('preserves thinking reasoning_content that appears before tool calls', async () => {

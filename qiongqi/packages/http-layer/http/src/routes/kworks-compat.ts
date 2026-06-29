@@ -3626,6 +3626,15 @@ function promptWithExplicitSkillContext(prompt: string, context: Record<string, 
       lines.push(`Bind any newly created skill to work mode: ${workModeId}`)
     }
   }
+  if (intent === 'create') {
+    lines.push(
+      'KWorks skill creation contract:',
+      '- Prefer producing an installable skill draft directly when the user already supplied enough context.',
+      '- Ask for user input only when the skill goal, activation scenario, or expected output is genuinely missing.',
+      '- The draft should include a SKILL.md with trigger guidance, procedure, output contract, failure handling, and examples.',
+      '- If generating files, keep them inside the current thread/workspace artifact path so the KWorks installer can register the skill.'
+    )
+  }
   lines.push('', prompt)
   return lines.join('\n')
 }

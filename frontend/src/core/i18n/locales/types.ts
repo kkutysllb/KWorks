@@ -343,6 +343,19 @@ export interface Translations {
     skillInstallTooltip: string;
   };
 
+  userInput: {
+    title: string;
+    pending: string;
+    submitted: string;
+    cancelled: string;
+    answerPlaceholder: string;
+    detailsPlaceholder: string;
+    submit: string;
+    submitting: string;
+    cancel: string;
+    error: string;
+  };
+
   // Uploads
   uploads: {
     uploading: string;
