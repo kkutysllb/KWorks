@@ -7,6 +7,7 @@ import {
 } from "./local";
 import {
   getBaseSettingsSnapshot,
+  getThreadContextSnapshot,
   getThreadModelSnapshot,
   subscribe,
   updateLocalSettings,
@@ -43,9 +44,27 @@ export function useThreadSettings(
     () => undefined,
   );
 
+  const threadContext = useSyncExternalStore(
+    subscribe,
+    () => getThreadContextSnapshot(threadId),
+    () => undefined,
+  );
+
   const settings = useMemo(
-    () => applyThreadModelOverride(baseSettings, threadModelName),
-    [baseSettings, threadModelName],
+    () =>
+      applyThreadModelOverride(
+        threadContext
+          ? {
+              ...baseSettings,
+              context: {
+                ...baseSettings.context,
+                ...threadContext,
+              },
+            }
+          : baseSettings,
+        threadModelName,
+      ),
+    [baseSettings, threadContext, threadModelName],
   );
 
   const setSettings = useCallback<LocalSettingsSetter>(

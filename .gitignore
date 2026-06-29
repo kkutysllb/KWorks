@@ -176,3 +176,4 @@ desktop-tauri/
 docs/superpowers/
 .qiongqi-data/
 .ruff_cache/
+.workbuddy/*

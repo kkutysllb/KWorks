@@ -74,8 +74,18 @@ export function buildQiongQiRoiSummary(
   };
 }
 
+export function isSelectedWorkspaceRoot(
+  workspaceRoot: unknown,
+): workspaceRoot is string {
+  if (typeof workspaceRoot !== "string") {
+    return false;
+  }
+  const trimmed = workspaceRoot.trim();
+  return trimmed.length > 0 && trimmed !== ".";
+}
+
 export function getWorkspaceRootDisplayName(workspaceRoot: unknown): string {
-  if (typeof workspaceRoot !== "string" || workspaceRoot.trim().length === 0) {
+  if (!isSelectedWorkspaceRoot(workspaceRoot)) {
     return "未设置工作目录";
   }
   const trimmed = workspaceRoot.trim().replace(/\/+$/, "");

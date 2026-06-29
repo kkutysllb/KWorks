@@ -91,6 +91,7 @@ import { useFollowupsContext } from "./followups-context";
 import { useThread } from "./messages/context";
 import {
   getWorkspaceRootDisplayName,
+  isSelectedWorkspaceRoot,
   QiongQiRoiStrip,
 } from "./qiongqi-roi-strip";
 import { Tooltip } from "./tooltip";
@@ -373,15 +374,12 @@ export function InputBox({
     searchParams.get("intent") === "create";
   const workspaceHistory = useMemo(() => {
     const values = new Set<string>();
-    if (
-      typeof context.workspaceRoot === "string" &&
-      context.workspaceRoot.trim()
-    ) {
+    if (isSelectedWorkspaceRoot(context.workspaceRoot)) {
       values.add(context.workspaceRoot.trim());
     }
     for (const historyThread of historyThreads ?? []) {
       const value = historyThread.context?.workspaceRoot;
-      if (typeof value === "string" && value.trim()) {
+      if (isSelectedWorkspaceRoot(value)) {
         values.add(value.trim());
       }
     }
@@ -390,7 +388,7 @@ export function InputBox({
         message.additional_kwargs ?? {},
         "workspaceRoot",
       );
-      if (typeof value === "string" && value.trim()) {
+      if (isSelectedWorkspaceRoot(value)) {
         values.add(value.trim());
       }
     }
@@ -1298,6 +1296,9 @@ function WorkspaceRootMenu({
   onPickDirectory: () => void;
   onWorkspaceRootSelect: (workspaceRoot: string | undefined) => void;
 }) {
+  const selectedWorkspaceRoot = isSelectedWorkspaceRoot(workspaceRoot)
+    ? workspaceRoot.trim()
+    : undefined;
   const presets = [
     { label: "当前会话默认", value: undefined as string | undefined },
     ...workspaceHistory.map((value) => ({
@@ -1343,7 +1344,7 @@ function WorkspaceRootMenu({
                     {preset.value ?? "由穷奇运行时决定"}
                   </span>
                 </div>
-                {(workspaceRoot ?? undefined) === preset.value && (
+                {selectedWorkspaceRoot === preset.value && (
                   <CheckIcon className="ml-auto size-4" />
                 )}
               </PromptInputActionMenuItem>

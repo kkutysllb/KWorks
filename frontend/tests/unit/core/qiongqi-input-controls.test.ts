@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildQiongQiRoiSummary,
   getWorkspaceRootDisplayName,
+  isSelectedWorkspaceRoot,
   shouldRetryQiongQiRoiUsageFetch,
 } from "@/components/workspace/qiongqi-roi-strip";
 
@@ -108,5 +109,9 @@ describe("QiongQi input controls", () => {
   test("workspace root display falls back to project root when unset", () => {
     expect(getWorkspaceRootDisplayName("/Users/libing/project")).toBe("project");
     expect(getWorkspaceRootDisplayName("")).toBe("未设置工作目录");
+    expect(getWorkspaceRootDisplayName(".")).toBe("未设置工作目录");
+    expect(isSelectedWorkspaceRoot(".")).toBe(false);
+    expect(isSelectedWorkspaceRoot(" . ")).toBe(false);
+    expect(isSelectedWorkspaceRoot("/Users/libing/project")).toBe(true);
   });
 });

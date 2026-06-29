@@ -193,6 +193,8 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("pickDirectory");
     expect(inputBox).toContain("useThreads");
     expect(inputBox).toContain("historyThread.context?.workspaceRoot");
+    expect(inputBox).toContain("isSelectedWorkspaceRoot");
+    expect(inputBox).toContain("if (isSelectedWorkspaceRoot(value))");
     expect(inputBox).toContain("协作策略");
     expect(inputBox).not.toContain("多代理协作");
     expect(hooks).toContain('is_plan_mode: context.taskMode === "plan"');

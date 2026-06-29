@@ -4,6 +4,7 @@ import {
   THREAD_MODEL_KEY_PREFIX,
   getLocalSettings,
   getThreadModelName,
+  sanitizeLocalSettings,
   saveLocalSettings,
   saveThreadModelName,
   type LocalSettings,
@@ -18,6 +19,10 @@ export type LocalSettingsSetter = <K extends keyof LocalSettings>(
 
 const listeners = new Set<Listener>();
 const threadModelNames = new Map<string, string | undefined>();
+const threadContexts = new Map<
+  string,
+  Partial<LocalSettings["context"]> | undefined
+>();
 
 let baseSettings: LocalSettings = DEFAULT_LOCAL_SETTINGS;
 let baseSettingsLoaded = false;
@@ -59,6 +64,22 @@ function mergeSettingsSection<K extends keyof LocalSettings>(
       ...value,
     },
   } as LocalSettings;
+}
+
+function splitThreadLocalContext(
+  context: Partial<LocalSettings["context"]>,
+): {
+  globalContext: Partial<LocalSettings["context"]>;
+  threadContext: Partial<LocalSettings["context"]>;
+} {
+  const { workspaceRoot, ...globalContext } = context;
+  return {
+    globalContext,
+    threadContext:
+      typeof workspaceRoot === "string" && workspaceRoot.trim()
+        ? { workspaceRoot }
+        : {},
+  };
 }
 
 function handleStorage(event: StorageEvent) {
@@ -115,11 +136,20 @@ export function getThreadModelSnapshot(threadId: string): string | undefined {
   return threadModelNames.get(threadId);
 }
 
+export function getThreadContextSnapshot(
+  threadId: string,
+): Partial<LocalSettings["context"]> | undefined {
+  ensureBaseSettingsLoaded();
+  return threadContexts.get(threadId);
+}
+
 export const updateLocalSettings: LocalSettingsSetter = (key, value) => {
   ensureBaseSettingsLoaded();
   ensureStorageListenerRegistered();
 
-  baseSettings = mergeSettingsSection(baseSettings, key, value);
+  baseSettings = sanitizeLocalSettings(
+    mergeSettingsSection(baseSettings, key, value),
+  );
   saveLocalSettings(baseSettings);
   emitChange();
 };
@@ -132,7 +162,18 @@ export function updateThreadSettings<K extends keyof LocalSettings>(
   ensureBaseSettingsLoaded();
   ensureStorageListenerRegistered();
 
-  const nextBaseSettings = mergeSettingsSection(baseSettings, key, value);
+  let baseValue = value;
+  if (key === "context") {
+    const { globalContext, threadContext } = splitThreadLocalContext(
+      value as Partial<LocalSettings["context"]>,
+    );
+    baseValue = globalContext as Partial<LocalSettings[K]>;
+    threadContexts.set(threadId, threadContext);
+  }
+
+  const nextBaseSettings = sanitizeLocalSettings(
+    mergeSettingsSection(baseSettings, key, baseValue),
+  );
   baseSettings = nextBaseSettings;
   saveLocalSettings(baseSettings);
 

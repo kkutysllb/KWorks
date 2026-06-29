@@ -42,18 +42,33 @@ export interface LocalSettings {
   };
 }
 
+function sanitizeGlobalContext(
+  context?: Partial<LocalSettings["context"]>,
+): Partial<LocalSettings["context"]> {
+  const next = { ...(context ?? {}) };
+  delete next.workspaceRoot;
+  return next;
+}
+
 function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
   return {
     ...DEFAULT_LOCAL_SETTINGS,
     context: {
       ...DEFAULT_LOCAL_SETTINGS.context,
-      ...settings?.context,
+      ...sanitizeGlobalContext(settings?.context),
     },
     notification: {
       ...DEFAULT_LOCAL_SETTINGS.notification,
       ...settings?.notification,
     },
   };
+}
+
+export function sanitizeLocalSettings(settings: LocalSettings): LocalSettings {
+  return mergeLocalSettings({
+    ...settings,
+    context: sanitizeGlobalContext(settings.context),
+  });
 }
 
 function getThreadModelStorageKey(threadId: string): string {
@@ -116,5 +131,8 @@ export function saveLocalSettings(settings: LocalSettings) {
   if (!isBrowser()) {
     return;
   }
-  localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+  localStorage.setItem(
+    LOCAL_SETTINGS_KEY,
+    JSON.stringify(sanitizeLocalSettings(settings)),
+  );
 }

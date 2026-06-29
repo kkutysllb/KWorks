@@ -1,3 +1,12 @@
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/cover.png">
+    <img alt="KKOCLAW — Open-Source Super Agent Platform" src="assets/cover.png" width="100%" />
+  </picture>
+</p>
+
+
 # KWorks
 
 KWorks is a local-first AI workspace built from three main parts:
