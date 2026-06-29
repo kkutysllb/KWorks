@@ -76,6 +76,16 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(res.instructions.length).toBeGreaterThan(0)
   })
 
+  it('injects the resolved skill package root for bundled skill resources', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+    const res = host.resolveTurn({ prompt: '/skill:tdd now', workspace: '/workspace/project' })
+
+    const joined = res.instructions.join('\n')
+    expect(joined).toContain(`Skill package root: ${join(root, 'tdd')}`)
+    expect(joined).toContain(`Skill entry file: ${join(root, 'tdd', 'SKILL.md')}`)
+    expect(joined).toContain('Resolve relative skill resource paths from this skill package root')
+  })
+
   it('respects enabledSkills=false to exclude a skill', async () => {
     const host = await SkillPluginHost.create(
       cfg({ roots: [root] }),

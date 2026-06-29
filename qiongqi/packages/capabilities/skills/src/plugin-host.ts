@@ -374,6 +374,9 @@ function buildInjection(
     const text = [
       `Active Skill: ${skill.manifest.name} (${skill.id})`,
       `Activation: ${match.reason}`,
+      `Skill package root: ${skill.root}`,
+      `Skill entry file: ${skill.entryPath}`,
+      'Resolve relative skill resource paths from this skill package root. Do not guess or search for this skill under the user workspace, project directory, or other home-directory paths.',
       skill.manifest.description ? `Description: ${skill.manifest.description}` : '',
       skill.manifest.tools.allowed.length ? `Allowed tools: ${skill.manifest.tools.allowed.join(', ')}` : '',
       skill.assets.length ? `Assets:\n${skill.assets.map((a) => `- ${a}`).join('\n')}` : '',
