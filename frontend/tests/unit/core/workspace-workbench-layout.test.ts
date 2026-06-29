@@ -207,6 +207,10 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("showSkillCreateBindingHint");
     expect(inputBox).toContain("新技能将自动绑定到当前工作模式");
     expect(inputBox).toContain("selectedWorkModeLabel");
+    expect(inputBox).toContain("InputBoxSubmitContext");
+    expect(inputBox).toContain(
+      "onSubmit?.(message, contextForWorkMode(context, workModeId, supportThinking))",
+    );
     expect(inputBox).not.toContain("{workMode.name || workMode.id}");
     expect(inputBox).toContain("workModeId");
     expect(inputBox).not.toContain('type SurfaceMode = "task" | "coding"');
@@ -224,14 +228,34 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("if (isSelectedWorkspaceRoot(value))");
     expect(inputBox).toContain("协作策略");
     expect(inputBox).not.toContain("多代理协作");
-    expect(hooks).toContain('is_plan_mode: context.taskMode === "plan"');
     expect(hooks).toContain(
-      'subagent_enabled: context.collaborationPolicy === "auto"',
+      'is_plan_mode: baseSubmitContext.taskMode === "plan"',
     );
-    expect(hooks).toContain("workModeId: context.workModeId");
+    expect(hooks).toContain(
+      'subagent_enabled: baseSubmitContext.collaborationPolicy === "auto"',
+    );
+    expect(hooks).toContain("workModeId: baseSubmitContext.workModeId");
+    expect(hooks).toContain("...context,\n          ...extraContext");
     expect(hooks).not.toContain(
       'context.mode === "pro" || context.mode === "ultra"',
     );
+  });
+
+  test("new chat submits the resolved work mode context from the input box", () => {
+    const chatPage = readFileSync(
+      resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
+      "utf8",
+    );
+
+    expect(chatPage).toContain("type InputBoxSubmitContext");
+    expect(chatPage).toContain("urlWorkModeId");
+    expect(chatPage).toContain("chatContext");
+    expect(chatPage).toContain("context: chatContext");
+    expect(chatPage).toContain("context={chatContext}");
+    expect(chatPage).toContain(
+      "(message: PromptInputMessage, submitContext: InputBoxSubmitContext)",
+    );
+    expect(chatPage).toContain("sendMessage(threadId, message, submitContext)");
   });
 
   test("settings dialog does not duplicate MCP under an external tools section", () => {
@@ -279,7 +303,6 @@ describe("workspace workbench layout", () => {
     expect(layoutState).toContain("qiongqi-web");
     expect(layoutState).toContain("qiongqi-skills");
     expect(layoutState).toContain("qiongqi-subagents");
-    expect(layoutState).toContain("qiongqi-memory");
     expect(layoutState).not.toContain("qiongqi-attachments");
     expect(shell).toContain("showNav={false}");
     expect(shell).toContain("ConfigWriteStatus");
@@ -344,7 +367,6 @@ describe("workspace workbench layout", () => {
     expect(settings).toContain("MCP 工具的域名策略");
     expect(settings).toContain("capabilities.skills");
     expect(settings).toContain("capabilities.subagents");
-    expect(settings).toContain("capabilities.memory");
     expect(settings).not.toContain("capabilities.attachments");
     expect(settings).toContain("saveConfigSection");
     expect(settings).toContain("useQueryClient");

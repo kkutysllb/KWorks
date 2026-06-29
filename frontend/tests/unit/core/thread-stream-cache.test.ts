@@ -261,6 +261,35 @@ function QiongQiContextSubmitHarness({ threadId }: { threadId: string }) {
   );
 }
 
+function SubmitContextOverrideHarness({ threadId }: { threadId: string }) {
+  const { sendMessage } = useThreadStream({
+    threadId,
+    context: {
+      mode: undefined,
+      workModeId: "task",
+      executionProfile: "fast",
+    },
+    isMock: false,
+  });
+  return React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        void sendMessage(
+          threadId,
+          { text: "context override", files: [] },
+          {
+            workModeId: "finance-market",
+            executionProfile: "deep",
+          },
+        );
+      },
+    },
+    "submit",
+  );
+}
+
 function NewThreadSubmitHarness({ initialThreadId }: { initialThreadId: string }) {
   const [threadId, setThreadId] = React.useState(initialThreadId);
   const [isNewThread, setIsNewThread] = React.useState(true);
@@ -570,6 +599,41 @@ describe("useThreadStream cache bridge", () => {
       thread_id: "thread-a",
     });
     expect(submitOptions?.context).not.toHaveProperty("orchestration_mode");
+  });
+
+  test("lets per-submit context override stale thread settings", async () => {
+    submitMock.mockImplementation(async () => undefined);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        React.createElement(SubmitContextOverrideHarness, {
+          threadId: "thread-a",
+        }),
+      );
+    });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const submitOptions = submitMock.mock.calls[0]?.[1] as
+      | { context?: Record<string, unknown> }
+      | undefined;
+    expect(submitOptions?.context).toMatchObject({
+      workModeId: "finance-market",
+      executionProfile: "deep",
+      thinking_enabled: true,
+      reasoning_effort: "high",
+    });
   });
 
   test("deduplicates optimistic user text after the server echoes the submitted human message", async () => {

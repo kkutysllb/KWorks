@@ -12,7 +12,10 @@ import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import { ChatBox, useThreadChat } from "@/components/workspace/chats";
 import { ExportTrigger } from "@/components/workspace/export-trigger";
 import { FollowupsProvider } from "@/components/workspace/followups-context";
-import { InputBox } from "@/components/workspace/input-box";
+import {
+  InputBox,
+  type InputBoxSubmitContext,
+} from "@/components/workspace/input-box";
 import {
   MessageList,
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
@@ -97,8 +100,8 @@ export default function AgentChatPage() {
   });
 
   const handleSubmit = useCallback(
-    (message: PromptInputMessage) => {
-      void sendMessage(threadId, message, { agent_name });
+    (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
+      void sendMessage(threadId, message, { ...submitContext, agent_name });
     },
     [sendMessage, threadId, agent_name],
   );

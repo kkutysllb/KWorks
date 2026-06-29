@@ -114,6 +114,8 @@ type QiongQiContext = Omit<
   sandboxMode?: "workspace-write" | "danger-full-access" | "read-only";
 };
 
+export type InputBoxSubmitContext = QiongQiContext;
+
 export function getModelDisplayName(
   model: Pick<Model, "display_name" | "name" | "model"> | undefined,
 ): string {
@@ -251,7 +253,10 @@ export function InputBox({
   initialWorkModeId?: string;
   onContextChange?: (context: QiongQiContext) => void;
   onFollowupsVisibilityChange?: (visible: boolean) => void;
-  onSubmit?: (message: PromptInputMessage) => void;
+  onSubmit?: (
+    message: PromptInputMessage,
+    context: InputBoxSubmitContext,
+  ) => void;
   onStop?: () => void;
 }) {
   const { t } = useI18n();
@@ -533,7 +538,7 @@ export function InputBox({
       setFollowupsLoading(false);
 
       if (resolvedModelName && context.model_name !== resolvedModelName) {
-        onContextChange?.({
+        const nextContext = {
           ...context,
           model_name: resolvedModelName,
           executionProfile: getResolvedExecutionProfile(
@@ -543,12 +548,13 @@ export function InputBox({
           taskMode: context.taskMode ?? "agent",
           collaborationPolicy: context.collaborationPolicy ?? "single",
           workModeId,
-        });
-        setTimeout(() => onSubmit?.(message), 0);
+        };
+        onContextChange?.(nextContext);
+        setTimeout(() => onSubmit?.(message, nextContext), 0);
         return;
       }
 
-      onSubmit?.(message);
+      onSubmit?.(message, contextForWorkMode(context, workModeId, supportThinking));
     },
     [
       context,
@@ -559,6 +565,7 @@ export function InputBox({
       modelReady,
       selectedModel?.supports_thinking,
       status,
+      supportThinking,
       workModeId,
     ],
   );

@@ -36,7 +36,10 @@ import {
 } from "@/components/ui/select";
 import { ChatBox } from "@/components/workspace/chats";
 import { FollowupsProvider } from "@/components/workspace/followups-context";
-import { InputBox } from "@/components/workspace/input-box";
+import {
+  InputBox,
+  type InputBoxSubmitContext,
+} from "@/components/workspace/input-box";
 import {
   MessageList,
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
@@ -328,7 +331,7 @@ function AgentPanelInner({
   }, [isLoading, silentRefreshAll]);
 
   const handleSubmit = useCallback(
-    (message: PromptInputMessage) => {
+    (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
       // Scope the coding agent to this project for file access and memory.
       const project_root = project?.path;
       void sendMessage(
@@ -336,6 +339,7 @@ function AgentPanelInner({
         message,
         project_root
           ? {
+              ...submitContext,
               project_root,
               project_id: projectId,
               memory_scope: {
@@ -344,7 +348,7 @@ function AgentPanelInner({
                 workspaceRoot: project_root,
               },
             }
-          : undefined,
+          : submitContext,
       );
     },
     [sendMessage, threadId, project?.path, projectId],

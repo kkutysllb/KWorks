@@ -606,20 +606,23 @@ export function useThreadStream({
       let uploadedFileInfo: UploadedFileInfo[] = [];
 
       try {
-        const buildSubmitContext = (targetThreadId: string | undefined) => ({
-          ...extraContext,
+        const baseSubmitContext = {
           ...context,
-          thinking_enabled: context.executionProfile !== "fast",
-          is_plan_mode: context.taskMode === "plan",
-          subagent_enabled: context.collaborationPolicy === "auto",
+          ...extraContext,
+        };
+        const buildSubmitContext = (targetThreadId: string | undefined) => ({
+          ...baseSubmitContext,
+          thinking_enabled: baseSubmitContext.executionProfile !== "fast",
+          is_plan_mode: baseSubmitContext.taskMode === "plan",
+          subagent_enabled: baseSubmitContext.collaborationPolicy === "auto",
           reasoning_effort:
-            context.reasoning_effort ??
-            (context.executionProfile === "deep"
+            baseSubmitContext.reasoning_effort ??
+            (baseSubmitContext.executionProfile === "deep"
               ? "high"
-              : context.executionProfile === "balanced"
+              : baseSubmitContext.executionProfile === "balanced"
                 ? "medium"
                 : undefined),
-          workModeId: context.workModeId,
+          workModeId: baseSubmitContext.workModeId,
           thread_id: targetThreadId,
         });
         let activeThreadId = requestedThreadId;

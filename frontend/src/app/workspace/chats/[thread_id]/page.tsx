@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { BackendStatusIndicator } from "@/components/desktop";
@@ -13,7 +13,10 @@ import {
 } from "@/components/workspace/chats";
 import { ExportTrigger } from "@/components/workspace/export-trigger";
 import { FollowupsProvider } from "@/components/workspace/followups-context";
-import { InputBox } from "@/components/workspace/input-box";
+import {
+  InputBox,
+  type InputBoxSubmitContext,
+} from "@/components/workspace/input-box";
 import {
   MessageList,
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
@@ -41,6 +44,10 @@ export default function ChatPage() {
   const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
     useThreadChat();
   const [settings, setSettings] = useThreadSettings(threadId);
+  const urlWorkModeId = searchParams.get("workModeId") ?? undefined;
+  const [appliedUrlWorkModeId, setAppliedUrlWorkModeId] = useState<
+    string | null
+  >(null);
   const mountedRef = useRef(false);
   useSpecificChatMode();
 
@@ -55,12 +62,16 @@ export default function ChatPage() {
   }, [isNewThread, router, searchParams]);
 
   useEffect(() => {
+    setAppliedUrlWorkModeId(null);
+  }, [threadId, urlWorkModeId]);
+
+  useEffect(() => {
     const activeSkillId = searchParams.get("skill") ?? undefined;
     const skillIntent = searchParams.get("intent") ?? undefined;
     const targetSkillId = searchParams.get("target") ?? undefined;
-    const workModeId = searchParams.get("workModeId") ?? undefined;
-    const nextWorkModeId = workModeId ?? settings.context.workModeId;
-    if (!activeSkillId && !skillIntent && !targetSkillId && !workModeId) return;
+    const nextWorkModeId = urlWorkModeId ?? settings.context.workModeId;
+    if (!activeSkillId && !skillIntent && !targetSkillId && !urlWorkModeId)
+      return;
     if (
       settings.context.activeSkillId === activeSkillId &&
       settings.context.skillIntent === skillIntent &&
@@ -76,7 +87,29 @@ export default function ChatPage() {
       targetSkillId,
       workModeId: nextWorkModeId,
     });
-  }, [searchParams, setSettings, settings.context]);
+  }, [searchParams, setSettings, settings.context, urlWorkModeId]);
+
+  useEffect(() => {
+    if (
+      isNewThread &&
+      urlWorkModeId &&
+      settings.context.workModeId === urlWorkModeId
+    ) {
+      setAppliedUrlWorkModeId(urlWorkModeId);
+    }
+  }, [isNewThread, settings.context.workModeId, urlWorkModeId]);
+
+  const shouldUseUrlWorkMode =
+    isNewThread &&
+    Boolean(urlWorkModeId) &&
+    appliedUrlWorkModeId !== urlWorkModeId;
+  const chatContext = useMemo(
+    () =>
+      shouldUseUrlWorkMode && urlWorkModeId
+        ? { ...settings.context, workModeId: urlWorkModeId }
+        : settings.context,
+    [settings.context, shouldUseUrlWorkMode, urlWorkModeId],
+  );
 
   const { showNotification } = useNotification();
 
@@ -89,7 +122,7 @@ export default function ChatPage() {
     loadMoreHistory,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
-    context: settings.context,
+    context: chatContext,
     isMock,
     onSend: (_threadId) => {
       setThreadId(_threadId);
@@ -121,8 +154,8 @@ export default function ChatPage() {
   });
 
   const handleSubmit = useCallback(
-    (message: PromptInputMessage) => {
-      void sendMessage(threadId, message);
+    (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
+      void sendMessage(threadId, message, submitContext);
     },
     [sendMessage, threadId],
   );
@@ -204,7 +237,7 @@ export default function ChatPage() {
                     >
                       <Welcome
                         collaborationPolicy={
-                          settings.context.collaborationPolicy ?? "single"
+                          chatContext.collaborationPolicy ?? "single"
                         }
                       />
                     </div>
@@ -225,7 +258,7 @@ export default function ChatPage() {
                             ? "streaming"
                             : "ready"
                       }
-                      context={settings.context}
+                      context={chatContext}
                       disabled={
                         env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
                         isUploading
