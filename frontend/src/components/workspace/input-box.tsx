@@ -185,12 +185,18 @@ function getReasoningEffortForProfile(
   return "minimal";
 }
 
-function resolveWorkModeId(
+export function resolveWorkModeId(
   workModes: WorkMode[],
   preferred: string | undefined,
 ): string {
   const trimmed = preferred?.trim();
   if (trimmed && workModes.some((mode) => mode.id === trimmed)) {
+    return trimmed;
+  }
+  if (
+    trimmed &&
+    !SYSTEM_WORK_MODES.some((mode) => mode.id === trimmed)
+  ) {
     return trimmed;
   }
   return workModes[0]?.id ?? "task";

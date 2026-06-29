@@ -109,6 +109,39 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(host.resolveTurn({ prompt: '/skill:tdd', workspace: '' }).activeSkillIds).toContain('tdd')
   })
 
+  it('reloads work mode definitions on the same host instance', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    expect(host.workModeInfo('finance-market')?.id).toBe('task')
+
+    await host.reload(cfg({
+      roots: [root],
+      workModes: {
+        defaultModeId: 'task',
+        modes: {
+          task: {
+            id: 'task',
+            name: 'Task',
+            defaultSkillIds: []
+          },
+          'finance-market': {
+            id: 'finance-market',
+            name: '金融市场',
+            description: '分析市场数据、公告和交易机会',
+            defaultSkillIds: ['tdd']
+          }
+        }
+      }
+    }))
+
+    expect(host.workModeInfo('finance-market')).toMatchObject({
+      id: 'finance-market',
+      name: '金融市场',
+      description: '分析市场数据、公告和交易机会'
+    })
+    expect(host.effectiveSkillIds('finance-market')).toContain('tdd')
+  })
+
   it('respects activeLimit', async () => {
     const host = await SkillPluginHost.create(
       cfg({ roots: [root] }),

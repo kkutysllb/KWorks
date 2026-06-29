@@ -594,9 +594,10 @@ export async function createToolMatrix(
   configStore?: QiongqiConfigStore
 ): Promise<ToolMatrix> {
   const nowIso = core.nowIso
+  const builtinSkillRoots = await resolveBuiltinSkillRoots(options.dataDir, options.skillRoots)
   const skillRuntime = await SkillRuntime.create(options.capabilities?.skills)
   const skillPluginHost = await SkillPluginHost.create(options.capabilities?.skills, {
-    builtinRoots: await resolveBuiltinSkillRoots(options.dataDir, options.skillRoots),
+    builtinRoots: builtinSkillRoots,
     enabledSkillsProvider: configStore
       ? (context) => {
           const owner = context?.ownerUserId
@@ -607,7 +608,7 @@ export async function createToolMatrix(
         }
       : undefined
   })
-  const skillMcpServers = collectSkillMcpServers(
+  let skillMcpServers = collectSkillMcpServers(
     skillPluginHost.list(),
     process.cwd(),
     (p) => skillPluginHost.isEnabled(p)
@@ -716,6 +717,13 @@ export async function createToolMatrix(
     if (!configStore) return
     const previous = mcpProviders
     const current = runtimeConfigSnapshot(configStore)
+    await skillRuntime.reload(current.capabilities?.skills)
+    await skillPluginHost.reload(current.capabilities?.skills)
+    skillMcpServers = collectSkillMcpServers(
+      skillPluginHost.list(),
+      process.cwd(),
+      (p) => skillPluginHost.isEnabled(p)
+    )
     mcpProviders = await buildMcpToolProviders(mergedMcpConfig(current.capabilities?.mcp, skillMcpServers))
     webProviders = buildWebToolProviders(current.capabilities?.web)
     registry = buildMainRegistry()

@@ -6,9 +6,11 @@ import { describe, expect, test } from "vitest";
 import {
   getModelDisplayName,
   getModelSelectorTriggerState,
+  resolveWorkModeId,
   resolveSelectedModel,
 } from "@/components/workspace/input-box";
 import type { Model } from "@/core/models/types";
+import { SYSTEM_WORK_MODES } from "@/core/skills/work-modes";
 
 describe("InputBox model selector trigger", () => {
   test("uses profile names, not provider model ids, as selector values", () => {
@@ -66,6 +68,12 @@ describe("InputBox model selector trigger", () => {
         model: "gpt-4.1",
       }),
     ).toBe("gpt-4.1");
+  });
+
+  test("preserves explicit custom work mode ids while user modes are still loading", () => {
+    expect(resolveWorkModeId([...SYSTEM_WORK_MODES], "finance-market")).toBe(
+      "finance-market",
+    );
   });
 
   test("prefers the current thread model over the backend active model", () => {

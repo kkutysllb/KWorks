@@ -635,6 +635,7 @@ export async function kworksWorkModes(
     }
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, nextSkills)
     if (!synced.ok) return synced.response
+    await refreshRuntimeTools(runtime)
     return jsonResponse({
       workMode: await workModeResponse(runtime, synced.config.capabilities?.skills ?? nextSkills, skillCompatFromCapability(synced.config.capabilities?.skills ?? nextSkills), parsed.mode.id)
     }, 201)
@@ -662,6 +663,7 @@ export async function kworksWorkModes(
     }
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, nextSkills)
     if (!synced.ok) return synced.response
+    await refreshRuntimeTools(runtime)
     return jsonResponse({
       workMode: await workModeResponse(runtime, synced.config.capabilities?.skills ?? nextSkills, skillCompatFromCapability(synced.config.capabilities?.skills ?? nextSkills), modeId)
     })
@@ -684,6 +686,7 @@ export async function kworksWorkModes(
     }
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, nextSkills)
     if (!synced.ok) return synced.response
+    await refreshRuntimeTools(runtime)
     return jsonResponse({ success: true })
   }
 
@@ -692,6 +695,7 @@ export async function kworksWorkModes(
     if (!updated.ok) return updated.response
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, updated.skills)
     if (!synced.ok) return synced.response
+    await refreshRuntimeTools(runtime)
     return jsonResponse({
       workMode: await workModeResponse(runtime, updated.skills, skillCompatFromCapability(updated.skills), modeId)
     })
@@ -707,6 +711,7 @@ export async function kworksWorkModes(
     if (!updated.ok) return updated.response
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, updated.skills)
     if (!synced.ok) return synced.response
+    await refreshRuntimeTools(runtime)
     return jsonResponse({
       workMode: await workModeResponse(runtime, updated.skills, skillCompatFromCapability(updated.skills), modeId)
     })

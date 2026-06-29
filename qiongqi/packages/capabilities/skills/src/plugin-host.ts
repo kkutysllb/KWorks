@@ -78,7 +78,7 @@ export class SkillPluginHost {
   private lastActivations: SkillActivation[] = []
 
   private constructor(
-    private readonly config: SkillsCapabilityConfigType,
+    private config: SkillsCapabilityConfigType,
     private readonly options: Required<Omit<SkillPluginHostOptions, 'builtinRoot' | 'builtinRoots'>> & { builtinRoot?: string; builtinRoots?: string[] },
     loaded: { plugins: LoadedSkillPlugin[]; validationErrors: Array<{ root: string; message: string }> }
   ) {
@@ -104,6 +104,17 @@ export class SkillPluginHost {
   }
 
   list(): readonly LoadedSkillPlugin[] { return this.plugins }
+
+  async reload(config: SkillsCapabilityConfigType | undefined): Promise<void> {
+    const normalized = config ?? SkillsCapabilityConfig.parse({ enabled: false })
+    const loaded = normalized.enabled
+      ? await discoverPlugins(normalized, this.options.builtinRoots ?? (this.options.builtinRoot ? [this.options.builtinRoot] : []))
+      : { plugins: [], validationErrors: [] }
+    this.config = normalized
+    this.plugins = loaded.plugins
+    this.validationErrors = loaded.validationErrors
+    this.lastActivations = []
+  }
 
   isEnabled(plugin: LoadedSkillPlugin, context?: SkillPluginHostContext): boolean {
     if (context?.effectiveSkillIds && !context.effectiveSkillIds.includes(plugin.id)) return false

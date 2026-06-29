@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchRequest } from '@qiongqi/http'
 import { buildHarness, readJson } from './http-server-test-harness.js'
 
@@ -78,6 +78,8 @@ describe('work mode skill APIs', () => {
 
   it('creates, updates, binds skills to, and deletes custom work modes', async () => {
     const h = buildSkillHarness()
+    const refreshRuntimeTools = vi.fn(async () => undefined)
+    h.runtime.refreshRuntimeTools = refreshRuntimeTools
 
     const create = await api(h, '/api/work-modes', {
       method: 'POST',
@@ -90,6 +92,7 @@ describe('work mode skill APIs', () => {
     })
 
     expect(create.status).toBe(201)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(1)
     await expect(readJson(create)).resolves.toMatchObject({
       workMode: {
         id: 'finance-review',
@@ -112,6 +115,7 @@ describe('work mode skill APIs', () => {
       })
     })
     expect(update.status).toBe(200)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(2)
     await expect(readJson(update)).resolves.toMatchObject({
       workMode: {
         id: 'finance-review',
@@ -123,6 +127,7 @@ describe('work mode skill APIs', () => {
 
     const addSkill = await api(h, '/api/work-modes/finance-review/skills/custom-research', { method: 'PUT' })
     expect(addSkill.status).toBe(200)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(3)
     await expect(readJson(addSkill)).resolves.toMatchObject({
       workMode: {
         id: 'finance-review',
@@ -143,6 +148,7 @@ describe('work mode skill APIs', () => {
 
     const remove = await api(h, '/api/work-modes/finance-review', { method: 'DELETE' })
     expect(remove.status).toBe(200)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(4)
 
     const afterDelete = await api(h, '/api/work-modes')
     const body = await readJson(afterDelete) as { workModes: Array<{ id: string }> }
