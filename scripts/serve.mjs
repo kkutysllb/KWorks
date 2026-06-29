@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const FRONTEND_DIR = join(REPO_ROOT, "frontend");
-const QIONGQI_DIR = join(REPO_ROOT, "third_party", "qiongqi");
+const QIONGQI_DIR = join(REPO_ROOT, "qiongqi");
 const LOG_DIR = join(REPO_ROOT, "logs");
 const PID_DIR = join(REPO_ROOT, ".pids");
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT ?? "9193");
