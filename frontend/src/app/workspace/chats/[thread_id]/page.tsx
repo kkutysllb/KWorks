@@ -37,6 +37,7 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showFollowups, setShowFollowups] = useState(false);
+  const [todoPanelOccupiesSpace, setTodoPanelOccupiesSpace] = useState(false);
   const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
     useThreadChat();
   const [settings, setSettings] = useThreadSettings(threadId);
@@ -132,6 +133,10 @@ export default function ChatPage() {
   const messageListPaddingBottom =
     MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
     (showFollowups ? MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM : 0);
+  const todoPanelContentOffsetClass =
+    todoPanelOccupiesSpace && !isNewThread
+      ? "xl:-translate-x-20 2xl:-translate-x-24"
+      : "";
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
@@ -161,12 +166,17 @@ export default function ChatPage() {
                 <TodoList
                   className="pointer-events-auto"
                   todos={thread.values.todos}
+                  onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
                   variant="floating"
                 />
               </div>
-              <div className="flex size-full justify-center">
+              <div className="flex size-full justify-center transition-transform duration-200 ease-out">
                 <MessageList
-                  className={cn("size-full", !isNewThread && "pt-10")}
+                  className={cn(
+                    "size-full transition-transform duration-200 ease-out",
+                    !isNewThread && "pt-10",
+                    todoPanelContentOffsetClass,
+                  )}
                   threadId={threadId}
                   thread={thread}
                   paddingBottom={messageListPaddingBottom}
@@ -178,11 +188,12 @@ export default function ChatPage() {
               <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
                 <div
                   className={cn(
-                    "relative w-full",
+                    "relative w-full transition-transform duration-200 ease-out",
                     isNewThread && "-translate-y-[calc(50vh-128px)]",
                     isNewThread
                       ? "max-w-[min(52rem,calc(100vw-2rem))]"
                       : "max-w-[min(68rem,calc(100vw-2rem))]",
+                    todoPanelContentOffsetClass,
                   )}
                 >
                   {isNewThread && (

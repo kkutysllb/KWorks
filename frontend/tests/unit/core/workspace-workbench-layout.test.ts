@@ -53,12 +53,12 @@ describe("workspace workbench layout", () => {
       "utf8",
     );
 
-    expect(content).toContain("pathname === \"/workspace/settings\"");
+    expect(content).toContain('pathname === "/workspace/settings"');
     expect(content).toContain("isSettingsRoute");
     expect(content).toContain("isSettingsRoute ? (");
     expect(content).toContain("<SettingsLayoutProvider syncHash>");
     expect(content).toContain("<SettingsSidebar />");
-    expect(content).toContain("<SidebarInset className=\"min-w-0\">");
+    expect(content).toContain('<SidebarInset className="min-w-0">');
     expect(content).not.toContain("<>{children}</>");
   });
 
@@ -122,7 +122,34 @@ describe("workspace workbench layout", () => {
     expect(chatBox).toContain(
       'artifactPanelOpen ? "translate-x-0" : "translate-x-full"',
     );
+    expect(chatBox).toContain(
+      '!artifactPanelOpen && "pointer-events-none hidden opacity-0"',
+    );
     expect(chatBox).toContain("defaultLayout={{ chat: 100, artifacts: 0 }}");
+  });
+
+  test("chat pages gently offset content when the floating todo panel is expanded", () => {
+    const chatPage = readFileSync(
+      resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
+      "utf8",
+    );
+    const agentChatPage = readFileSync(
+      resolve(
+        repoRoot,
+        "src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx",
+      ),
+      "utf8",
+    );
+
+    for (const page of [chatPage, agentChatPage]) {
+      expect(page).toContain("todoPanelOccupiesSpace");
+      expect(page).toContain(
+        "onFloatingVisibilityChange={setTodoPanelOccupiesSpace}",
+      );
+      expect(page).toContain("todoPanelContentOffsetClass");
+      expect(page).toContain("xl:-translate-x-20");
+      expect(page).not.toContain("xl:pr-[24rem]");
+    }
   });
 
   test("welcome surface no longer advertises legacy KWorks or runtime copy", () => {

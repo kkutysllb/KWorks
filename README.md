@@ -1,8 +1,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/cover.png">
-    <img alt="KKOCLAW — Open-Source Super Agent Platform" src="assets/cover.png" width="100%" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/cover.svg">
+    <img alt="KWorks— Open-Source Super Agent Platform" src="assets/cover.svg" width="100%" />
   </picture>
 </p>
 

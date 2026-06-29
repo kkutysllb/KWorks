@@ -125,13 +125,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
         id={`${resizableIdBase}-separator`}
         className={cn(
           "opacity-33 hover:opacity-100",
-          !artifactPanelOpen && "pointer-events-none opacity-0",
+          !artifactPanelOpen && "pointer-events-none hidden opacity-0",
         )}
       />
       <ResizablePanel
         className={cn(
           "transition-all duration-300 ease-in-out",
-          !artifactsOpen && "opacity-0",
+          !artifactPanelOpen && "pointer-events-none hidden opacity-0",
         )}
         id="artifacts"
       >
@@ -141,7 +141,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             artifactPanelOpen ? "translate-x-0" : "translate-x-full",
           )}
         >
-          <div className="flex size-full flex-col overflow-hidden rounded-lg border bg-background/80 shadow-sm">
+          <div className="bg-background/80 flex size-full flex-col overflow-hidden rounded-lg border shadow-sm">
             <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
               <FilesIcon className="size-4 text-emerald-500" />
               <div className="min-w-0 flex-1">

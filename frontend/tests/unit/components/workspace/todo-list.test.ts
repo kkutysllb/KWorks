@@ -1,20 +1,37 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { TodoList } from "@/components/workspace/todo-list";
+
+const sourcePath = resolve(
+  __dirname,
+  "../../../../src/components/workspace/todo-list.tsx",
+);
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderTodoList(todos: React.ComponentProps<typeof TodoList>["todos"]) {
+type TodoListTestProps = React.ComponentProps<typeof TodoList> & {
+  onFloatingVisibilityChange?: (visible: boolean) => void;
+};
+
+function renderTodoList(
+  todos: React.ComponentProps<typeof TodoList>["todos"],
+  props: Partial<TodoListTestProps> = {},
+) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(React.createElement(TodoList, { todos, variant: "floating" }));
+    root.render(
+      React.createElement(TodoList, { todos, variant: "floating", ...props }),
+    );
   });
   return { container, root };
 }
@@ -107,5 +124,62 @@ describe("TodoList floating panel", () => {
     }));
 
     expect(container.textContent).toContain("兼容旧数据");
+  });
+
+  test("reports whether the floating panel occupies chat space", () => {
+    const onFloatingVisibilityChange = vi.fn();
+    ({ container, root } = renderTodoList(
+      [{ id: "a", content: "分析项目", status: "pending" }],
+      { onFloatingVisibilityChange },
+    ));
+
+    expect(onFloatingVisibilityChange).toHaveBeenLastCalledWith(true);
+
+    const collapse = container.querySelector<HTMLButtonElement>(
+      '[aria-label="收起任务步骤"]',
+    );
+    act(() => {
+      collapse?.click();
+    });
+    expect(onFloatingVisibilityChange).toHaveBeenLastCalledWith(false);
+
+    const expand = container.querySelector<HTMLButtonElement>(
+      '[aria-label="展开任务步骤"]',
+    );
+    act(() => {
+      expand?.click();
+    });
+    expect(onFloatingVisibilityChange).toHaveBeenLastCalledWith(true);
+
+    const close = container.querySelector<HTMLButtonElement>(
+      '[aria-label="关闭任务步骤"]',
+    );
+    act(() => {
+      close?.click();
+    });
+    expect(onFloatingVisibilityChange).toHaveBeenLastCalledWith(false);
+
+    act(() => {
+      root?.render(
+        React.createElement(TodoList, {
+          todos: [
+            { id: "a", content: "分析项目", status: "completed" },
+            { id: "b", content: "验证结果", status: "in_progress" },
+          ],
+          variant: "floating",
+          onFloatingVisibilityChange,
+        }),
+      );
+    });
+    expect(onFloatingVisibilityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  test("uses a lightweight Codex-style list for the floating panel", () => {
+    const source = readFileSync(sourcePath, "utf8");
+
+    expect(source).toContain("todo-floating-panel");
+    expect(source).toContain("todo-floating-list");
+    expect(source).toContain("backdrop-blur-xl");
+    expect(source).not.toContain("<QueueList");
   });
 });

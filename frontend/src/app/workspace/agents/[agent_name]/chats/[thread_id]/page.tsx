@@ -47,6 +47,7 @@ function parseAgentNameFromPath(pathname: string | null): string {
 export default function AgentChatPage() {
   const { t } = useI18n();
   const [showFollowups, setShowFollowups] = useState(false);
+  const [todoPanelOccupiesSpace, setTodoPanelOccupiesSpace] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -110,6 +111,10 @@ export default function AgentChatPage() {
     ? MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
       MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM
     : undefined;
+  const todoPanelContentOffsetClass =
+    todoPanelOccupiesSpace && !isNewThread
+      ? "xl:-translate-x-20 2xl:-translate-x-24"
+      : "";
 
   return (
     <ThreadContext.Provider value={{ thread }}>
@@ -159,12 +164,17 @@ export default function AgentChatPage() {
                 <TodoList
                   className="pointer-events-auto"
                   todos={thread.values.todos}
+                  onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
                   variant="floating"
                 />
               </div>
-              <div className="flex size-full justify-center">
+              <div className="flex size-full justify-center transition-transform duration-200 ease-out">
                 <MessageList
-                  className={cn("size-full", !isNewThread && "pt-10")}
+                  className={cn(
+                    "size-full transition-transform duration-200 ease-out",
+                    !isNewThread && "pt-10",
+                    todoPanelContentOffsetClass,
+                  )}
                   threadId={threadId}
                   thread={thread}
                   paddingBottom={messageListPaddingBottom}
@@ -177,11 +187,12 @@ export default function AgentChatPage() {
               <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
                 <div
                   className={cn(
-                    "relative w-full",
+                    "relative w-full transition-transform duration-200 ease-out",
                     isNewThread && "-translate-y-[calc(50vh-96px)]",
                     isNewThread
                       ? "max-w-(--container-width-sm)"
                       : "max-w-(--container-width-md)",
+                    todoPanelContentOffsetClass,
                   )}
                 >
                   {isNewThread && (
