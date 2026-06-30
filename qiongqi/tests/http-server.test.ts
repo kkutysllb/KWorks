@@ -2778,6 +2778,80 @@ describe('HTTP server', () => {
     await expect(readFile(join(installed.root, 'scripts', 'kk-common.zip'), 'utf8')).rejects.toThrow()
   })
 
+  it('installs imported package skills whose SKILL.md documents absolute local paths', async () => {
+    const h = buildHarness()
+    await rm(join('/tmp/kun', 'skills', 'custom', 'shared', 'abs-doc'), { recursive: true, force: true })
+    const form = new FormData()
+    form.append('mode', 'package')
+    form.append('workModeId', 'task')
+    form.append('files', new File([
+      storedZip([
+        {
+          path: 'abs-doc/SKILL.md',
+          content: [
+            '---',
+            'name: abs-doc',
+            'description: Imported package with documented local paths',
+            '---',
+            '',
+            '# Abs Doc',
+            '',
+            'Example source path from the author machine: /Users/libing/Downloads/source.csv'
+          ].join('\n')
+        },
+        {
+          path: 'abs-doc/skill.json',
+          content: JSON.stringify({
+            specVersion: '1.0',
+            id: 'abs-doc',
+            name: 'Abs Doc',
+            description: 'Imported package with documented local paths',
+            entry: 'SKILL.md'
+          })
+        }
+      ])
+    ], 'abs-doc.zip', { type: 'application/zip' }))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as { draftId: string; mode: string }
+    expect(created.mode).toBe('package')
+
+    const generate = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/generate`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    expect(generate.status).toBe(200)
+    const generated = await readJson(generate) as {
+      draft: {
+        metadata: { id: string; name: string; description: string }
+        skillMarkdown: string
+        manifestPatch: Record<string, unknown>
+      }
+    }
+    expect(generated.draft.skillMarkdown).toContain('/Users/libing/Downloads/source.csv')
+
+    const install = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/install`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workModeId: 'task',
+        metadata: generated.draft.metadata,
+        skillMarkdown: generated.draft.skillMarkdown,
+        manifestPatch: generated.draft.manifestPatch,
+        confirmations: []
+      })
+    }))
+    expect(install.status).toBe(201)
+    const installed = await readJson(install) as { root: string; skill_id: string }
+    expect(installed.skill_id).toBe('abs-doc')
+    await expect(readFile(join(installed.root, 'SKILL.md'), 'utf8')).resolves.toContain('/Users/libing/Downloads/source.csv')
+  })
+
   it('supports deflated zip skill packages and rejects unsafe zip paths', async () => {
     const h = buildHarness()
     const form = new FormData()

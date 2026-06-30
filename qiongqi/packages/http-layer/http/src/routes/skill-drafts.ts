@@ -397,7 +397,7 @@ export async function installSkillDraft(
   if (!isValidCustomSkillId(skillId)) {
     return jsonResponse({ detail: 'id must start with a lowercase English letter or number and contain only lowercase English letters, numbers, or hyphens' }, 400)
   }
-  if (containsUnsafeAbsolutePath(generated.skillMarkdown)) {
+  if (draft.mode !== 'package' && containsUnsafeAbsolutePath(generated.skillMarkdown)) {
     return jsonResponse({ detail: 'generated SKILL.md contains an absolute local path' }, 400)
   }
 
