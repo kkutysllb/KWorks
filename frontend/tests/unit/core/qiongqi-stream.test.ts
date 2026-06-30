@@ -633,7 +633,7 @@ describe("useQiongqiStream /v1 contract", () => {
     });
   });
 
-  test("uses runtime working directory instead of legacy default workspace for new chats without a selected workspace", async () => {
+  test("delegates the default workspace to the backend for new chats without a selected workspace", async () => {
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse(makeThread({ id: "draft-thread", workspace: "." }), {
@@ -679,15 +679,10 @@ describe("useQiongqiStream /v1 contract", () => {
         String(url).endsWith("/v1/threads") &&
         (init as RequestInit | undefined)?.method === "POST",
     );
-    expect(
-      parseRequestBody(createThreadCall?.[1] as RequestInit | undefined),
-    ).toMatchObject({
-      workspace: ".",
-    });
-    expect(
-      parseRequestBody(createThreadCall?.[1] as RequestInit | undefined)
-        .workspace,
-    ).not.toBe("default");
+    const body = parseRequestBody(
+      createThreadCall?.[1] as RequestInit | undefined,
+    );
+    expect(body).not.toHaveProperty("workspace");
   });
 
   test("updates existing thread workspace before starting a turn when the user selects a workspace", async () => {

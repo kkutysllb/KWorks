@@ -513,9 +513,13 @@ function attachmentIdsFromAdditionalKwargs(
     .filter((path): path is string => path !== null);
 }
 
-function workspaceRootFromContext(context: Record<string, unknown>): string {
+function workspaceRootFromContext(
+  context: Record<string, unknown>,
+): string | undefined {
   const value = context.workspaceRoot;
-  return typeof value === "string" && value.trim() ? value.trim() : ".";
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : undefined;
 }
 
 function workModeIdFromContext(
@@ -923,7 +927,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
             : undefined;
         const newThread = await qiongqiClient.createThread({
           ...(requestedThreadId ? { id: requestedThreadId } : {}),
-          workspace: workspaceRoot,
+          ...(workspaceRoot ? { workspace: workspaceRoot } : {}),
           ...(modelName ? { model: modelName } : {}),
           mode: qiongqiModeFromContext(context),
           workModeId: requestedWorkModeId,
@@ -940,7 +944,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       }
 
       const currentWorkModeId = workModeIdRef.current;
-      const shouldUpdateWorkspace = workspaceRoot !== ".";
+      const shouldUpdateWorkspace = workspaceRoot !== undefined;
       const shouldUpdateWorkMode =
         requestedWorkModeId !== undefined &&
         requestedWorkModeId !== currentWorkModeId;

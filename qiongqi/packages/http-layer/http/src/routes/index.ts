@@ -772,7 +772,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('POST', '/v1/threads', async (request) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return createThread(runtime.threadService, request, actorOwner(actor), await defaultModelForActor(runtime, actor))
+    return createThread(runtime.threadService, request, actorOwner(actor), await defaultModelForActor(runtime, actor), runtime)
   })
   router.add('GET', '/v1/threads/:id', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)

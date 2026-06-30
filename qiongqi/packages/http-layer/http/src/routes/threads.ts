@@ -18,9 +18,11 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '@qiongqi/services'
 import type { RuntimeError } from './runtime-error.js'
+import type { ServerRuntime } from './server-runtime.js'
 import type { SessionStore } from '@qiongqi/ports'
 import type { Turn } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
+import { defaultThreadWorkspace } from './default-workspace.js'
 
 /**
  * Handlers for the thread CRUD endpoints. The handlers accept a
@@ -67,7 +69,8 @@ export async function createThread(
   service: ThreadService,
   request: Request,
   ownerUserId?: string,
-  defaultModel?: string
+  defaultModel?: string,
+  runtime?: ServerRuntime
 ): Promise<JsonResponse | Response> {
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
@@ -84,7 +87,18 @@ export async function createThread(
       message: 'model is required when no default model is configured'
     }])
   }
-  const thread = await service.create({ ...requestBody, model }, { ...(id ? { id } : {}), ownerUserId })
+  const requestedWorkspace = requestBody.workspace?.trim()
+  const workspace = requestedWorkspace && requestedWorkspace !== '.'
+    ? requestedWorkspace
+    : runtime ? defaultThreadWorkspace(runtime, requestBody.workModeId) : undefined
+  if (!workspace) {
+    return validationError('invalid create thread body', [{
+      code: 'custom',
+      path: ['workspace'],
+      message: 'workspace is required when no default workspace is configured'
+    }])
+  }
+  const thread = await service.create({ ...requestBody, workspace, model }, { ...(id ? { id } : {}), ownerUserId })
   return jsonResponse(ThreadSchema.parse(thread), 201)
 }
 

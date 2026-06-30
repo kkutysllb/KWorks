@@ -84,7 +84,6 @@ describe('work mode skill contracts', () => {
   it('accepts workModeId on thread and turn payloads', () => {
     expect(CreateThreadRequest.parse({
       title: 'x',
-      workspace: '.',
       model: 'm',
       workModeId: 'coding'
     }).workModeId).toBe('coding')

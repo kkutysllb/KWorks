@@ -126,11 +126,13 @@ export class ThreadService {
     const id = options.id ?? generated
     const model = request.model?.trim()
     if (!model) throw new Error('model is required to create a thread')
+    const workspace = request.workspace?.trim()
+    if (!workspace) throw new Error('workspace is required to create a thread')
     const thread = createThreadRecord({
       id,
       ownerUserId: options.ownerUserId,
       title: options.title ?? (request.title?.trim() || 'New chat'),
-      workspace: request.workspace,
+      workspace,
       model,
       mode: request.mode,
       workModeId: request.workModeId,

@@ -146,7 +146,7 @@ export type ThreadSummary = z.infer<typeof ThreadSummarySchema>
 export const CreateThreadRequest = z.object({
   id: z.string().min(1).optional(),
   title: z.string().optional(),
-  workspace: z.string().min(1),
+  workspace: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   mode: ThreadMode.default('agent'),
   workModeId: z.string().min(1).optional(),

@@ -1774,6 +1774,47 @@ describe('HTTP server', () => {
     expect(thread?.workspace).toBe(selectedWorkspace)
   })
 
+  it('defaults KWorks task runs to the user workspace instead of the process cwd', async () => {
+    const h = buildHarness()
+
+    const stream = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/threads/thread_default_workspace/runs/stream', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          input: { messages: [{ role: 'user', content: '当前默认工作区是什么' }] },
+          context: { model_name: 'deepseek-chat', workModeId: 'task' }
+        })
+      })
+    )
+
+    expect(stream.status).toBe(200)
+    const thread = await h.threadService.get('thread_default_workspace')
+    expect(thread?.workspace).toBe('/tmp/kun/users/runtime/workspace')
+    expect(thread?.workspace).not.toBe(process.cwd())
+  })
+
+  it('defaults KWorks coding runs to the dedicated coding workspace', async () => {
+    const h = buildHarness()
+
+    const stream = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/threads/thread_default_coding_workspace/runs/stream', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          input: { messages: [{ role: 'user', content: '写代码' }] },
+          context: { model_name: 'deepseek-chat', workModeId: 'coding' }
+        })
+      })
+    )
+
+    expect(stream.status).toBe(200)
+    const thread = await h.threadService.get('thread_default_coding_workspace')
+    expect(thread?.workspace).toBe('/tmp/kun/coding-workspace')
+  })
+
   it('updates a pre-created KWorks thread to the selected workspaceRoot before running', async () => {
     const h = buildHarness()
     await h.threadService.create(
@@ -3031,6 +3072,37 @@ describe('HTTP server', () => {
     )
     const listed = (await readJson(list)) as { threads: { id: string }[] }
     expect(listed.threads.map((t) => t.id)).toContain(created.id)
+  })
+
+  it('creates native task threads in the user workspace when workspace is omitted', async () => {
+    const h = buildHarness()
+    const create = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/threads', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'deepseek-chat', workModeId: 'task' })
+      })
+    )
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as { workspace: string }
+    expect(created.workspace).toBe('/tmp/kun/users/runtime/workspace')
+    expect(created.workspace).not.toBe(process.cwd())
+  })
+
+  it('creates native coding threads in the dedicated coding workspace when workspace is omitted', async () => {
+    const h = buildHarness()
+    const create = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/threads', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'deepseek-chat', workModeId: 'coding' })
+      })
+    )
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as { workspace: string }
+    expect(created.workspace).toBe('/tmp/kun/coding-workspace')
   })
 
   it('sets, reads, and clears thread goals through the HTTP layer', async () => {

@@ -186,7 +186,7 @@ export const qiongqiClient = {
   async createThread(input: {
     id?: string;
     title?: string;
-    workspace: string;
+    workspace?: string;
     model?: string;
     mode?: string;
     workModeId?: string;

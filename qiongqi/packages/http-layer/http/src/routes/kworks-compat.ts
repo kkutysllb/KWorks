@@ -7,6 +7,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { encodeSseEvent } from '../sse.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { defaultThreadWorkspace } from './default-workspace.js'
 import {
   DEFAULT_QIONGQI_CAPABILITIES_CONFIG,
   QiongqiConfigSchema,
@@ -3482,8 +3483,8 @@ export async function kworksCreateThread(runtime: ServerRuntime, request: Reques
   const value = isObject(body.value) ? body.value : {}
   const threadId = stringValue(value.thread_id) ?? randomUUID()
   const model = stringValue(value.model) ?? runtime.info().model ?? 'default'
-  const workspace = stringValue(value.workspace) ?? process.cwd()
   const workModeId = stringValue(value.workModeId) ?? stringValue(value.work_mode_id)
+  const workspace = explicitWorkspace(stringValue(value.workspace)) ?? defaultThreadWorkspace(runtime, workModeId)
   const title = stringValue(value.title) ?? 'New chat'
   const existing = await runtime.threadService.get(threadId)
   if (!existing) {
@@ -3623,8 +3624,8 @@ export async function kworksRunStream(runtime: ServerRuntime, threadId: string, 
   if (!model) {
     return jsonResponse({ detail: 'model is not configured for this KWorks user' }, 400)
   }
-  const workspace = resolveKWorksWorkspace(value, context)
   const workModeId = workModeIdFromCompatContext(context)
+  const workspace = resolveKWorksWorkspace(runtime, value, context, workModeId)
   const title = deriveThreadTitle(prompt)
   await syncRuntimeToolsForActor(runtime, actor)
   await ensureThread(runtime, threadId, {
@@ -3796,17 +3797,27 @@ function workModeIdFromCompatContext(context: Record<string, unknown>): string |
   return stringValue(context.workModeId) ?? stringValue(context.work_mode_id)
 }
 
-function resolveKWorksWorkspace(value: Record<string, unknown>, context: Record<string, unknown>): string {
+function resolveKWorksWorkspace(
+  runtime: ServerRuntime,
+  value: Record<string, unknown>,
+  context: Record<string, unknown>,
+  workModeId?: string
+): string {
   return (
-    stringValue(context.workspaceRoot) ??
-    stringValue(context.workspace_root) ??
-    stringValue(context.project_root) ??
-    stringValue(context.workspace) ??
-    stringValue(value.workspaceRoot) ??
-    stringValue(value.workspace_root) ??
-    stringValue(value.workspace) ??
-    process.cwd()
+    explicitWorkspace(stringValue(context.workspaceRoot)) ??
+    explicitWorkspace(stringValue(context.workspace_root)) ??
+    explicitWorkspace(stringValue(context.project_root)) ??
+    explicitWorkspace(stringValue(context.workspace)) ??
+    explicitWorkspace(stringValue(value.workspaceRoot)) ??
+    explicitWorkspace(stringValue(value.workspace_root)) ??
+    explicitWorkspace(stringValue(value.workspace)) ??
+    defaultThreadWorkspace(runtime, workModeId)
   )
+}
+
+function explicitWorkspace(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed && trimmed !== '.' ? trimmed : undefined
 }
 
 function promptWithExplicitSkillContext(prompt: string, context: Record<string, unknown>): string {
