@@ -231,7 +231,10 @@ export async function createSkillDraft(
   formData.append("mode", request.mode);
   if (request.workModeId) formData.append("workModeId", request.workModeId);
   for (const file of request.files) {
-    formData.append("files", file);
+    const relativePath = (
+      file as File & { webkitRelativePath?: string }
+    ).webkitRelativePath;
+    formData.append("files", file, relativePath || file.name);
   }
   const response = await fetch(`${getBackendBaseURL()}/api/skills/drafts`, {
     method: "POST",

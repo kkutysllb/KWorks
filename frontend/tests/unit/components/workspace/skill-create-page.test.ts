@@ -332,4 +332,134 @@ describe("SkillCreatePage", () => {
       expect.any(Object),
     );
   });
+
+  test("uploads an existing skill package through the package import panel", async () => {
+    createDraftMock.mockImplementation((_request, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_package123",
+        mode: "package",
+        files: [
+          { path: "SKILL.md", kind: "markdown", size: 42 },
+          { path: "skill.json", kind: "json", size: 128 },
+        ],
+      });
+    });
+    analyzeDraftMock.mockImplementation((_draftId, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_package123",
+        evidence: {
+          files: [
+            { path: "SKILL.md", kind: "markdown", size: 42 },
+            { path: "skill.json", kind: "json", size: 128 },
+          ],
+          entryCandidates: [{ path: "SKILL.md", confidence: 0.95, reason: "skill package entry" }],
+          commands: [],
+          dependencies: [],
+          risks: [],
+          snippets: [],
+        },
+      });
+    });
+    generateDraftMock.mockImplementation((_draftId, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_package123",
+        evidence: {
+          files: [
+            { path: "SKILL.md", kind: "markdown", size: 42 },
+            { path: "skill.json", kind: "json", size: 128 },
+          ],
+          entryCandidates: [],
+          commands: [],
+          dependencies: [],
+          risks: [],
+          snippets: [],
+        },
+        draft: {
+          metadata: {
+            id: "kk-common",
+            name: "KK Common",
+            description: "Common KWorks helpers",
+          },
+          skillMarkdown: "---\nname: kk-common\n---\n# KK Common",
+          manifestPatch: {
+            assets: [],
+            permissions: {
+              workspace: "write",
+              network: false,
+              exec: "workspace",
+              requiresApproval: "on-request",
+            },
+          },
+          questions: [],
+          warnings: [],
+        },
+      });
+    });
+
+    ({ container, root } = renderPage());
+    const packageButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("导入现成技能"),
+    );
+    act(() => {
+      packageButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(container.textContent).toContain("上传技能包");
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    const file = new File(["zip"], "kk-common.zip", { type: "application/zip" });
+    Object.defineProperty(input!, "files", {
+      configurable: true,
+      value: [file],
+    });
+    await act(async () => {
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("分析并导入"),
+    );
+    expect(importButton).toBeTruthy();
+    await act(async () => {
+      importButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(createDraftMock).toHaveBeenCalledWith(
+      { mode: "package", workModeId: "coding", files: [file] },
+      expect.any(Object),
+    );
+    expect(generateDraftMock).toHaveBeenCalledWith(
+      "draft_package123",
+      expect.any(Object),
+    );
+    expect(container.textContent).toContain("KK Common");
+
+    const installButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("确认安装"),
+    );
+    expect(installButton).toBeTruthy();
+    await act(async () => {
+      installButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(installDraftMock).toHaveBeenCalledWith(
+      {
+        draftId: "draft_package123",
+        request: expect.objectContaining({
+          workModeId: "coding",
+          metadata: expect.objectContaining({ id: "kk-common" }),
+        }),
+      },
+      expect.any(Object),
+    );
+  });
 });

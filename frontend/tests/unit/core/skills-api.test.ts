@@ -131,6 +131,37 @@ describe("skills API", () => {
     expect(init.body.getAll("files")).toHaveLength(1);
   });
 
+  test("preserves browser directory upload relative paths when creating a skill draft", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        success: true,
+        draftId: "draft_pkg123",
+        mode: "package",
+        files: [{ path: "market-brief/SKILL.md", kind: "markdown", size: 12 }],
+      }),
+    });
+
+    const file = new File(["# Market Brief"], "SKILL.md", {
+      type: "text/markdown",
+    }) as File & { webkitRelativePath?: string };
+    Object.defineProperty(file, "webkitRelativePath", {
+      configurable: true,
+      value: "market-brief/SKILL.md",
+    });
+
+    await createSkillDraft({
+      mode: "package",
+      workModeId: "task",
+      files: [file],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: FormData }];
+    const uploaded = init.body.get("files") as File;
+    expect(uploaded.name).toBe("market-brief/SKILL.md");
+  });
+
   test("calls skill draft analyze and generate endpoints", async () => {
     fetchMock
       .mockResolvedValueOnce({

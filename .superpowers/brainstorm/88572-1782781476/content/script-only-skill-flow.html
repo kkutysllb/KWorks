@@ -1,0 +1,74 @@
+<h2>只上传命令脚本时，如何自动生成技能？</h2>
+<p class="subtitle">这条链路要把“模型创作”限制在草稿层，把复制、路径、权限、安装交给确定性代码。</p>
+
+<div class="mockup">
+  <div class="mockup-header">推荐流程：脚本资产 → 证据包 → 技能草稿 → 用户确认 → 安装</div>
+  <div class="mockup-body">
+    <div style="display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:12px;">
+      <div class="placeholder">
+        <strong>1 上传</strong><br>
+        .py / .sh / .js<br>
+        文件夹 / zip<br>
+        README 可选
+      </div>
+      <div class="placeholder">
+        <strong>2 静态识别</strong><br>
+        shebang/imports<br>
+        argparse/click<br>
+        package hints<br>
+        危险命令
+      </div>
+      <div class="placeholder">
+        <strong>3 模型生成</strong><br>
+        name/description<br>
+        when-to-use<br>
+        procedure<br>
+        output contract
+      </div>
+      <div class="placeholder">
+        <strong>4 审查</strong><br>
+        路径修复<br>
+        权限建议<br>
+        待确认参数<br>
+        预览 diff
+      </div>
+      <div class="placeholder">
+        <strong>5 安装</strong><br>
+        scripts/ 复制<br>
+        SKILL.md 写入<br>
+        skill.json 写入<br>
+        绑定工作模式
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">模型允许做什么</div>
+    <div class="mockup-body">
+      <ul>
+        <li>根据脚本内容推断用途、触发条件和输出格式</li>
+        <li>把命令写成相对路径：<code>python scripts/convert.py</code></li>
+        <li>列出不确定参数，让用户确认</li>
+        <li>建议权限：网络、执行、工作区读写</li>
+      </ul>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">模型不能做什么</div>
+    <div class="mockup-body">
+      <ul>
+        <li>不能发明脚本没有的能力</li>
+        <li>不能引用本机绝对路径</li>
+        <li>不能默认执行脚本或安装依赖</li>
+        <li>不能绕过安全扫描直接安装</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键界面</h3>
+  <p>上传后显示“识别结果”面板：主入口命令、检测到的参数、依赖、风险、模型依据。旁边是可编辑的 `SKILL.md` 预览。确认安装前必须处理红色问题，比如入口脚本不明确、危险命令、缺少必填参数。</p>
+</div>

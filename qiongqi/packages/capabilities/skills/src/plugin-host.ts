@@ -192,6 +192,7 @@ export class SkillPluginHost {
     const catalog = buildAvailableSkillsInstruction(
       available,
       input.workModeId,
+      this.config.roots,
       Math.min(DEFAULT_CATALOG_BUDGET_BYTES, this.options.instructionBudgetBytes)
     )
     const remainingBudget = Math.max(0, this.options.instructionBudgetBytes - (catalog?.bytes ?? 0))
@@ -410,12 +411,15 @@ function buildInjection(
 function buildAvailableSkillsInstruction(
   available: readonly LoadedSkillPlugin[],
   workModeId: string | undefined,
+  roots: readonly string[],
   budgetBytes: number
 ): { text: string; bytes: number } | undefined {
   if (available.length === 0 || budgetBytes <= 0) return undefined
   const lines = [
     `Available Skills${workModeId ? ` for work mode "${workModeId}"` : ''}:`,
     'These are installed skill instruction packages available in the current work mode. Skills are not direct tool calls; use this list to understand what specialized workflows you can apply, and do not say no skills are installed merely because they are not listed as tools.',
+    roots.length ? `Configured skill roots: ${roots.map((root) => resolve(root)).join(', ')}` : 'Configured skill roots: none',
+    'When the user asks about installed, newly created, or available skills, answer from this runtime skill catalog and the configured skill roots. Do not search the current project workspace to discover installed skills.',
     ''
   ]
   let bytes = Buffer.byteLength(lines.join('\n'), 'utf8')
@@ -425,7 +429,7 @@ function buildAvailableSkillsInstruction(
     const commands = skill.manifest.activation.commands.length
       ? ` Commands: ${skill.manifest.activation.commands.join(', ')}.`
       : ''
-    const line = `- ${skill.manifest.name} (${skill.id})${description}${commands}`
+    const line = `- ${skill.manifest.name} (${skill.id})${description}${commands} root: ${skill.root}`
     const lineBytes = Buffer.byteLength(`${line}\n`, 'utf8')
     if (bytes + lineBytes > budgetBytes) break
     lines.push(line)

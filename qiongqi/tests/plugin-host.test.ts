@@ -168,6 +168,22 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain('not direct tool calls')
   })
 
+  it('tells the model to discover installed skills from configured skill roots, not the workspace', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    const res = host.resolveTurn({
+      prompt: '我刚创建的新技能能识别吗？',
+      workspace: '/workspace/project',
+      effectiveSkillIds: ['tdd']
+    })
+
+    const joined = res.instructions.join('\n')
+    expect(joined).toContain('Configured skill roots')
+    expect(joined).toContain(root)
+    expect(joined).toContain('Do not search the current project workspace to discover installed skills')
+    expect(joined).toContain(`root: ${join(root, 'tdd')}`)
+  })
+
   it('does not restrict the turn tool catalog even when a skill declares workspace:read', async () => {
     const roRoot = await mkdtemp(join(tmpdir(), 'ro-'))
     await mkdir(join(roRoot, 'ro'), { recursive: true })

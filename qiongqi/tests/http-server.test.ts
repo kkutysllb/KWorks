@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { deflateRawSync } from 'node:zlib'
 import { dispatchRequest } from '@qiongqi/http'
 import { kworksUserWorkspacePaths } from '@qiongqi/http'
 import { createApprovalRequest } from '@qiongqi/domain'
@@ -2639,6 +2640,223 @@ describe('HTTP server', () => {
     await expect(readFile(join(installed.root, 'scripts', 'convert.py'), 'utf8')).resolves.toContain('argparse')
   })
 
+  it('extracts uploaded zip skill packages, classifies them as package drafts, and installs without retaining the zip', async () => {
+    const h = buildHarness()
+    await rm(join('/tmp/kun', 'skills', 'custom', 'shared', 'kk-common'), { recursive: true, force: true })
+    const form = new FormData()
+    form.append('mode', 'scripts')
+    form.append('workModeId', 'task')
+    form.append('files', new File([
+      storedZip([
+        {
+          path: 'kk-common/SKILL.md',
+          content: [
+            '---',
+            'name: kk-common',
+            'description: Common KWorks helpers',
+            '---',
+            '',
+            '# KK Common',
+            '',
+            'Use this skill for common helper scripts.'
+          ].join('\n')
+        },
+        {
+          path: 'kk-common/skill.json',
+          content: JSON.stringify({
+            specVersion: '1.0',
+            id: 'kk-common',
+            name: 'KK Common',
+            description: 'Common KWorks helpers',
+            entry: 'SKILL.md',
+            assets: ['scripts/script.py']
+          })
+        },
+        {
+          path: 'kk-common/scripts/script.py',
+          content: 'print("kk common")\n'
+        }
+      ])
+    ], 'kk-common.zip', { type: 'application/zip' }))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as {
+      draftId: string
+      mode: string
+      files: Array<{ path: string; kind: string; size: number }>
+    }
+    expect(created.mode).toBe('package')
+    expect(created.files.map((file) => file.path).sort()).toEqual([
+      'SKILL.md',
+      'scripts/script.py',
+      'skill.json'
+    ])
+    expect(created.files.map((file) => file.path)).not.toContain('kk-common.zip')
+
+    const generate = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/generate`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    expect(generate.status).toBe(200)
+    const generated = await readJson(generate) as {
+      draft: {
+        metadata: { id: string; name: string; description: string }
+        skillMarkdown: string
+        manifestPatch: Record<string, unknown>
+      }
+    }
+    expect(generated.draft.metadata).toMatchObject({
+      id: 'kk-common',
+      name: 'KK Common',
+      description: 'Common KWorks helpers'
+    })
+    expect(generated.draft.skillMarkdown).toContain('# KK Common')
+
+    const install = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/install`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workModeId: 'task',
+        metadata: generated.draft.metadata,
+        skillMarkdown: generated.draft.skillMarkdown,
+        manifestPatch: generated.draft.manifestPatch,
+        confirmations: []
+      })
+    }))
+    expect(install.status).toBe(201)
+    const installed = await readJson(install) as { root: string; skill_id: string; workModeId: string }
+    expect(installed.skill_id).toBe('kk-common')
+    expect(installed.workModeId).toBe('task')
+    await expect(readFile(join(installed.root, 'SKILL.md'), 'utf8')).resolves.toContain('# KK Common')
+    await expect(readFile(join(installed.root, 'scripts', 'script.py'), 'utf8')).resolves.toContain('kk common')
+    await expect(readFile(join(installed.root, 'scripts', 'kk-common.zip'), 'utf8')).rejects.toThrow()
+  })
+
+  it('supports deflated zip skill packages and rejects unsafe zip paths', async () => {
+    const h = buildHarness()
+    const form = new FormData()
+    form.append('mode', 'package')
+    form.append('files', new File([
+      zipArchive([
+        {
+          path: 'deflated-skill/SKILL.md',
+          content: [
+            '---',
+            'name: deflated-skill',
+            'description: Deflated skill package',
+            '---',
+            '# Deflated Skill'
+          ].join('\n'),
+          compression: 8
+        }
+      ])
+    ], 'deflated-skill.zip', { type: 'application/zip' }))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    expect(create.status).toBe(201)
+    await expect(readJson(create)).resolves.toMatchObject({
+      mode: 'package',
+      files: [{ path: 'SKILL.md', kind: 'markdown' }]
+    })
+
+    const bad = new FormData()
+    bad.append('mode', 'package')
+    bad.append('files', new File([
+      storedZip([{ path: '../evil/SKILL.md', content: '# bad' }])
+    ], 'evil.zip', { type: 'application/zip' }))
+
+    const rejected = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: bad
+    }))
+    expect(rejected.status).toBe(400)
+    await expect(readJson(rejected)).resolves.toMatchObject({
+      message: expect.stringContaining('unsafe')
+    })
+  })
+
+  it('installs package drafts preserving package-relative files instead of copying uploads into scripts', async () => {
+    const h = buildHarness()
+    await rm(join('/tmp/kun', 'skills', 'custom', 'shared', 'market-brief'), { recursive: true, force: true })
+    const form = new FormData()
+    form.append('mode', 'package')
+    form.append('workModeId', 'task')
+    form.append('files', new File([
+      [
+        '---',
+        'name: market-brief',
+        'description: Create a market brief',
+        '---',
+        '',
+        '# Market Brief'
+      ].join('\n')
+    ], 'market-brief/SKILL.md', { type: 'text/markdown' }))
+    form.append('files', new File([
+      JSON.stringify({
+        specVersion: '1.0',
+        id: 'market-brief',
+        name: 'Market Brief',
+        description: 'Create a market brief',
+        entry: 'SKILL.md',
+        assets: ['resources/template.md']
+      })
+    ], 'market-brief/skill.json', { type: 'application/json' }))
+    form.append('files', new File(['# Template\n'], 'market-brief/resources/template.md', { type: 'text/markdown' }))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as { draftId: string; mode: string; files: Array<{ path: string }> }
+    expect(created.mode).toBe('package')
+    expect(created.files.map((file) => file.path).sort()).toEqual([
+      'SKILL.md',
+      'resources/template.md',
+      'skill.json'
+    ])
+
+    const generate = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/generate`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    const generated = await readJson(generate) as {
+      draft: {
+        metadata: { id: string; name: string; description: string }
+        skillMarkdown: string
+        manifestPatch: Record<string, unknown>
+      }
+    }
+
+    const install = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/install`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workModeId: 'task',
+        metadata: generated.draft.metadata,
+        skillMarkdown: generated.draft.skillMarkdown,
+        manifestPatch: generated.draft.manifestPatch,
+        confirmations: []
+      })
+    }))
+    expect(install.status).toBe(201)
+    const installed = await readJson(install) as { root: string; skill_id: string }
+    expect(installed.skill_id).toBe('market-brief')
+    await expect(readFile(join(installed.root, 'resources', 'template.md'), 'utf8')).resolves.toContain('# Template')
+    await expect(readFile(join(installed.root, 'scripts', 'template.md'), 'utf8')).rejects.toThrow()
+  })
+
   it('rejects generated script skill installs that contain absolute local paths', async () => {
     const h = buildHarness()
     const form = new FormData()
@@ -3897,3 +4115,77 @@ describe('HTTP server', () => {
     expect(body.path).toBe('/tmp')
   })
 })
+
+function storedZip(entries: Array<{ path: string; content: string | Buffer }>): Buffer {
+  return zipArchive(entries.map((entry) => ({ ...entry, compression: 0 as const })))
+}
+
+function zipArchive(entries: Array<{ path: string; content: string | Buffer; compression?: 0 | 8 }>): Buffer {
+  const localParts: Buffer[] = []
+  const centralParts: Buffer[] = []
+  let offset = 0
+  for (const entry of entries) {
+    const name = Buffer.from(entry.path, 'utf8')
+    const data = typeof entry.content === 'string' ? Buffer.from(entry.content, 'utf8') : entry.content
+    const compression = entry.compression ?? 0
+    const compressed = compression === 8 ? deflateRawSync(data) : data
+    const crc = crc32(data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(0, 6)
+    local.writeUInt16LE(compression, 8)
+    local.writeUInt16LE(0, 10)
+    local.writeUInt16LE(0, 12)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(compressed.byteLength, 18)
+    local.writeUInt32LE(data.byteLength, 22)
+    local.writeUInt16LE(name.byteLength, 26)
+    local.writeUInt16LE(0, 28)
+    localParts.push(local, name, compressed)
+
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(0, 8)
+    central.writeUInt16LE(compression, 10)
+    central.writeUInt16LE(0, 12)
+    central.writeUInt16LE(0, 14)
+    central.writeUInt32LE(crc, 16)
+    central.writeUInt32LE(compressed.byteLength, 20)
+    central.writeUInt32LE(data.byteLength, 24)
+    central.writeUInt16LE(name.byteLength, 28)
+    central.writeUInt16LE(0, 30)
+    central.writeUInt16LE(0, 32)
+    central.writeUInt16LE(0, 34)
+    central.writeUInt16LE(0, 36)
+    central.writeUInt32LE(0, 38)
+    central.writeUInt32LE(offset, 42)
+    centralParts.push(central, name)
+    offset += local.byteLength + name.byteLength + compressed.byteLength
+  }
+  const centralOffset = offset
+  const central = Buffer.concat(centralParts)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(0, 4)
+  end.writeUInt16LE(0, 6)
+  end.writeUInt16LE(entries.length, 8)
+  end.writeUInt16LE(entries.length, 10)
+  end.writeUInt32LE(central.byteLength, 12)
+  end.writeUInt32LE(centralOffset, 16)
+  end.writeUInt16LE(0, 20)
+  return Buffer.concat([...localParts, central, end])
+}
+
+function crc32(data: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of data) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}

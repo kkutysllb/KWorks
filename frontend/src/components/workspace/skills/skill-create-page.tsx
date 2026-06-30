@@ -95,6 +95,7 @@ export function SkillCreatePage() {
   }));
   const [draftId, setDraftId] = useState<string | null>(null);
   const [scriptFiles, setScriptFiles] = useState<File[]>([]);
+  const [packageFiles, setPackageFiles] = useState<File[]>([]);
   const [draftEvidence, setDraftEvidence] = useState<SkillDraftEvidence | null>(
     null,
   );
@@ -210,20 +211,31 @@ export function SkillCreatePage() {
   const handleScriptFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     setScriptFiles(files);
+    resetDraftState();
+  };
+
+  const handlePackageFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    setPackageFiles(files);
+    resetDraftState();
+  };
+
+  const resetDraftState = () => {
     setDraftId(null);
     setDraftEvidence(null);
     setGeneratedDraft(null);
     setInstalledDraft(null);
   };
 
-  const handleGenerateFromScripts = () => {
-    if (scriptFiles.length === 0) {
-      toast.error("请先上传脚本文件");
+  const handleGenerateDraft = (draftMode: "scripts" | "package") => {
+    const files = draftMode === "scripts" ? scriptFiles : packageFiles;
+    if (files.length === 0) {
+      toast.error(draftMode === "scripts" ? "请先上传脚本文件" : "请先上传技能包文件");
       return;
     }
     setInstalledDraft(null);
     createDraft(
-      { mode: "scripts", workModeId: form.workModeId, files: scriptFiles },
+      { mode: draftMode, workModeId: form.workModeId, files },
       {
         onSuccess: (created) => {
           setDraftId(created.draftId);
@@ -242,12 +254,22 @@ export function SkillCreatePage() {
               });
             },
             onError: (error) => {
-              toast.error(errorMessage(error, "分析脚本失败"));
+              toast.error(
+                errorMessage(
+                  error,
+                  draftMode === "scripts" ? "分析脚本失败" : "分析技能包失败",
+                ),
+              );
             },
           });
         },
         onError: (error) => {
-          toast.error(errorMessage(error, "上传脚本失败"));
+          toast.error(
+            errorMessage(
+              error,
+              draftMode === "scripts" ? "上传脚本失败" : "上传技能包失败",
+            ),
+          );
         },
       },
     );
@@ -504,11 +526,29 @@ export function SkillCreatePage() {
                     }
                     isInstalling={isInstallingDraft}
                     onFileChange={handleScriptFilesChange}
-                    onGenerate={handleGenerateFromScripts}
+                    onGenerate={() => handleGenerateDraft("scripts")}
                     onInstall={handleInstallGeneratedDraft}
                   />
                 ) : (
-                  <PackageImportPanel />
+                  <PackageImportPanel
+                    evidence={draftEvidence}
+                    files={packageFiles}
+                    generatedDraft={generatedDraft}
+                    installedDraft={installedDraft}
+                    isBusy={
+                      isCreatingDraft ||
+                      isAnalyzingDraft ||
+                      isGeneratingDraft ||
+                      isInstallingDraft
+                    }
+                    isGenerating={
+                      isCreatingDraft || isAnalyzingDraft || isGeneratingDraft
+                    }
+                    isInstalling={isInstallingDraft}
+                    onFileChange={handlePackageFilesChange}
+                    onGenerate={() => handleGenerateDraft("package")}
+                    onInstall={handleInstallGeneratedDraft}
+                  />
                 )}
               </div>
             )}
@@ -737,16 +777,174 @@ function ScriptDraftPanel({
   );
 }
 
-function PackageImportPanel() {
+function PackageImportPanel({
+  evidence,
+  files,
+  generatedDraft,
+  installedDraft,
+  isBusy,
+  isGenerating,
+  isInstalling,
+  onFileChange,
+  onGenerate,
+  onInstall,
+}: {
+  evidence: SkillDraftEvidence | null;
+  files: File[];
+  generatedDraft: GeneratedSkillDraft | null;
+  installedDraft: SkillCreateResponse | null;
+  isBusy: boolean;
+  isGenerating: boolean;
+  isInstalling: boolean;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onGenerate: () => void;
+  onInstall: () => void;
+}) {
   return (
-    <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
-      <PackageIcon className="text-muted-foreground size-7" />
-      <h2 className="mt-3 text-base font-semibold">导入现成技能</h2>
-      <p className="text-muted-foreground mt-2 max-w-md text-sm">
-        这个入口会复用草稿安装链路，优先识别 SKILL.md、skill.json 和资源目录。
-        当前先完成脚本生成路径，完整包导入会继续补齐。
-      </p>
-    </div>
+    <>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold">上传技能包</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            支持 zip 技能包，或直接上传 SKILL.md、skill.json 和资源文件。系统会自动解压、识别并安装到用户技能空间。
+          </p>
+        </div>
+        <Badge variant="secondary" className="shrink-0">
+          package
+        </Badge>
+      </div>
+
+      <label className="border-border bg-muted/30 hover:bg-muted/50 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center transition-colors">
+        <PackageIcon className="text-muted-foreground size-6" />
+        <span className="text-sm font-medium">选择技能包文件</span>
+        <span className="text-muted-foreground text-xs">
+          上传 zip 会在服务端安全解压；原始压缩包不会作为技能脚本保留。
+        </span>
+        <input
+          accept=".zip,.md,.json,.py,.sh,.js,.ts,.mjs,.cjs,.txt"
+          className="sr-only"
+          multiple
+          type="file"
+          onChange={onFileChange}
+        />
+      </label>
+
+      {files.length > 0 && (
+        <div className="border-border rounded-md border">
+          <div className="border-b px-3 py-2 text-xs font-medium">已选择文件</div>
+          <div className="divide-border divide-y">
+            {files.map((file) => {
+              const relativePath = (
+                file as File & { webkitRelativePath?: string }
+              ).webkitRelativePath;
+              return (
+                <div
+                  key={`${relativePath || file.name}-${file.size}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="truncate">{relativePath || file.name}</span>
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {formatBytes(file.size)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-muted-foreground text-xs">
+          安装后模型默认从用户技能空间发现该技能，不需要在当前工作区查找。
+        </p>
+        <Button
+          type="button"
+          disabled={files.length === 0 || isBusy}
+          onClick={onGenerate}
+        >
+          {isGenerating ? (
+            <Loader2Icon className="size-4 animate-spin" />
+          ) : (
+            <SparklesIcon className="size-4" />
+          )}
+          分析并导入
+        </Button>
+      </div>
+
+      {evidence && (
+        <div className="grid gap-3 md:grid-cols-3">
+          <EvidenceBlock
+            label="入口"
+            value={evidence.entryCandidates[0]?.path ?? "SKILL.md"}
+          />
+          <EvidenceBlock
+            label="文件"
+            value={`${evidence.files.length} 个文件`}
+          />
+          <EvidenceBlock
+            label="资源"
+            value={
+              evidence.files
+                .filter((file) => file.path !== "SKILL.md" && file.path !== "skill.json")
+                .slice(0, 2)
+                .map((file) => file.path)
+                .join(", ") || "无"
+            }
+          />
+        </div>
+      )}
+
+      {generatedDraft && (
+        <div className="border-border rounded-lg border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">
+                {generatedDraft.metadata.name}
+              </h3>
+              <p className="text-muted-foreground mt-1 text-xs">
+                {generatedDraft.metadata.description}
+              </p>
+            </div>
+            <Badge variant="outline">{generatedDraft.metadata.id}</Badge>
+          </div>
+          {generatedDraft.warnings.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {generatedDraft.warnings.map((warning) => (
+                <div
+                  key={warning.message}
+                  className="text-amber-700 dark:text-amber-300 flex gap-2 text-xs"
+                >
+                  <AlertTriangleIcon className="mt-0.5 size-3 shrink-0" />
+                  <span>{warning.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex justify-end">
+            <Button
+              type="button"
+              disabled={isInstalling}
+              onClick={onInstall}
+            >
+              {isInstalling ? (
+                <Loader2Icon className="size-4 animate-spin" />
+              ) : (
+                <SaveIcon className="size-4" />
+              )}
+              确认安装
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {installedDraft && (
+        <Alert className="border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2Icon className="size-4" />
+          <AlertTitle>技能已安装</AlertTitle>
+          <AlertDescription>{installedDraft.root}</AlertDescription>
+        </Alert>
+      )}
+    </>
   );
 }
 

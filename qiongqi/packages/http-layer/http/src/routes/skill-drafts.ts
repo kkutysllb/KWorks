@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { inflateRawSync } from 'node:zlib'
 import {
   DEFAULT_QIONGQI_CAPABILITIES_CONFIG,
   QiongqiConfigSchema,
   type QiongqiConfig
 } from '@qiongqi/contracts'
-import { resolveWorkModeDefaultSkillIds } from '@qiongqi/skills'
+import { migrateLegacyManifest, resolveWorkModeDefaultSkillIds, SkillManifestV1 } from '@qiongqi/skills'
 import type { AuthActor } from '../auth-service.js'
 import { readJsonBody } from '../read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
@@ -93,6 +94,8 @@ type GeneratedSkillDraft = {
 
 const SCRIPT_EXTENSIONS = new Set(['.py', '.sh', '.js', '.ts', '.mjs', '.cjs'])
 const MAX_UPLOAD_BYTES = 512 * 1024
+const MAX_EXTRACTED_BYTES = 2 * 1024 * 1024
+const MAX_DRAFT_FILES = 200
 
 export async function createSkillDraft(
   runtime: ServerRuntime,
@@ -110,38 +113,44 @@ export async function createSkillDraft(
   const filesRoot = join(root, 'files')
   await mkdir(filesRoot, { recursive: true })
 
+  let mode = draftMode(form.get('mode'))
   const uploaded: DraftFile[] = []
   for (const file of files) {
     if (file.size > MAX_UPLOAD_BYTES) {
       return ERRORS.validation(`file exceeds ${MAX_UPLOAD_BYTES} byte limit: ${file.name}`)
     }
-    const safePath = safeUploadPath(file.name || 'upload')
-    if (!safePath.ok) return ERRORS.validation(safePath.detail)
-    const absolutePath = resolve(filesRoot, safePath.path)
-    const rel = relative(filesRoot, absolutePath)
-    if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
-      return ERRORS.validation('uploaded file path escapes draft workspace')
-    }
-    await mkdir(dirname(absolutePath), { recursive: true })
     const data = Buffer.from(await file.arrayBuffer())
-    await writeFile(absolutePath, data)
-    uploaded.push({
-      path: safePath.path,
-      kind: kindForPath(safePath.path),
-      size: data.byteLength,
-      sha256: createHash('sha256').update(data).digest('hex')
-    })
+    if (isZipUpload(file.name || '', data)) {
+      const extracted = extractZipEntries(data)
+      if (!extracted.ok) return ERRORS.validation(extracted.detail)
+      if (extracted.files.some((entry) => isSkillPackageMarker(entry.path))) mode = 'package'
+      for (const entry of extracted.files) {
+        const saved = await writeDraftFile(filesRoot, entry.path, entry.data)
+        if (!saved.ok) return ERRORS.validation(saved.detail)
+        uploaded.push(saved.file)
+      }
+      continue
+    }
+    const saved = await writeDraftFile(filesRoot, file.name || 'upload', data)
+    if (!saved.ok) return ERRORS.validation(saved.detail)
+    uploaded.push(saved.file)
+  }
+
+  const normalizedFiles = await normalizeDraftPackageRoot(filesRoot, uploaded, mode)
+  if (!normalizedFiles.ok) return ERRORS.validation(normalizedFiles.detail)
+  if (normalizedFiles.files.some((file) => isSkillPackageMarker(file.path))) {
+    mode = 'package'
   }
 
   const now = runtime.nowIso()
   const draft: SkillDraftSnapshot = {
     version: 1,
     draftId,
-    mode: draftMode(form.get('mode')),
+    mode,
     workModeId: normalizeWorkModeId(stringFormValue(form.get('workModeId')) ?? stringFormValue(form.get('work_mode_id'))),
     createdAt: now,
     updatedAt: now,
-    files: uploaded
+    files: normalizedFiles.files
   }
   await saveDraft(runtime, draft)
 
@@ -149,8 +158,170 @@ export async function createSkillDraft(
     success: true,
     draftId,
     mode: draft.mode,
-    files: uploaded.map(({ sha256: _sha256, ...file }) => file)
+    files: draft.files.map(({ sha256: _sha256, ...file }) => file)
   }, 201)
+}
+
+async function writeDraftFile(
+  filesRoot: string,
+  name: string,
+  data: Buffer
+): Promise<{ ok: true; file: DraftFile } | { ok: false; detail: string }> {
+  const safePath = safeUploadPath(name || 'upload')
+  if (!safePath.ok) return safePath
+  const absolutePath = resolve(filesRoot, safePath.path)
+  const rel = relative(filesRoot, absolutePath)
+  if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
+    return { ok: false, detail: 'uploaded file path escapes draft workspace' }
+  }
+  await mkdir(dirname(absolutePath), { recursive: true })
+  await writeFile(absolutePath, data)
+  return {
+    ok: true,
+    file: {
+      path: safePath.path,
+      kind: kindForPath(safePath.path),
+      size: data.byteLength,
+      sha256: createHash('sha256').update(data).digest('hex')
+    }
+  }
+}
+
+async function normalizeDraftPackageRoot(
+  filesRoot: string,
+  files: DraftFile[],
+  mode: DraftMode
+): Promise<{ ok: true; files: DraftFile[] } | { ok: false; detail: string }> {
+  if (files.length > MAX_DRAFT_FILES) {
+    return { ok: false, detail: `draft contains more than ${MAX_DRAFT_FILES} files` }
+  }
+  if (mode !== 'package' && !files.some((file) => isSkillPackageMarker(file.path))) {
+    return { ok: true, files }
+  }
+  const prefix = commonPackageRootPrefix(files.map((file) => file.path))
+  if (!prefix) return { ok: true, files }
+
+  const nextFiles: DraftFile[] = []
+  const seen = new Set<string>()
+  for (const file of files) {
+    const nextPath = file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path
+    if (!nextPath || seen.has(nextPath)) return { ok: false, detail: 'package files contain duplicate paths after root normalization' }
+    seen.add(nextPath)
+    const source = resolve(filesRoot, file.path)
+    const target = resolve(filesRoot, nextPath)
+    const rel = relative(filesRoot, target)
+    if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
+      return { ok: false, detail: 'package file path escapes draft workspace' }
+    }
+    if (source !== target) {
+      await mkdir(dirname(target), { recursive: true })
+      await rename(source, target)
+    }
+    nextFiles.push({
+      ...file,
+      path: nextPath,
+      kind: kindForPath(nextPath)
+    })
+  }
+  await rm(resolve(filesRoot, prefix.slice(0, -1)), { recursive: true, force: true }).catch(() => undefined)
+  return { ok: true, files: nextFiles.sort((a, b) => a.path.localeCompare(b.path)) }
+}
+
+function commonPackageRootPrefix(paths: string[]): string | undefined {
+  if (paths.length === 0) return undefined
+  const split = paths.map((path) => path.split('/'))
+  if (split.some((parts) => parts.length < 2)) return undefined
+  const first = split[0]?.[0]
+  if (!first || split.some((parts) => parts[0] !== first)) return undefined
+  const stripped = paths.map((path) => path.slice(first.length + 1))
+  if (!stripped.some((path) => isSkillPackageMarker(path))) return undefined
+  return `${first}/`
+}
+
+function isZipUpload(name: string, data: Buffer): boolean {
+  return extname(name).toLowerCase() === '.zip' || data.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+}
+
+function extractZipEntries(data: Buffer): { ok: true; files: Array<{ path: string; data: Buffer }> } | { ok: false; detail: string } {
+  const eocdOffset = findEndOfCentralDirectory(data)
+  if (eocdOffset < 0) return { ok: false, detail: 'uploaded zip file is invalid or unsupported' }
+  const totalEntries = data.readUInt16LE(eocdOffset + 10)
+  const centralSize = data.readUInt32LE(eocdOffset + 12)
+  const centralOffset = data.readUInt32LE(eocdOffset + 16)
+  if (centralOffset + centralSize > data.byteLength) {
+    return { ok: false, detail: 'uploaded zip central directory is invalid' }
+  }
+  if (totalEntries > MAX_DRAFT_FILES) {
+    return { ok: false, detail: `zip contains more than ${MAX_DRAFT_FILES} files` }
+  }
+
+  const files: Array<{ path: string; data: Buffer }> = []
+  const seen = new Set<string>()
+  let totalSize = 0
+  let offset = centralOffset
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (offset + 46 > data.byteLength || data.readUInt32LE(offset) !== 0x02014b50) {
+      return { ok: false, detail: 'uploaded zip central directory entry is invalid' }
+    }
+    const flags = data.readUInt16LE(offset + 8)
+    const compression = data.readUInt16LE(offset + 10)
+    const compressedSize = data.readUInt32LE(offset + 20)
+    const uncompressedSize = data.readUInt32LE(offset + 24)
+    const nameLength = data.readUInt16LE(offset + 28)
+    const extraLength = data.readUInt16LE(offset + 30)
+    const commentLength = data.readUInt16LE(offset + 32)
+    const localHeaderOffset = data.readUInt32LE(offset + 42)
+    const nameStart = offset + 46
+    const nameEnd = nameStart + nameLength
+    if (nameEnd > data.byteLength) return { ok: false, detail: 'uploaded zip file name is invalid' }
+    const rawName = data.subarray(nameStart, nameEnd).toString('utf8')
+    offset = nameEnd + extraLength + commentLength
+
+    if (!rawName || rawName.endsWith('/')) continue
+    if (rawName.startsWith('__MACOSX/') || rawName.endsWith('/.DS_Store') || rawName === '.DS_Store') continue
+    if ((flags & 0x1) !== 0) return { ok: false, detail: 'encrypted zip files are not supported' }
+    const safePath = safeUploadPath(rawName)
+    if (!safePath.ok) return safePath
+    if (seen.has(safePath.path)) return { ok: false, detail: 'zip contains duplicate file paths' }
+    seen.add(safePath.path)
+    if (localHeaderOffset + 30 > data.byteLength || data.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+      return { ok: false, detail: 'uploaded zip local header is invalid' }
+    }
+    const localNameLength = data.readUInt16LE(localHeaderOffset + 26)
+    const localExtraLength = data.readUInt16LE(localHeaderOffset + 28)
+    const compressedStart = localHeaderOffset + 30 + localNameLength + localExtraLength
+    const compressedEnd = compressedStart + compressedSize
+    if (compressedEnd > data.byteLength) return { ok: false, detail: 'uploaded zip file data is invalid' }
+    const compressed = data.subarray(compressedStart, compressedEnd)
+    const content = compression === 0
+      ? Buffer.from(compressed)
+      : compression === 8
+        ? inflateRawSync(compressed)
+        : undefined
+    if (!content) return { ok: false, detail: `unsupported zip compression method: ${compression}` }
+    if (content.byteLength !== uncompressedSize) {
+      return { ok: false, detail: 'uploaded zip file size metadata is invalid' }
+    }
+    totalSize += content.byteLength
+    if (totalSize > MAX_EXTRACTED_BYTES) {
+      return { ok: false, detail: `zip extracted content exceeds ${MAX_EXTRACTED_BYTES} byte limit` }
+    }
+    files.push({ path: safePath.path, data: content })
+  }
+  if (files.length === 0) return { ok: false, detail: 'zip does not contain any importable files' }
+  return { ok: true, files }
+}
+
+function findEndOfCentralDirectory(data: Buffer): number {
+  const min = Math.max(0, data.byteLength - 65_557)
+  for (let index = data.byteLength - 22; index >= min; index -= 1) {
+    if (data.readUInt32LE(index) === 0x06054b50) return index
+  }
+  return -1
+}
+
+function isSkillPackageMarker(path: string): boolean {
+  return path === 'SKILL.md' || path.endsWith('/SKILL.md') || path === 'skill.json' || path.endsWith('/skill.json')
 }
 
 export async function analyzeSkillDraft(
@@ -174,7 +345,10 @@ export async function generateSkillDraft(
   const draft = await loadDraft(runtime, draftId)
   if (!draft) return ERRORS.notFound(`skill draft not found: ${draftId}`)
   const evidence = draft.evidence ?? await analyzeDraftFiles(runtime, draft)
-  const generated = generateDraftFromEvidence(evidence)
+  const generated = draft.mode === 'package'
+    ? await generatePackageDraft(runtime, draft, evidence).catch((error) => error instanceof Error ? error : new Error(String(error)))
+    : generateDraftFromEvidence(evidence)
+  if (generated instanceof Error) return ERRORS.validation(generated.message)
   await saveDraft(runtime, {
     ...draft,
     evidence,
@@ -229,11 +403,25 @@ export async function installSkillDraft(
 
   const targetRoot = userSkillInstallRoot(runtime, skillId)
   await rm(targetRoot, { recursive: true, force: true })
-  await mkdir(join(targetRoot, 'scripts'), { recursive: true })
-  for (const file of draft.files) {
-    const source = resolve(draftFilesRoot(runtime, draft.draftId), file.path)
-    const targetName = basename(file.path)
-    await cp(source, join(targetRoot, 'scripts', targetName), { recursive: false, force: true })
+  if (draft.mode === 'package') {
+    await mkdir(targetRoot, { recursive: true })
+    for (const file of draft.files) {
+      const source = resolve(draftFilesRoot(runtime, draft.draftId), file.path)
+      const target = resolve(targetRoot, file.path)
+      const rel = relative(targetRoot, target)
+      if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
+        return ERRORS.validation('package file path escapes skill install root')
+      }
+      await mkdir(dirname(target), { recursive: true })
+      await cp(source, target, { recursive: false, force: true })
+    }
+  } else {
+    await mkdir(join(targetRoot, 'scripts'), { recursive: true })
+    for (const file of draft.files) {
+      const source = resolve(draftFilesRoot(runtime, draft.draftId), file.path)
+      const targetName = basename(file.path)
+      await cp(source, join(targetRoot, 'scripts', targetName), { recursive: false, force: true })
+    }
   }
   await writeFile(join(targetRoot, 'SKILL.md'), generated.skillMarkdown, 'utf8')
   await writeFile(join(targetRoot, 'skill.json'), `${JSON.stringify(skillManifestForDraft(generated), null, 2)}\n`, 'utf8')
@@ -265,6 +453,15 @@ async function analyzeDraftFiles(runtime: ServerRuntime, draft: SkillDraftSnapsh
     const absolutePath = resolve(draftFilesRoot(runtime, draft.draftId), file.path)
     const content = await readFile(absolutePath, 'utf8').catch(() => '')
     files.push(file)
+    if (draft.mode === 'package' && file.path === 'SKILL.md') {
+      entryCandidates.push({ path: file.path, confidence: 0.95, reason: 'skill package entry' })
+      snippets.push({ path: file.path, label: 'skill entry', text: content.split(/\r?\n/).slice(0, 12).join('\n') })
+      continue
+    }
+    if (draft.mode === 'package' && file.path === 'skill.json') {
+      snippets.push({ path: file.path, label: 'skill manifest', text: content.split(/\r?\n/).slice(0, 24).join('\n') })
+      continue
+    }
     if (!SCRIPT_EXTENSIONS.has(extname(file.path).toLowerCase())) continue
 
     const kind = kindForPath(file.path)
@@ -302,6 +499,89 @@ async function analyzeDraftFiles(runtime: ServerRuntime, draft: SkillDraftSnapsh
     risks,
     snippets
   }
+}
+
+async function generatePackageDraft(
+  runtime: ServerRuntime,
+  draft: SkillDraftSnapshot,
+  evidence: SkillDraftEvidence
+): Promise<GeneratedSkillDraft> {
+  const filesRoot = draftFilesRoot(runtime, draft.draftId)
+  const skillMarkdown = await readFile(resolve(filesRoot, 'SKILL.md'), 'utf8').catch(() => undefined)
+  if (!skillMarkdown) throw new Error('package draft must contain SKILL.md')
+  const manifest = await readPackageManifest(filesRoot, skillMarkdown)
+  const warnings = evidence.risks.map((risk) => ({ severity: risk.severity, message: `${risk.kind}: ${risk.evidence}` }))
+  return {
+    metadata: {
+      id: manifest.id,
+      name: manifest.name,
+      description: manifest.description ?? descriptionFromSkillMarkdown(skillMarkdown, manifest.name)
+    },
+    skillMarkdown,
+    manifestPatch: {
+      ...manifest,
+      assets: manifest.assets,
+      permissions: manifest.permissions
+    },
+    questions: [],
+    warnings
+  }
+}
+
+async function readPackageManifest(filesRoot: string, skillMarkdown: string): Promise<SkillManifestV1> {
+  const manifestPath = resolve(filesRoot, 'skill.json')
+  const raw = await readFile(manifestPath, 'utf8').catch(() => undefined)
+  if (raw) {
+    const parsed = JSON.parse(raw) as unknown
+    if (isObject(parsed) && 'specVersion' in parsed) {
+      return SkillManifestV1.parse(parsed)
+    }
+    if (isObject(parsed)) return migrateLegacyManifest(parsed)
+  }
+  const frontmatter = readSkillFrontmatter(skillMarkdown)
+  const id = slugifySkillId(frontmatter.name ?? frontmatter.id ?? frontmatter.title) ?? 'custom-skill'
+  return SkillManifestV1.parse({
+    specVersion: '1.0',
+    id,
+    name: frontmatter.title ?? titleFromSlug(id),
+    description: frontmatter.description ?? descriptionFromSkillMarkdown(skillMarkdown, titleFromSlug(id)),
+    entry: 'SKILL.md',
+    category: 'workflow',
+    activation: {
+      commands: [],
+      promptPatterns: frontmatter.description ? [escapeRegExp(frontmatter.description)] : [],
+      fileTypes: [],
+      autoActivate: false
+    },
+    commands: [],
+    tools: { allowed: [], declarations: [], mcpServers: {} },
+    contributes: { chatMenu: [], quickTask: [] },
+    permissions: {
+      workspace: 'write',
+      network: false,
+      exec: 'workspace',
+      requiresApproval: 'on-request'
+    },
+    assets: []
+  })
+}
+
+function readSkillFrontmatter(markdown: string): Record<string, string> {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)
+  const out: Record<string, string> = {}
+  if (!match) return out
+  for (const line of match[1].split(/\r?\n/)) {
+    const idx = line.indexOf(':')
+    if (idx > 0) out[line.slice(0, idx).trim()] = line.slice(idx + 1).trim()
+  }
+  return out
+}
+
+function descriptionFromSkillMarkdown(markdown: string, fallbackName: string): string {
+  const frontmatter = readSkillFrontmatter(markdown)
+  if (frontmatter.description) return frontmatter.description
+  const heading = /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim()
+  return heading ? `Use the ${heading} skill package.` : `Use the ${fallbackName} skill package.`
 }
 
 function generateDraftFromEvidence(evidence: SkillDraftEvidence): GeneratedSkillDraft {
@@ -378,33 +658,39 @@ function skillManifestForDraft(draft: GeneratedSkillDraft): Record<string, unkno
   const assets = Array.isArray(draft.manifestPatch.assets)
     ? draft.manifestPatch.assets.filter((asset): asset is string => typeof asset === 'string')
     : []
-  return {
+  const base = {
     specVersion: '1.0',
     id: draft.metadata.id,
     name: draft.metadata.name,
     description: draft.metadata.description,
-    version: '0.1.0',
-    entry: 'SKILL.md',
-    category: 'workflow',
+    version: stringValue(draft.manifestPatch.version) ?? '0.1.0',
+    entry: stringValue(draft.manifestPatch.entry) ?? 'SKILL.md',
+    category: stringValue(draft.manifestPatch.category) ?? 'workflow',
+    ...(isObject(draft.manifestPatch.author) ? { author: draft.manifestPatch.author } : {}),
+    ...(stringValue(draft.manifestPatch.license) ? { license: stringValue(draft.manifestPatch.license) } : {}),
+    ...(stringValue(draft.manifestPatch.icon) ? { icon: stringValue(draft.manifestPatch.icon) } : {}),
+    ...(typeof draft.manifestPatch.priority === 'number' ? { priority: draft.manifestPatch.priority } : {}),
     activation: {
       commands: [],
       promptPatterns: [escapeRegExp(draft.metadata.description)],
       fileTypes: [],
-      autoActivate: false
+      autoActivate: false,
+      ...(isObject(draft.manifestPatch.activation) ? draft.manifestPatch.activation : {})
     },
-    commands: [],
-    tools: {
+    commands: Array.isArray(draft.manifestPatch.commands) ? draft.manifestPatch.commands : [],
+    tools: isObject(draft.manifestPatch.tools) ? draft.manifestPatch.tools : {
       allowed: [],
       declarations: [],
       mcpServers: {}
     },
-    contributes: {
+    contributes: isObject(draft.manifestPatch.contributes) ? draft.manifestPatch.contributes : {
       chatMenu: [],
       quickTask: []
     },
     permissions,
     assets
   }
+  return SkillManifestV1.parse(base)
 }
 
 async function enableDraftSkillForActor(
@@ -609,10 +895,11 @@ function workspaceRootFromRuntimeDataDir(dataDir: string): string {
 }
 
 function safeUploadPath(name: string): { ok: true; path: string } | { ok: false; detail: string } {
-  const normalized = name.replace(/\\/g, '/').split('/').filter(Boolean)
-  if (normalized.some((part) => part === '..' || part.startsWith('.'))) {
+  const rawParts = name.replace(/\\/g, '/').split('/')
+  if (rawParts.some((part) => part === '..' || part.startsWith('.'))) {
     return { ok: false, detail: 'uploaded file path contains unsafe segments' }
   }
+  const normalized = rawParts.filter(Boolean)
   const safeParts = normalized.map((part) => basename(part).replace(/[^\w.\- ]+/g, '_').trim()).filter(Boolean)
   const path = safeParts.join('/')
   if (!path) return { ok: false, detail: 'uploaded file name is empty' }
