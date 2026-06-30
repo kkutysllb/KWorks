@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   addSkillToWorkMode,
+  analyzeSkillDraft,
   createSkill,
+  createSkillDraft,
   createWorkMode,
   deleteWorkMode,
   deleteSkill,
   enableSkill,
+  generateSkillDraft,
+  installSkillDraft,
   loadSkills,
   loadWorkModeSkills,
   loadWorkModes,
@@ -17,6 +21,8 @@ import {
 } from "./api";
 import type {
   SkillCreateRequest,
+  SkillDraftCreateRequest,
+  SkillDraftInstallRequest,
   WorkModeUpdateRequest,
   WorkModeWriteRequest,
 } from "./type";
@@ -98,6 +104,46 @@ export function useCreateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: SkillCreateRequest) => createSkill(request),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+      void queryClient.invalidateQueries({ queryKey: ["work-modes"] });
+      if (result.workModeId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["work-mode-skills", result.workModeId],
+        });
+      }
+    },
+  });
+}
+
+export function useCreateSkillDraft() {
+  return useMutation({
+    mutationFn: (request: SkillDraftCreateRequest) => createSkillDraft(request),
+  });
+}
+
+export function useAnalyzeSkillDraft() {
+  return useMutation({
+    mutationFn: (draftId: string) => analyzeSkillDraft(draftId),
+  });
+}
+
+export function useGenerateSkillDraft() {
+  return useMutation({
+    mutationFn: (draftId: string) => generateSkillDraft(draftId),
+  });
+}
+
+export function useInstallSkillDraft() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      draftId,
+      request,
+    }: {
+      draftId: string;
+      request: SkillDraftInstallRequest;
+    }) => installSkillDraft(draftId, request),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["skills"] });
       void queryClient.invalidateQueries({ queryKey: ["work-modes"] });

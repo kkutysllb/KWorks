@@ -34,6 +34,14 @@ import { agentCardJsonResponse } from './agent-card.js'
 import { a2aCreateTask, a2aCreateTaskSync, a2aGetTask, a2aCancelTask, a2aGetArtifacts, a2aSubscribeTask } from './a2a.js'
 import { listSkills } from './skills.js'
 import {
+  analyzeSkillDraft,
+  createSkillDraft,
+  generateSkillDraft,
+  installSkillDraft,
+  listSkillDrafts,
+  updateSkillDraft
+} from './skill-drafts.js'
+import {
   attachmentDiagnostics,
   getAttachmentContent,
   getAttachmentMetadata,
@@ -302,6 +310,36 @@ export function buildRouter(runtime: ServerRuntime): Router {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
     return kworksSetCodingSkillEnabled(runtime, actor, ctx.params.skillId, request)
+  })
+  router.add('GET', '/api/skills/drafts', async (request) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return listSkillDrafts(runtime)
+  })
+  router.add('POST', '/api/skills/drafts', async (request) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return createSkillDraft(runtime, actor, request)
+  })
+  router.add('POST', '/api/skills/drafts/:draftId/analyze', async (request, ctx) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return analyzeSkillDraft(runtime, actor, ctx.params.draftId)
+  })
+  router.add('POST', '/api/skills/drafts/:draftId/generate', async (request, ctx) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return generateSkillDraft(runtime, actor, ctx.params.draftId)
+  })
+  router.add('PATCH', '/api/skills/drafts/:draftId', async (request, ctx) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return updateSkillDraft(runtime, actor, ctx.params.draftId, request)
+  })
+  router.add('POST', '/api/skills/drafts/:draftId/install', async (request, ctx) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return installSkillDraft(runtime, actor, ctx.params.draftId, request)
   })
   router.add('PUT', '/api/skills/:name', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)

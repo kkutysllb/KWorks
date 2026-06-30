@@ -3,9 +3,20 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const { pushMock, createSkillMock } = vi.hoisted(() => ({
+const {
+  analyzeDraftMock,
+  createDraftMock,
+  createSkillMock,
+  generateDraftMock,
+  installDraftMock,
+  pushMock,
+} = vi.hoisted(() => ({
+  analyzeDraftMock: vi.fn(),
+  createDraftMock: vi.fn(),
   pushMock: vi.fn(),
   createSkillMock: vi.fn(),
+  generateDraftMock: vi.fn(),
+  installDraftMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -21,8 +32,24 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/core/skills/hooks", () => ({
+  useAnalyzeSkillDraft: () => ({
+    mutate: analyzeDraftMock,
+    isPending: false,
+  }),
   useCreateSkill: () => ({
     mutate: createSkillMock,
+    isPending: false,
+  }),
+  useCreateSkillDraft: () => ({
+    mutate: createDraftMock,
+    isPending: false,
+  }),
+  useGenerateSkillDraft: () => ({
+    mutate: generateDraftMock,
+    isPending: false,
+  }),
+  useInstallSkillDraft: () => ({
+    mutate: installDraftMock,
     isPending: false,
   }),
   useWorkModes: () => ({
@@ -95,8 +122,12 @@ describe("SkillCreatePage", () => {
   let container: HTMLDivElement | undefined;
 
   beforeEach(() => {
+    analyzeDraftMock.mockReset();
+    createDraftMock.mockReset();
     pushMock.mockReset();
     createSkillMock.mockReset();
+    generateDraftMock.mockReset();
+    installDraftMock.mockReset();
   });
 
   afterEach(() => {
@@ -140,6 +171,163 @@ describe("SkillCreatePage", () => {
         output: "Markdown 摘要，包含来源、要点和后续问题",
         procedure: "1. 明确主题和范围\n2. 检索资料",
         workModeId: "coding",
+      },
+      expect.any(Object),
+    );
+  });
+
+  test("renders import-first entry cards and switches to script generation", () => {
+    ({ container, root } = renderPage());
+
+    expect(container.textContent).toContain("空白创建");
+    expect(container.textContent).toContain("导入现成技能");
+    expect(container.textContent).toContain("从脚本生成");
+
+    const scriptButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("从脚本生成"),
+    );
+    expect(scriptButton).toBeTruthy();
+    act(() => {
+      scriptButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(container.textContent).toContain("上传命令脚本");
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
+  });
+
+  test("uploads scripts, generates a draft, and installs it for the selected work mode", async () => {
+    createDraftMock.mockImplementation((_request, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_abc123",
+        mode: "scripts",
+        files: [{ path: "convert.py", kind: "python", size: 12 }],
+      });
+    });
+    analyzeDraftMock.mockImplementation((_draftId, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_abc123",
+        evidence: {
+          files: [{ path: "convert.py", kind: "python", size: 12 }],
+          entryCandidates: [
+            { path: "convert.py", confidence: 0.86, reason: "__main__" },
+          ],
+          commands: [
+            {
+              path: "convert.py",
+              suggestedInvocation: "python scripts/convert.py <input>",
+              arguments: [
+                { name: "input", required: true, source: "argparse" },
+              ],
+            },
+          ],
+          dependencies: [],
+          risks: [],
+          snippets: [],
+        },
+      });
+    });
+    generateDraftMock.mockImplementation((_draftId, options) => {
+      options?.onSuccess?.({
+        success: true,
+        draftId: "draft_abc123",
+        evidence: {
+          files: [{ path: "convert.py", kind: "python", size: 12 }],
+          entryCandidates: [],
+          commands: [],
+          dependencies: [],
+          risks: [],
+          snippets: [],
+        },
+        draft: {
+          metadata: {
+            id: "convert",
+            name: "Convert",
+            description: "Convert files",
+          },
+          skillMarkdown: "---\nname: convert\n---",
+          manifestPatch: {
+            permissions: {
+              workspace: "write",
+              network: false,
+              exec: "workspace",
+              requiresApproval: "on-request",
+            },
+          },
+          questions: [],
+          warnings: [],
+        },
+      });
+    });
+
+    ({ container, root } = renderPage());
+    const scriptButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("从脚本生成"),
+    );
+    act(() => {
+      scriptButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    const file = new File(["print('ok')"], "convert.py", {
+      type: "text/x-python",
+    });
+    Object.defineProperty(input!, "files", {
+      configurable: true,
+      value: [file],
+    });
+    await act(async () => {
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const uploadButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("识别并生成草稿"),
+    );
+    expect(uploadButton).toBeTruthy();
+    await act(async () => {
+      uploadButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(createDraftMock).toHaveBeenCalledWith(
+      { mode: "scripts", workModeId: "coding", files: [file] },
+      expect.any(Object),
+    );
+    expect(analyzeDraftMock).toHaveBeenCalledWith(
+      "draft_abc123",
+      expect.any(Object),
+    );
+    expect(generateDraftMock).toHaveBeenCalledWith(
+      "draft_abc123",
+      expect.any(Object),
+    );
+    expect(container.textContent).toContain("Convert");
+
+    const installButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("确认安装"),
+    );
+    expect(installButton).toBeTruthy();
+    await act(async () => {
+      installButton!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(installDraftMock).toHaveBeenCalledWith(
+      {
+        draftId: "draft_abc123",
+        request: expect.objectContaining({
+          workModeId: "coding",
+          metadata: expect.objectContaining({ id: "convert" }),
+          confirmations: ["exec-workspace"],
+        }),
       },
       expect.any(Object),
     );

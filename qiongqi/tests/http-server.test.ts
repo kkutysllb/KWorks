@@ -2520,6 +2520,161 @@ describe('HTTP server', () => {
     expect(refreshCount).toBe(1)
   })
 
+  it('creates a skill draft from uploaded scripts and analyzes a python entrypoint', async () => {
+    const h = buildHarness()
+    const form = new FormData()
+    form.append('mode', 'scripts')
+    form.append('files', new File([
+      [
+        'import argparse',
+        'import markdown',
+        '',
+        'def main():',
+        "    parser = argparse.ArgumentParser(description='Convert Markdown to HTML')",
+        "    parser.add_argument('input')",
+        "    parser.add_argument('output')",
+        '    parser.parse_args()',
+        '',
+        "if __name__ == '__main__':",
+        '    main()'
+      ].join('\n')
+    ], 'convert.py', { type: 'text/x-python' }))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    expect(create.status).toBe(201)
+    const created = await readJson(create) as { draftId: string; files: Array<{ path: string; kind: string; size: number }> }
+    expect(created.draftId).toMatch(/^draft_/)
+    expect(created.files).toEqual([
+      { path: 'convert.py', kind: 'python', size: expect.any(Number) }
+    ])
+
+    const analyze = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${created.draftId}/analyze`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    expect(analyze.status).toBe(200)
+    const analyzed = await readJson(analyze) as {
+      evidence: {
+        entryCandidates: Array<{ path: string; reason: string }>
+        commands: Array<{ suggestedInvocation: string; arguments: Array<{ name: string }> }>
+        dependencies: Array<{ name: string }>
+      }
+    }
+    expect(analyzed.evidence.entryCandidates[0]?.path).toBe('convert.py')
+    expect(analyzed.evidence.entryCandidates[0]?.reason).toContain('__main__')
+    expect(analyzed.evidence.commands[0]?.suggestedInvocation).toBe('python scripts/convert.py <input> <output>')
+    expect(analyzed.evidence.commands[0]?.arguments.map((arg) => arg.name)).toEqual(['input', 'output'])
+    expect(analyzed.evidence.dependencies.map((dep) => dep.name)).toContain('markdown')
+  })
+
+  it('lists skill drafts through the draft route instead of the dynamic skill route', async () => {
+    const h = buildHarness()
+    const response = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+
+    expect(response.status).toBe(200)
+    const body = await readJson(response) as { drafts?: unknown[] }
+    expect(Array.isArray(body.drafts)).toBe(true)
+  })
+
+  it('generates and installs a script skill with copied scripts and relative commands', async () => {
+    const h = buildHarness()
+    await rm(join('/tmp/kun', 'skills', 'custom', 'shared', 'convert'), { recursive: true, force: true })
+    const form = new FormData()
+    form.append('mode', 'scripts')
+    form.append('workModeId', 'task')
+    form.append('files', new File([
+      [
+        "import argparse",
+        "parser = argparse.ArgumentParser(description='Convert Markdown to HTML')",
+        "parser.add_argument('input')",
+        "parser.add_argument('output')"
+      ].join('\n')
+    ], 'convert.py'))
+
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    const { draftId } = await readJson(create) as { draftId: string }
+
+    const generate = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${draftId}/generate`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    expect(generate.status).toBe(200)
+    const generated = await readJson(generate) as {
+      draft: {
+        metadata: { id: string; name: string; description: string }
+        skillMarkdown: string
+        manifestPatch: Record<string, unknown>
+      }
+    }
+    expect(generated.draft.metadata.id).toBe('convert')
+    expect(generated.draft.skillMarkdown).toContain('python scripts/convert.py <input> <output>')
+    expect(generated.draft.skillMarkdown).not.toContain('/Users/')
+
+    const install = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${draftId}/install`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workModeId: 'task',
+        metadata: generated.draft.metadata,
+        skillMarkdown: generated.draft.skillMarkdown,
+        manifestPatch: generated.draft.manifestPatch,
+        confirmations: ['exec-workspace']
+      })
+    }))
+    expect(install.status).toBe(201)
+    const installed = await readJson(install) as { root: string; skill_id: string; workModeId: string }
+    expect(installed.skill_id).toBe('convert')
+    expect(installed.workModeId).toBe('task')
+    await expect(readFile(join(installed.root, 'SKILL.md'), 'utf8')).resolves.toContain('python scripts/convert.py')
+    await expect(readFile(join(installed.root, 'scripts', 'convert.py'), 'utf8')).resolves.toContain('argparse')
+  })
+
+  it('rejects generated script skill installs that contain absolute local paths', async () => {
+    const h = buildHarness()
+    const form = new FormData()
+    form.append('mode', 'scripts')
+    form.append('files', new File(['print("ok")'], 'convert.py'))
+    const create = await dispatchRequest(h.router, new Request('http://localhost/api/skills/drafts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1' },
+      body: form
+    }))
+    const { draftId } = await readJson(create) as { draftId: string }
+
+    const install = await dispatchRequest(h.router, new Request(`http://localhost/api/skills/drafts/${draftId}/install`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workModeId: 'task',
+        metadata: { id: 'convert', name: 'Convert', description: 'Convert files' },
+        skillMarkdown: 'Run python /Users/libing/private/convert.py',
+        manifestPatch: {
+          permissions: {
+            workspace: 'write',
+            network: false,
+            exec: 'workspace',
+            requiresApproval: 'on-request'
+          }
+        },
+        confirmations: []
+      })
+    }))
+    expect(install.status).toBe(400)
+    await expect(readJson(install)).resolves.toMatchObject({
+      detail: expect.stringContaining('absolute')
+    })
+  })
+
   it('rejects invalid KWorks skill ids before creating files', async () => {
     const h = buildHarness()
     const session = await h.runtime.authService?.initialize({

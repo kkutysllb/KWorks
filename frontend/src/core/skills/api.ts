@@ -5,6 +5,11 @@ import type {
   Skill,
   SkillCreateRequest,
   SkillCreateResponse,
+  SkillDraftAnalysisResponse,
+  SkillDraftCreateRequest,
+  SkillDraftCreateResponse,
+  SkillDraftGenerateResponse,
+  SkillDraftInstallRequest,
   WorkMode,
   WorkModeSkill,
   WorkModesResponse,
@@ -214,6 +219,81 @@ export async function createSkill(
     throw new Error(
       (await responseDetail(response)) ??
         `Failed to create skill (${response.status})`,
+    );
+  }
+  return response.json() as Promise<SkillCreateResponse>;
+}
+
+export async function createSkillDraft(
+  request: SkillDraftCreateRequest,
+): Promise<SkillDraftCreateResponse> {
+  const formData = new FormData();
+  formData.append("mode", request.mode);
+  if (request.workModeId) formData.append("workModeId", request.workModeId);
+  for (const file of request.files) {
+    formData.append("files", file);
+  }
+  const response = await fetch(`${getBackendBaseURL()}/api/skills/drafts`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(
+      (await responseDetail(response)) ??
+        `Failed to create skill draft (${response.status})`,
+    );
+  }
+  return response.json() as Promise<SkillDraftCreateResponse>;
+}
+
+export async function analyzeSkillDraft(
+  draftId: string,
+): Promise<SkillDraftAnalysisResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/drafts/${encodeURIComponent(draftId)}/analyze`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw new Error(
+      (await responseDetail(response)) ??
+        `Failed to analyze skill draft (${response.status})`,
+    );
+  }
+  return response.json() as Promise<SkillDraftAnalysisResponse>;
+}
+
+export async function generateSkillDraft(
+  draftId: string,
+): Promise<SkillDraftGenerateResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/drafts/${encodeURIComponent(draftId)}/generate`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw new Error(
+      (await responseDetail(response)) ??
+        `Failed to generate skill draft (${response.status})`,
+    );
+  }
+  return response.json() as Promise<SkillDraftGenerateResponse>;
+}
+
+export async function installSkillDraft(
+  draftId: string,
+  request: SkillDraftInstallRequest,
+): Promise<SkillCreateResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/drafts/${encodeURIComponent(draftId)}/install`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      (await responseDetail(response)) ??
+        `Failed to install skill draft (${response.status})`,
     );
   }
   return response.json() as Promise<SkillCreateResponse>;

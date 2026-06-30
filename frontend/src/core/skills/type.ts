@@ -74,3 +74,86 @@ export interface SkillCreateResponse {
   root: string;
   message: string;
 }
+
+export type SkillDraftMode = "scripts" | "package";
+
+export interface SkillDraftFile {
+  path: string;
+  kind: string;
+  size: number;
+}
+
+export interface SkillDraftCreateRequest {
+  mode: SkillDraftMode;
+  files: File[];
+  workModeId?: string;
+}
+
+export interface SkillDraftCreateResponse {
+  success: boolean;
+  draftId: string;
+  mode: SkillDraftMode;
+  files: SkillDraftFile[];
+}
+
+export interface SkillDraftEvidence {
+  files: SkillDraftFile[];
+  entryCandidates: Array<{
+    path: string;
+    confidence: number;
+    reason: string;
+  }>;
+  commands: Array<{
+    path: string;
+    suggestedInvocation: string;
+    arguments: Array<{
+      name: string;
+      required: boolean;
+      source: string;
+    }>;
+  }>;
+  dependencies: Array<{
+    name: string;
+    source: string;
+  }>;
+  risks: Array<{
+    severity: "low" | "medium" | "high" | string;
+    kind: string;
+    evidence: string;
+  }>;
+  snippets: Array<{
+    path: string;
+    label: string;
+    text: string;
+  }>;
+}
+
+export interface GeneratedSkillDraft {
+  metadata: {
+    id: string;
+    name: string;
+    description: string;
+  };
+  skillMarkdown: string;
+  manifestPatch: Record<string, unknown>;
+  questions: Array<{ field: string; question: string }>;
+  warnings: Array<{ severity: string; message: string }>;
+}
+
+export interface SkillDraftAnalysisResponse {
+  success: boolean;
+  draftId: string;
+  evidence: SkillDraftEvidence;
+}
+
+export interface SkillDraftGenerateResponse extends SkillDraftAnalysisResponse {
+  draft: GeneratedSkillDraft;
+}
+
+export interface SkillDraftInstallRequest
+  extends Omit<GeneratedSkillDraft, "questions" | "warnings"> {
+  workModeId?: string;
+  confirmations?: string[];
+  questions?: GeneratedSkillDraft["questions"];
+  warnings?: GeneratedSkillDraft["warnings"];
+}

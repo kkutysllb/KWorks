@@ -12,7 +12,13 @@ vi.mock("@/core/config", () => ({
   getBackendBaseURL: () => "http://127.0.0.1:19987",
 }));
 
-import { createSkill } from "@/core/skills/api";
+import {
+  analyzeSkillDraft,
+  createSkill,
+  createSkillDraft,
+  generateSkillDraft,
+  installSkillDraft,
+} from "@/core/skills/api";
 
 describe("skills API", () => {
   beforeEach(() => {
@@ -84,5 +90,136 @@ describe("skills API", () => {
         output: "Markdown 摘要",
       }),
     ).rejects.toThrow("id is required");
+  });
+
+  test("creates a skill draft with multipart uploads", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        success: true,
+        draftId: "draft_abc123",
+        mode: "scripts",
+        files: [{ path: "convert.py", kind: "python", size: 12 }],
+      }),
+    });
+
+    const file = new File(["print('ok')"], "convert.py", {
+      type: "text/x-python",
+    });
+    await expect(
+      createSkillDraft({
+        mode: "scripts",
+        workModeId: "task",
+        files: [file],
+      }),
+    ).resolves.toMatchObject({
+      draftId: "draft_abc123",
+      files: [{ path: "convert.py" }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:19987/api/skills/drafts",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData),
+      }),
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: FormData }];
+    expect(init.body.get("mode")).toBe("scripts");
+    expect(init.body.get("workModeId")).toBe("task");
+    expect(init.body.getAll("files")).toHaveLength(1);
+  });
+
+  test("calls skill draft analyze and generate endpoints", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, evidence: { files: [] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          draft: { metadata: { id: "convert" } },
+        }),
+      });
+
+    await analyzeSkillDraft("draft_abc123");
+    await generateSkillDraft("draft_abc123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:19987/api/skills/drafts/draft_abc123/analyze",
+      { method: "POST" },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:19987/api/skills/drafts/draft_abc123/generate",
+      { method: "POST" },
+    );
+  });
+
+  test("installs a skill draft with edited metadata and manifest patch", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        success: true,
+        installed: true,
+        skill_id: "convert",
+        workModeId: "task",
+        root: "/tmp/kun/skills/custom/shared/convert",
+      }),
+    });
+
+    await expect(
+      installSkillDraft("draft_abc123", {
+        workModeId: "task",
+        metadata: {
+          id: "convert",
+          name: "Convert",
+          description: "Convert files",
+        },
+        skillMarkdown: "---\nname: convert\n---",
+        manifestPatch: {
+          permissions: {
+            workspace: "write",
+            network: false,
+            exec: "workspace",
+            requiresApproval: "on-request",
+          },
+        },
+        confirmations: ["exec-workspace"],
+      }),
+    ).resolves.toMatchObject({ skill_id: "convert" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:19987/api/skills/drafts/draft_abc123/install",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workModeId: "task",
+          metadata: {
+            id: "convert",
+            name: "Convert",
+            description: "Convert files",
+          },
+          skillMarkdown: "---\nname: convert\n---",
+          manifestPatch: {
+            permissions: {
+              workspace: "write",
+              network: false,
+              exec: "workspace",
+              requiresApproval: "on-request",
+            },
+          },
+          confirmations: ["exec-workspace"],
+        }),
+      },
+    );
   });
 });
