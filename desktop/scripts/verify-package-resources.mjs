@@ -2,9 +2,13 @@
 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-const SCRIPT_DIR = new URL(".", import.meta.url).pathname;
+// ⚠️ 不能用 new URL(...).pathname — 在 Windows 上返回 /D:/a/... （带前导斜杠），
+// path.resolve 会把它解析到当前盘符的根而非实际盘符，导致 existsSync 全部失败。
+// fileURLToPath 正确处理 Windows file:///D:/... → D:\...
+const SCRIPT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const DESKTOP_DIR = resolve(SCRIPT_DIR, "..");
 const REPO_ROOT = resolve(DESKTOP_DIR, "..");
 
