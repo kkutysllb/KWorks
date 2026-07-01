@@ -5,6 +5,12 @@
 .env.local
 .env.*.local
 
+# Code signing certificates & keys (NEVER commit these)
+*.p12
+*.pfx
+*.cer
+*.key
+
 # ═══════════════════════════════════════
 # Python
 # ═══════════════════════════════════════
@@ -14,10 +20,10 @@ __pycache__/
 *.so
 .Python
 build/
-# Re-include desktop-electron/build (icon files needed by electron-builder at packaging time;
+# Re-include desktop/build (icons + entitlements needed by electron-builder at packaging time;
 # the unanchored `build/` above was incorrectly matching the Electron asset directory)
-!/desktop-electron/build/
-!/desktop-electron/build/**
+!/desktop/build/
+!/desktop/build/**
 develop-eggs/
 dist/
 downloads/

@@ -27,6 +27,7 @@
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "@types/node": "^20.14.10",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",

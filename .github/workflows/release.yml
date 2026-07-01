@@ -1,0 +1,167 @@
+# KWorks Desktop — Release Pipeline
+#
+# 触发方式：
+#   1. 推送 tag `v*`（如 v0.1.0）→ 自动构建 + 签名 + 公证 + 发布到 GitHub Release
+#   2. Actions 页面手动运行（workflow_dispatch）→ 用于测试，发布为草稿
+#
+# 流水线步骤：
+#   checkout → node/pnpm → 构建 frontend → 构建 qiongqi → 构建 desktop
+#   → 导入 Apple 签名证书 → electron-builder 打包(DMG+ZIP) → afterSign 公证 → 发布
+#
+# 必需的 GitHub Secrets（用 desktop/scripts/export-mac-secrets.mjs 生成）：
+#   MAC_CERTIFICATE                  — Developer ID .p12 的 base64
+#   MAC_CERTIFICATE_PWD              — .p12 导出密码
+#   APPLE_ID                         — Apple ID 邮箱
+#   APPLE_APP_SPECIFIC_PASSWORD      — appleid.apple.com 生成的应用专用密码
+#   APPLE_TEAM_ID                    — 开发者团队 ID（如 DHV5D72JNF）
+#
+# GH_TOKEN 用 Actions 自动注入的 GITHUB_TOKEN，无需额外配置。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "发布为草稿（不公开），用于测试"
+        required: false
+        default: "true"
+
+# 同一个 tag 不要并发发布
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & Release (macOS)
+    runs-on: macos-latest
+
+    permissions:
+      contents: write # electron-builder 需要 create/upload GitHub Release
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 拿到完整历史，便于生成 changelog
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # 不开启 registry 缓存，避免 pnpm + npm cache 冲突
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+          run_install: false
+
+      - name: ♻️ Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/pnpm/store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 1/4：构建前端（静态导出到 frontend/out）
+      # ─────────────────────────────────────────────────────────────
+      - name: 🎨 Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build:desktop
+
+      - name: ✅ Verify frontend output
+        run: |
+          test -f frontend/out/index.html || { echo "❌ frontend/out/index.html 缺失"; exit 1; }
+          test -d frontend/out/_next || { echo "❌ frontend/out/_next 缺失"; exit 1; }
+          echo "✓ 前端产物就绪"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 2/4：构建 qiongqi 运行时
+      # ─────────────────────────────────────────────────────────────
+      - name: ⚙️ Build qiongqi
+        working-directory: qiongqi
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: ✅ Verify qiongqi output
+        run: |
+          test -f qiongqi/packages/cli-layer/cli/dist/serve-entry.js || { echo "❌ serve-entry.js 缺失"; exit 1; }
+          echo "✓ qiongqi 产物就绪"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 3/4：安装 desktop 依赖（node-pty 会在此时编译）
+      # ─────────────────────────────────────────────────────────────
+      # node-pty 是 C++ 原生模块，需 node-gyp 编译；node-gyp 9.x 依赖 Python 的
+      # distutils（Python 3.12+ 已移除）。装 setuptools 提供兼容实现。
+      - name: 🐍 Ensure Python distutils for native module build
+        run: |
+          if python3 -c "import distutils.version" 2>/dev/null; then
+            echo "✓ distutils 可用"
+          else
+            echo "⚠️ distutils 缺失（Python 3.12+），安装 setuptools..."
+            pip3 install --user setuptools || pip3 install --break-system-packages setuptools
+          fi
+
+      - name: 🔨 Install desktop deps
+        working-directory: desktop
+        run: pnpm install --frozen-lockfile
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 4/4：导入 Apple 签名证书到 runner 钥匙串
+      # ─────────────────────────────────────────────────────────────
+      - name: 🔑 Import Apple signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERTIFICATE }}
+          p12-password: ${{ secrets.MAC_CERTIFICATE_PWD }}
+
+      # ─────────────────────────────────────────────────────────────
+      # 打包 + 签名 + 公证 + 发布
+      # build:app 会依次：tsc 编译 → build:frontend → verify 资源 → electron-builder
+      # 这里 build:frontend 会命中已存在的 frontend/out（上一步已构建），很快
+      # ─────────────────────────────────────────────────────────────
+      - name: 🚀 Build, sign, notarize & publish
+        working-directory: desktop
+        env:
+          # 公证凭证（notarize.cjs 读取）
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # electron-builder 发布用（Actions 自动注入的 GITHUB_TOKEN）
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # CI 标记（electron-builder 据此判断是否在 CI 环境）
+          CI: "true"
+        run: |
+          # 手动触发且 draft=true 时，发布为草稿
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.draft }}" = "true" ]; then
+            pnpm run build && pnpm run build:frontend && pnpm run verify:package-resources && \
+            npx electron-builder --mac --publish never
+            echo "💡 草稿模式：产物未发布，可在 desktop/release/ 查看（runner 上）"
+          else
+            pnpm run build:app
+          fi
+
+      # ─────────────────────────────────────────────────────────────
+      # 上传构建产物到 Actions（即使 Release 流程也可作备份/调试）
+      # ─────────────────────────────────────────────────────────────
+      - name: 📎 Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KWorks-mac-build
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/latest-mac.yml
+          if-no-files-found: warn
+          retention-days: 14

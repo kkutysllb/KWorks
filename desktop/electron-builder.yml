@@ -24,10 +24,31 @@ extraResources:
       - 32x32.png
   - from: build/icon.png
     to: icon.png
+afterSign: scripts/notarize.cjs
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # identity 不写死：让 electron-builder 自动匹配钥匙串里唯一的
+  # "Developer ID Application" 证书。本地与 CI 统一行为。
+  # CI 通过 CSC_NAME / 导入证书到 runner 钥匙串后即可自动发现。
+  notarize: false
+  target:
+    - dmg
+    - zip
+dmg:
+  sign: false
+  contents:
+    - x: 130
+      y: 220
 win:
   icon: build/icon.ico
 linux:
   icon: build/icon.png
+publish:
+  provider: github
+  owner: kkutysllb
+  repo: KWorks
