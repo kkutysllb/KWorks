@@ -114,25 +114,10 @@ jobs:
           echo "✓ 前端产物就绪"
 
       # ─────────────────────────────────────────────────────────────
-      # 构建 qiongqi（含 better-sqlite3 C++ 原生模块，每平台各自编译）
-      # ─────────────────────────────────────────────────────────────
-      - name: ⚙️ Build qiongqi
-        working-directory: qiongqi
-        shell: bash
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run build
-
-      - name: ✅ Verify qiongqi output
-        shell: bash
-        run: |
-          test -f qiongqi/packages/cli-layer/cli/dist/serve-entry.js || { echo "❌ serve-entry.js 缺失"; exit 1; }
-          echo "✓ qiongqi 产物就绪"
-
-      # ─────────────────────────────────────────────────────────────
-      # Python distutils 兜底：node-pty + better-sqlite3 都用 node-gyp 编译，
-      # node-gyp 9.x 依赖 Python distutils（Python 3.12+ 已移除）。
-      # macOS/Linux 用 pip3，Windows 用 python -m pip
+      # 原生模块编译准备（必须在 qiongqi/desktop 的 pnpm install 之前完成）
+      # better-sqlite3 + node-pty 都是 C++ 原生模块，install 时触发 node-gyp rebuild。
+      # 需要两个条件：(1) Python distutils 可用（node-gyp 9.x 依赖，Py3.12+ 已移除）
+      #              (2) Windows 上 MSVC C++ 工具链已激活（node-gyp 找不到 VS）
       # ─────────────────────────────────────────────────────────────
       - name: 🐍 Ensure Python distutils (macOS/Linux)
         if: runner.os != 'Windows'
@@ -155,17 +140,36 @@ jobs:
             Write-Host "✓ distutils 可用"
           }
 
-      # ─────────────────────────────────────────────────────────────
-      # 安装 desktop 依赖（node-pty 原生模块每平台编译）
-      # ─────────────────────────────────────────────────────────────
-      # Windows: 先激活 MSVC C++ 工具链（better-sqlite3 + node-pty 编译需要）
-      # windows-latest 自带 VS2022，但 node-gyp 有时无法自动发现，需显式激活。
+      # Windows: 激活 MSVC C++ 工具链。windows-latest 自带 VS2022，
+      # 但 node-gyp 有时无法自动发现，需显式激活环境变量后才能被后续 step 继承。
+      # 之前的版本把这一步放在 desktop install 前，但 qiongqi install 更早，
+      # 导致 better-sqlite3 编译时 MSVC 仍未激活。现在提前到所有 install 之前。
       - name: 🔧 Setup MSVC dev environment (Windows only)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
+      # ─────────────────────────────────────────────────────────────
+      # 构建 qiongqi（含 better-sqlite3 C++ 原生模块，每平台各自编译）
+      # ─────────────────────────────────────────────────────────────
+      - name: ⚙️ Build qiongqi
+        working-directory: qiongqi
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: ✅ Verify qiongqi output
+        shell: bash
+        run: |
+          test -f qiongqi/packages/cli-layer/cli/dist/serve-entry.js || { echo "❌ serve-entry.js 缺失"; exit 1; }
+          echo "✓ qiongqi 产物就绪"
+
+      # ─────────────────────────────────────────────────────────────
+      # 安装 desktop 依赖（node-pty 原生模块每平台编译）
+      # MSVC 已在前面激活，Python distutils 也已备齐，这里直接 install 即可。
+      # ─────────────────────────────────────────────────────────────
       - name: 🔨 Install desktop deps
         working-directory: desktop
         shell: bash
