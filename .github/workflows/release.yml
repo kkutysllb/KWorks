@@ -158,16 +158,44 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # 安装 desktop 依赖（node-pty 原生模块每平台编译）
       # ─────────────────────────────────────────────────────────────
+      # Windows: 先激活 MSVC C++ 工具链（better-sqlite3 + node-pty 编译需要）
+      # windows-latest 自带 VS2022，但 node-gyp 有时无法自动发现，需显式激活。
+      - name: 🔧 Setup MSVC dev environment (Windows only)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: 🔨 Install desktop deps
         working-directory: desktop
         shell: bash
         run: pnpm install --frozen-lockfile
 
       # ─────────────────────────────────────────────────────────────
-      # 仅 macOS：导入 Apple Developer ID 签名证书到 runner 钥匙串
+      # 检查 macOS 签名 Secrets 是否已配置
+      # 在 step 的 if 条件中无法直接判空 secrets.xxx，需通过 env 中转后输出标记。
+      # ─────────────────────────────────────────────────────────────
+      - name: 🔍 Check macOS signing secrets availability
+        if: runner.os == 'macOS'
+        id: mac_secrets
+        env:
+          MAC_CERT: ${{ secrets.MAC_CERTIFICATE }}
+          MAC_PWD: ${{ secrets.MAC_CERTIFICATE_PWD }}
+        run: |
+          if [ -n "$MAC_CERT" ] && [ -n "$MAC_PWD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "✓ macOS 签名 Secrets 已配置，将进行签名+公证"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ macOS 签名 Secrets 未配置，将构建未签名版本"
+            echo "  配置方法见 desktop/scripts/export-mac-secrets.mjs"
+          fi
+
+      # ─────────────────────────────────────────────────────────────
+      # 仅 macOS 且 Secrets 已配置：导入 Apple Developer ID 签名证书
       # ─────────────────────────────────────────────────────────────
       - name: 🔑 Import Apple signing certificate (macOS only)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.MAC_CERTIFICATE }}
@@ -185,8 +213,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: "true"
-          # Windows: 不提供 CSC_LINK → electron-builder 自动跳过签名
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || 'false' }}
+          # macOS: secrets 配置了才自动发现证书签名，否则跳过签名
+          # Windows/Linux: 永远 false
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
         run: |
           # tag 触发 → 发布到 Release；手动触发 → 仅构建不上传
           if [ "${{ github.event_name }}" = "push" ]; then

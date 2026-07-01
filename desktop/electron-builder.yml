@@ -68,8 +68,8 @@ publish:
   provider: github
   owner: kkutysllb
   repo: KWorks
-  # 三平台并行构建时，首个平台创建 Release，后续平台会追加产物到同一 Release。
-  # allowUpdates 让 electron-builder 在 Release 已存在时自动上传 assets 而非报错。
-  allowUpdates: true
-  # 并发上传时用 HTML 上自动生成的 releaseNotes，不需要额外 changelog 文件
+  # GitHub provider 默认行为：Release 已存在时自动追加 assets，无需额外字段。
+  # 注意：electron-builder schema 是严格模式 (additionalProperties: false)，
+  # 任何未定义字段（如 allowUpdates）都会导致整个 publish 校验失败。
+  # releaseType=release 控制创建的是正式 Release 而非 prerelease。
   releaseType: release
