@@ -44,7 +44,10 @@ jobs:
           - os: macos-latest
             platform: mac
             artifact_suffix: mac
-          - os: windows-latest
+          # ⚠️ 不能用 windows-latest：当前指向 windows-2025 镜像，预装 VS 18 (2026 Preview)。
+          # node-gyp 11.x 的 find-visualstudio.js 不认识 VS 18，报 unknown version。
+          # 固定 windows-2022 → 预装 VS 2022 (17.x)，node-gyp 完全支持。
+          - os: windows-2022
             platform: win
             artifact_suffix: win
           - os: ubuntu-latest
