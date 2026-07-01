@@ -4,12 +4,12 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BarChart3Icon,
-  BotIcon,
   CalendarIcon,
   CoinsIcon,
   CpuIcon,
+  GaugeIcon,
   RefreshCwIcon,
-  WrenchIcon,
+  SparklesIcon,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -73,10 +73,28 @@ const MODEL_COLORS = [
   "#f97316", "#64748b",
 ];
 
-const CALLER_CONFIG = [
-  { key: "lead_agent" as const, color: "#8b5cf6", bg: "bg-violet-500/10", text: "text-violet-400" },
-  { key: "subagent" as const, color: "#06b6d4", bg: "bg-cyan-500/10", text: "text-cyan-400" },
-  { key: "middleware" as const, color: "#f59e0b", bg: "bg-amber-500/10", text: "text-amber-400" },
+const EFFICIENCY_CONFIG = [
+  {
+    key: "actual_tokens" as const,
+    color: "#8b5cf6",
+    bg: "bg-violet-500/10",
+    text: "text-violet-400",
+    icon: CpuIcon,
+  },
+  {
+    key: "cache_hit_tokens" as const,
+    color: "#06b6d4",
+    bg: "bg-cyan-500/10",
+    text: "text-cyan-400",
+    icon: GaugeIcon,
+  },
+  {
+    key: "token_economy_savings_tokens" as const,
+    color: "#f59e0b",
+    bg: "bg-amber-500/10",
+    text: "text-amber-400",
+    icon: SparklesIcon,
+  },
 ];
 
 function fmtNum(n: number): string {
@@ -682,43 +700,48 @@ export function TokenUsagePage() {
           <div className="py-16 text-center text-muted-foreground text-sm">暂无用量数据</div>
         )}
 
-        {/* By Caller Section */}
+        {/* Token efficiency section */}
         <div className="space-y-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/10">
-              <BotIcon className="h-3.5 w-3.5 text-cyan-400" />
+              <GaugeIcon className="h-3.5 w-3.5 text-cyan-400" />
             </span>
-            {t.settings.tokenUsage.byCaller}
+            {t.settings.tokenUsage.tokenEfficiency}
           </h3>
-          <div className="grid grid-cols-3 gap-3">
-            {CALLER_CONFIG.map((cfg) => {
-              const tokens = stats.by_caller[cfg.key];
-              const callerTotal = Math.max(
-                stats.by_caller.lead_agent + stats.by_caller.subagent + stats.by_caller.middleware,
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {EFFICIENCY_CONFIG.map((cfg) => {
+              const Icon = cfg.icon;
+              const tokens = stats.efficiency[cfg.key];
+              const maxMetric = Math.max(
+                stats.efficiency.actual_tokens,
+                stats.efficiency.cache_hit_tokens,
+                stats.efficiency.token_economy_savings_tokens,
                 1,
               );
-              const pct = Math.max((tokens / callerTotal) * 100, 2);
+              const pct = Math.max((tokens / maxMetric) * 100, 2);
               const label =
-                cfg.key === "lead_agent"
-                  ? t.settings.tokenUsage.leadAgent
-                  : cfg.key === "subagent"
-                    ? t.settings.tokenUsage.subagent
-                    : t.settings.tokenUsage.middleware;
+                cfg.key === "actual_tokens"
+                  ? t.settings.tokenUsage.actualTokens
+                  : cfg.key === "cache_hit_tokens"
+                    ? t.settings.tokenUsage.cacheHitTokens
+                    : t.settings.tokenUsage.tokenEconomySavings;
+              const sub =
+                cfg.key === "cache_hit_tokens" &&
+                stats.efficiency.cache_hit_rate != null
+                  ? `${Math.round(stats.efficiency.cache_hit_rate * 100)}% ${t.settings.tokenUsage.cacheHitRate}`
+                  : null;
               return (
                 <div key={cfg.key} className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className={cn("flex h-6 w-6 items-center justify-center rounded-md", cfg.bg)}>
-                      {cfg.key === "lead_agent" ? (
-                        <CpuIcon className={cn("h-3.5 w-3.5", cfg.text)} />
-                      ) : cfg.key === "subagent" ? (
-                        <BotIcon className={cn("h-3.5 w-3.5", cfg.text)} />
-                      ) : (
-                        <WrenchIcon className={cn("h-3.5 w-3.5", cfg.text)} />
-                      )}
+                      <Icon className={cn("h-3.5 w-3.5", cfg.text)} />
                     </span>
                     <span className="text-xs text-muted-foreground">{label}</span>
                   </div>
-                  <div className="font-mono text-lg font-bold">{formatTokenCount(tokens)}</div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="font-mono text-lg font-bold">{formatTokenCount(tokens)}</div>
+                    {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+                  </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full transition-all"

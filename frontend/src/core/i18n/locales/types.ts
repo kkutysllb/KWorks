@@ -606,13 +606,14 @@ export interface Translations {
       summaryTotalRuns: string;
       summaryModels: string;
       byModel: string;
-      byCaller: string;
+      tokenEfficiency: string;
       modelColumn: string;
       tokensColumn: string;
       runsColumn: string;
-      leadAgent: string;
-      subagent: string;
-      middleware: string;
+      actualTokens: string;
+      cacheHitTokens: string;
+      tokenEconomySavings: string;
+      cacheHitRate: string;
       noData: string;
     };
     acknowledge: {
