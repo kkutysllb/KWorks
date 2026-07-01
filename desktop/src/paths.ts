@@ -55,6 +55,11 @@ export function getAppDataDir(): string {
   return join(homedir(), ".kworks-workspace");
 }
 
+/** Directory used for extracted packaged runtimes and other generated assets. */
+export function getRuntimeCacheDir(): string {
+  return join(getAppDataDir(), "runtime");
+}
+
 /**
  * The gateway state directory (`KWorks_HOME`).
  *
@@ -144,14 +149,27 @@ export function getSkillsMigrationMarkerPath(): string {
 /**
  * The QiongQi runtime source bundled with KWorks.
  *
- * Development uses the vendored source under the repository. Packaged builds
- * ship the same source as `extraResources/qiongqi`.
+ * Development uses the vendored source under the repository. Packaged macOS
+ * builds extract a signed single-file archive into the writable runtime cache;
+ * packaged Windows/Linux builds use the direct `extraResources/qiongqi` copy.
  */
 export function getQiongqiRuntimeDir(): string {
   if (isPackaged()) {
-    return join(process.resourcesPath, "qiongqi");
+    return existsSync(getBundledQiongqiRuntimeArchivePath())
+      ? join(getRuntimeCacheDir(), "qiongqi")
+      : getPackagedQiongqiRuntimeDir();
   }
   return join(REPO_ROOT, "qiongqi");
+}
+
+/** The direct packaged QiongQi runtime directory used by Windows/Linux builds. */
+export function getPackagedQiongqiRuntimeDir(): string {
+  return join(process.resourcesPath, "qiongqi");
+}
+
+/** The compressed QiongQi runtime shipped as a package resource. */
+export function getBundledQiongqiRuntimeArchivePath(): string {
+  return join(process.resourcesPath, "qiongqi-runtime.tar.gz");
 }
 
 /**

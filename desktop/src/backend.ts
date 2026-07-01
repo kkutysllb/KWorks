@@ -10,12 +10,12 @@
  *  - Kill the child cleanly on shutdown (SIGTERM → SIGKILL)
  */
 
-import { app } from "electron";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   cpSync,
   createWriteStream,
   existsSync,
+  rmSync,
   statSync,
   mkdirSync,
   readdirSync,
@@ -23,13 +23,14 @@ import {
   writeFileSync,
   type WriteStream,
 } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
 
 import {
   getAuthJwtSecretPath,
+  getBundledQiongqiRuntimeArchivePath,
   getBuiltinCodingSkillsDir,
   getBuiltinCoreSkillsDir,
   getBuiltinTaskSkillsDir,
@@ -40,6 +41,7 @@ import {
   getKworksHome,
   getLogsDir,
   getQiongqiRuntimeDir,
+  getRuntimeCacheDir,
   getSkillsDir,
   getSkillsMigrationMarkerPath,
   isPackaged,
@@ -136,11 +138,12 @@ export class BackendManager extends EventEmitter {
 
     const port = resolveGatewayPort();
 
-    this.ensureDataDirs();
-    this.initSkills();
     this.openLogStream();
 
     try {
+      this.ensureDataDirs();
+      this.ensurePackagedQiongqiRuntime();
+      this.initSkills();
       this.ensureQiongqiRuntimeBuildFresh();
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
@@ -293,6 +296,42 @@ export class BackendManager extends EventEmitter {
         throw new Error(`Failed to rebuild ${relativePackageDir} (exit ${result.status ?? "unknown"})`);
       }
     }
+  }
+
+  private ensurePackagedQiongqiRuntime(): void {
+    if (!isPackaged()) return;
+
+    const archive = getBundledQiongqiRuntimeArchivePath();
+    if (!existsSync(archive)) return;
+
+    const runtimeDir = getQiongqiRuntimeDir();
+    const entry = join(runtimeDir, "packages", "cli-layer", "cli", "dist", "serve-entry.js");
+    const markerPath = join(runtimeDir, ".kworks-runtime-archive.json");
+    const archiveSha256 = sha256File(archive);
+    if (existsSync(entry) && readRuntimeArchiveMarker(markerPath) === archiveSha256) return;
+
+    const cacheDir = getRuntimeCacheDir();
+    mkdirSync(cacheDir, { recursive: true });
+    rmSync(runtimeDir, { recursive: true, force: true });
+
+    const result = spawnSync("tar", ["-xzf", archive, "-C", cacheDir], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (result.status !== 0) {
+      const detail = result.stderr?.trim() || result.stdout?.trim() || "unknown tar error";
+      throw new Error(`Failed to extract bundled QiongQi runtime: ${detail}`);
+    }
+
+    if (!existsSync(entry)) {
+      throw new Error(`Extracted QiongQi runtime is missing serve entry: ${entry}`);
+    }
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({ archiveSha256, extractedAt: new Date().toISOString() }, null, 2)}\n`,
+      "utf8",
+    );
+    this.appendLog(`[backend] extracted bundled QiongQi runtime to ${runtimeDir}`);
   }
 
   // ── Environment ───────────────────────────────────────────────────────
@@ -802,4 +841,18 @@ function oldestMtimeMs(dir: string): number {
     }
   }
   return Number.isFinite(oldest) ? oldest : 0;
+}
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function readRuntimeArchiveMarker(path: string): string | null {
+  if (!existsSync(path)) return null;
+  try {
+    const data = JSON.parse(readFileSync(path, "utf8")) as { archiveSha256?: unknown };
+    return typeof data.archiveSha256 === "string" ? data.archiveSha256 : null;
+  } catch {
+    return null;
+  }
 }

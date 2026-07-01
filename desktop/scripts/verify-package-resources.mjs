@@ -15,6 +15,7 @@ const REPO_ROOT = resolve(DESKTOP_DIR, "..");
 const FRONTEND_OUT_DIR = join(REPO_ROOT, "frontend", "out");
 const QIONGQI_DIR = join(REPO_ROOT, "qiongqi");
 const SKILLS_DIR = join(REPO_ROOT, "skills");
+const QIONGQI_RUNTIME_ARCHIVE = join(DESKTOP_DIR, "build", "qiongqi-runtime.tar.gz");
 
 const checks = [];
 
@@ -48,6 +49,7 @@ requirePath(
   "resources/qiongqi built serve entry",
 );
 requirePath(join(QIONGQI_DIR, "node_modules"), "resources/qiongqi node_modules");
+requirePath(QIONGQI_RUNTIME_ARCHIVE, "resources/qiongqi-runtime.tar.gz");
 
 const failed = checks.filter((check) => !check.ok);
 for (const check of checks) {

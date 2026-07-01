@@ -46,6 +46,8 @@ test("desktop backend uses a generated QiongQi config instead of repo MCP config
 
 test("desktop backend injects the bundled qiongqi runtime path", () => {
   assert.match(backendSource, /getQiongqiRuntimeDir/);
+  assert.match(backendSource, /ensurePackagedQiongqiRuntime/);
+  assert.match(backendSource, /archiveSha256/);
   assert.match(backendSource, /KWorks_QIONGQI_REPO_PATH/);
 });
 

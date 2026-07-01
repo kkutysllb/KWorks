@@ -6,9 +6,18 @@ const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const verifierUrl = new URL("../scripts/verify-package-resources.mjs", import.meta.url);
+const prepareResourcesSource = readFileSync(
+  new URL("../scripts/prepare-package-resources.mjs", import.meta.url),
+  "utf8",
+);
+const releaseWorkflowSource = readFileSync(
+  new URL("../../.github/workflows/release.yml", import.meta.url),
+  "utf8",
+);
 
 test("packaged app build verifies the embedded Node QiongQi runtime", () => {
   assert.doesNotMatch(packageJson.scripts["build:app"], /build:gateway/);
+  assert.match(packageJson.scripts["build:app"], /pnpm run prepare:package-resources/);
   assert.match(packageJson.scripts["build:app"], /pnpm run verify:package-resources/);
   assert.match(packageJson.scripts["build:app:full"], /pnpm run build:app/);
 });
@@ -16,7 +25,7 @@ test("packaged app build verifies the embedded Node QiongQi runtime", () => {
 test("package resource verifier rejects stale or incomplete Node QiongQi bundles", () => {
   assert.equal(existsSync(verifierUrl), true);
   const verifierSource = readFileSync(verifierUrl, "utf8");
-  assert.match(verifierSource, /resources\/qiongqi/);
+  assert.match(verifierSource, /qiongqi-runtime\.tar\.gz/);
   assert.match(verifierSource, /frontend\/out/);
   assert.match(verifierSource, /join\(REPO_ROOT, "qiongqi"\)/);
   assert.match(verifierSource, /join\(SKILLS_DIR, "public"\)/);
@@ -24,6 +33,13 @@ test("package resource verifier rejects stale or incomplete Node QiongQi bundles
   assert.match(verifierSource, /node_modules/);
   assert.doesNotMatch(verifierSource, /resources\/gateway/);
   assert.doesNotMatch(verifierSource, /local_skill_storage\.py/);
+});
+
+test("package resource preparation rebuilds and verifies every QiongQi package dist", () => {
+  assert.match(prepareResourcesSource, /scripts", "build\.mjs"/);
+  assert.match(prepareResourcesSource, /PACKAGE_DIST_INDEXES/);
+  assert.match(prepareResourcesSource, /packages\/domain-layer\/domain\/dist\/index\.js/);
+  assert.match(prepareResourcesSource, /packages\/cli-layer\/cli\/dist\/index\.js/);
 });
 
 test("packaged app ships small tray icons separately from the app icon", () => {
@@ -37,11 +53,33 @@ test("packaged app ships small tray icons separately from the app icon", () => {
   assert.match(builderConfig, /32x32\.png/);
 });
 
-test("packaged app ships the vendored qiongqi runtime source", () => {
+test("macOS packaged app ships the vendored qiongqi runtime as a single archive", () => {
   const builderConfig = readFileSync(
     new URL("../electron-builder.yml", import.meta.url),
     "utf8",
   );
-  assert.match(builderConfig, /from: \.\.\/qiongqi/);
-  assert.match(builderConfig, /to: qiongqi/);
+  assert.match(
+    builderConfig,
+    /mac:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\.tar\.gz[\s\S]*to: qiongqi-runtime\.tar\.gz/,
+  );
+  assert.match(
+    builderConfig,
+    /win:[\s\S]*extraResources:[\s\S]*from: \.\.\/qiongqi[\s\S]*to: qiongqi/,
+  );
+  assert.match(
+    builderConfig,
+    /linux:[\s\S]*extraResources:[\s\S]*from: \.\.\/qiongqi[\s\S]*to: qiongqi/,
+  );
+});
+
+test("release workflow prepares packaged resources before electron-builder", () => {
+  const prepareIndex = releaseWorkflowSource.indexOf("pnpm run prepare:package-resources");
+  const verifyIndex = releaseWorkflowSource.indexOf("pnpm run verify:package-resources");
+  const builderIndex = releaseWorkflowSource.indexOf("npx electron-builder");
+
+  assert.notEqual(prepareIndex, -1);
+  assert.notEqual(verifyIndex, -1);
+  assert.notEqual(builderIndex, -1);
+  assert.equal(prepareIndex < verifyIndex, true);
+  assert.equal(verifyIndex < builderIndex, true);
 });

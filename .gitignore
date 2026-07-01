@@ -24,6 +24,7 @@ build/
 # the unanchored `build/` above was incorrectly matching the Electron asset directory)
 !/desktop/build/
 !/desktop/build/**
+desktop/build/qiongqi-runtime.tar.gz
 develop-eggs/
 dist/
 downloads/

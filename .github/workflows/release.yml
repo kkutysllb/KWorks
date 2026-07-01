@@ -226,10 +226,14 @@ jobs:
         run: |
           # tag 触发 → 发布到 Release；手动触发 → 仅构建不上传
           if [ "${{ github.event_name }}" = "push" ]; then
-            pnpm run build && pnpm run build:frontend && pnpm run verify:package-resources && \
+            pnpm run build && pnpm run build:frontend && \
+              pnpm run prepare:package-resources && \
+              pnpm run verify:package-resources && \
               npx electron-builder --${{ matrix.platform }} --publish always
           else
-            pnpm run build && pnpm run build:frontend && pnpm run verify:package-resources && \
+            pnpm run build && pnpm run build:frontend && \
+              pnpm run prepare:package-resources && \
+              pnpm run verify:package-resources && \
               npx electron-builder --${{ matrix.platform }} --publish never
             echo "💡 手动触发：产物仅上传到 Artifacts，未发布 Release"
           fi
