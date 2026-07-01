@@ -140,15 +140,11 @@ jobs:
             Write-Host "✓ distutils 可用"
           }
 
-      # Windows: 激活 MSVC C++ 工具链。windows-latest 自带 VS2022，
-      # 但 node-gyp 有时无法自动发现，需显式激活环境变量后才能被后续 step 继承。
-      # 之前的版本把这一步放在 desktop install 前，但 qiongqi install 更早，
-      # 导致 better-sqlite3 编译时 MSVC 仍未激活。现在提前到所有 install 之前。
-      - name: 🔧 Setup MSVC dev environment (Windows only)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      # ⚠️ 不要使用 ilammy/msvc-dev-cmd！
+      # 该 action 会设置 VSINSTALLDIR 指向 VS 18 (2026 Preview)，
+      # node-gyp 11.x 不认识 VS 18，报 "unknown version undefined"。
+      # windows-latest 自带 VS 2022 Enterprise + C++ workload，
+      # node-gyp 通过 vswhere.exe 自动发现，无需任何额外步骤。
 
       # ─────────────────────────────────────────────────────────────
       # 构建 qiongqi（含 better-sqlite3 C++ 原生模块，每平台各自编译）
@@ -168,7 +164,6 @@ jobs:
 
       # ─────────────────────────────────────────────────────────────
       # 安装 desktop 依赖（node-pty 原生模块每平台编译）
-      # MSVC 已在前面激活，Python distutils 也已备齐，这里直接 install 即可。
       # ─────────────────────────────────────────────────────────────
       - name: 🔨 Install desktop deps
         working-directory: desktop
