@@ -42,8 +42,14 @@ mac:
 dmg:
   sign: false
   contents:
+    # 左侧：应用本体
     - x: 130
       y: 220
+    # 右侧：Applications 文件夹快捷方式（拖拽安装）
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
 win:
   icon: build/icon.ico
   # 不签名：未配置 CSC_LINK/certificateFile 时 electron-builder 会自动跳过签名。
