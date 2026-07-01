@@ -1,6 +1,11 @@
 import type { Project } from "@/core/projects";
 import type { AgentThread, AgentThreadContext } from "@/core/threads/types";
 
+export const PROJECT_TASKS_COLLAPSED_STORAGE_KEY =
+  "kworks.sidebar.project-tasks.collapsed";
+
+type ProjectTasksCollapseStorage = Pick<Storage, "getItem" | "setItem">;
+
 export type ProjectTaskThread = Pick<
   AgentThread,
   "thread_id" | "updated_at" | "context" | "values" | "status"
@@ -81,6 +86,33 @@ export function normalizeWorkspacePath(path: string): string {
   return path.trim().replace(/\/+$/, "");
 }
 
+export function readProjectTasksCollapsed(
+  storage: ProjectTasksCollapseStorage | undefined = getBrowserStorage(),
+): boolean {
+  if (!storage) return false;
+  try {
+    const value = storage.getItem(PROJECT_TASKS_COLLAPSED_STORAGE_KEY);
+    return value === "1" || value === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function writeProjectTasksCollapsed(
+  collapsed: boolean,
+  storage: ProjectTasksCollapseStorage | undefined = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(
+      PROJECT_TASKS_COLLAPSED_STORAGE_KEY,
+      collapsed ? "1" : "0",
+    );
+  } catch {
+    // Ignore storage failures so sidebar interaction still works.
+  }
+}
+
 function resolveProjectForThread(
   context: Pick<AgentThreadContext, "projectId" | "workspaceRoot"> | null | undefined,
   projectById: Map<string, Pick<Project, "id" | "name" | "path">>,
@@ -113,4 +145,9 @@ function timestampOf(value: string | null | undefined): number {
   if (!value) return 0;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getBrowserStorage(): ProjectTasksCollapseStorage | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.localStorage;
 }

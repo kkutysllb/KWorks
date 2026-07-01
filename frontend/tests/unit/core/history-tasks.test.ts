@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 
 import { groupHistoryTasksByWorkMode } from "@/components/workspace/history-tasks";
+import * as projectTasks from "@/components/workspace/project-tasks";
 import { buildProjectTaskSummary } from "@/components/workspace/project-tasks";
+import {
+  codingProjectNewTaskPath,
+  codingProjectThreadPath,
+  codingThreadStorageKey,
+} from "@/core/projects/coding-thread-routes";
 import type { AgentThread } from "@/core/threads/types";
 
 describe("history task grouping", () => {
@@ -136,5 +142,42 @@ describe("history task grouping", () => {
     expect(summary.unassignedThreads.map((thread) => thread.thread_id)).toEqual([
       "daily",
     ]);
+  });
+
+  test("persists sidebar project task collapse state", () => {
+    const storage = new Map<string, string>();
+    const storageLike = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    };
+
+    expect(projectTasks.readProjectTasksCollapsed(storageLike)).toBe(false);
+
+    projectTasks.writeProjectTasksCollapsed(true, storageLike);
+
+    expect(
+      storage.get(projectTasks.PROJECT_TASKS_COLLAPSED_STORAGE_KEY),
+    ).toBe("1");
+    expect(projectTasks.readProjectTasksCollapsed(storageLike)).toBe(true);
+
+    projectTasks.writeProjectTasksCollapsed(false, storageLike);
+
+    expect(
+      storage.get(projectTasks.PROJECT_TASKS_COLLAPSED_STORAGE_KEY),
+    ).toBe("0");
+    expect(projectTasks.readProjectTasksCollapsed(storageLike)).toBe(false);
+  });
+
+  test("builds distinct coding project routes for new and existing tasks", () => {
+    expect(codingProjectNewTaskPath("proj kworks")).toBe(
+      "/workspace/coding/proj%20kworks?new=1",
+    );
+    expect(codingProjectThreadPath("proj kworks", "thread/123")).toBe(
+      "/workspace/coding/proj%20kworks?thread=thread%2F123",
+    );
+    expect(codingThreadStorageKey("proj kworks")).toBe(
+      "coding:thread:proj kworks",
+    );
   });
 });

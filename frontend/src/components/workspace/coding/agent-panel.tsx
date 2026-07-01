@@ -10,6 +10,7 @@ import {
   Undo2Icon,
   XCircleIcon,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +53,7 @@ import {
   useProject,
 } from "@/core/projects";
 import type { QiongqiChange } from "@/core/projects";
+import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
 import { useThreadStream } from "@/core/threads/hooks";
@@ -114,15 +116,28 @@ function AgentPanelInner({
 }: AgentPanelProps) {
   const { project } = useProject(projectId);
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   // Persist the coding agent thread ID per-project so switching workspace tabs
   // (which unmounts this component) and coming back can rejoin the same run.
   // Without this, the backend keeps the run alive (onDisconnect:"continue") but
   // the frontend loses track of which thread to reconnect to.
-  const threadIdStorageKey = `coding:thread:${projectId}`;
+  const threadIdStorageKey = codingThreadStorageKey(projectId);
   const [threadId, setThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
     return window.localStorage.getItem(threadIdStorageKey) ?? undefined;
   });
+  useEffect(() => {
+    const routeThreadId = searchParams.get("thread");
+    if (routeThreadId) {
+      setThreadId(routeThreadId);
+      onThreadIdChange?.(routeThreadId);
+      return;
+    }
+    if (searchParams.get("new") === "1") {
+      setThreadId(undefined);
+      onThreadIdChange?.(undefined);
+    }
+  }, [onThreadIdChange, searchParams, threadIdStorageKey]);
   useEffect(() => {
     if (threadId) {
       window.localStorage.setItem(threadIdStorageKey, threadId);

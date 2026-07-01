@@ -33,7 +33,7 @@ import {
   MonitorCogIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
@@ -93,6 +93,7 @@ import type {
   StageHistoryEntry,
   StageSuggestion,
 } from "@/core/projects";
+import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { cn } from "@/lib/utils";
 
 import { AgentPanel } from "./agent-panel";
@@ -133,6 +134,7 @@ const RIGHT_PANEL_MAX_WIDTH = 1120;
 
 export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { project, isLoading, error } = useProject(projectId);
   const { worktrees } = useWorktrees(projectId);
   const { diff } = useProjectDiff(projectId);
@@ -163,11 +165,21 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   // AgentPanelInner — both components read/write the same localStorage key so
   // the Results/Diff panels and the Agent chat panel stay in sync after a tab
   // switch without either having to re-derive the thread ID.
-  const threadIdStorageKey = `coding:thread:${projectId}`;
+  const threadIdStorageKey = codingThreadStorageKey(projectId);
   const [agentThreadId, setAgentThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
     return window.localStorage.getItem(threadIdStorageKey) ?? undefined;
   });
+  useEffect(() => {
+    const routeThreadId = searchParams.get("thread");
+    if (routeThreadId) {
+      setAgentThreadId(routeThreadId);
+      return;
+    }
+    if (searchParams.get("new") === "1") {
+      setAgentThreadId(undefined);
+    }
+  }, [searchParams, threadIdStorageKey]);
   useEffect(() => {
     if (agentThreadId) {
       window.localStorage.setItem(threadIdStorageKey, agentThreadId);

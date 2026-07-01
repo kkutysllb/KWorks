@@ -2,6 +2,8 @@
 
 import {
   BriefcaseBusinessIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   ClockIcon,
   Code2Icon,
   FolderOpenIcon,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   SidebarGroup,
@@ -21,14 +24,21 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useProjects } from "@/core/projects";
+import {
+  codingProjectNewTaskPath,
+  codingProjectPath,
+  codingProjectThreadPath,
+} from "@/core/projects/coding-thread-routes";
 import { useThreads } from "@/core/threads/hooks";
-import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import { titleOfThread } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
 
 import {
   buildProjectTaskSummary,
+  readProjectTasksCollapsed,
   type ProjectTaskBucket,
   type ProjectTaskThread,
+  writeProjectTasksCollapsed,
 } from "./project-tasks";
 
 export function WorkspaceSpacesSection() {
@@ -101,6 +111,7 @@ export function WorkspaceTasksSection() {
   const pathname = usePathname();
   const { projects, isLoading: projectsLoading } = useProjects();
   const { data: threads = [], isLoading: threadsLoading } = useThreads();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const currentWorkspaceRoot = currentWorkspaceRootFromPath(pathname, threads);
   const summary = buildProjectTaskSummary({
     projects,
@@ -110,11 +121,32 @@ export function WorkspaceTasksSection() {
   });
   const isLoading = projectsLoading || threadsLoading;
   const visibleBuckets = summary.buckets.slice(0, 3);
+  const ToggleIcon = isCollapsed ? ChevronRightIcon : ChevronDownIcon;
+  const handleToggle = useCallback(() => {
+    setIsCollapsed((previous) => {
+      const next = !previous;
+      writeProjectTasksCollapsed(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setIsCollapsed(readProjectTasksCollapsed());
+  }, []);
 
   return (
     <SidebarGroup className="pt-1">
       <SidebarGroupLabel className="flex items-center justify-between gap-2">
-        <span>项目 / 任务</span>
+        <button
+          type="button"
+          aria-controls="sidebar-project-tasks-content"
+          aria-expanded={!isCollapsed}
+          className="hover:text-foreground flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors"
+          onClick={handleToggle}
+        >
+          <ToggleIcon className="size-3 shrink-0" />
+          <span className="truncate">项目 / 任务</span>
+        </button>
         <Link
           href="/workspace/coding"
           className="text-muted-foreground hover:text-foreground rounded px-1.5 py-0.5 text-[10px] transition-colors"
@@ -122,17 +154,22 @@ export function WorkspaceTasksSection() {
           全部
         </Link>
       </SidebarGroupLabel>
-      <SidebarGroupContent className="space-y-2 px-2">
-        {isLoading ? (
-          <ProjectTasksLoading />
-        ) : visibleBuckets.length > 0 ? (
-          visibleBuckets.map((bucket) => (
-            <ProjectTaskBucketCard key={bucket.project.id} bucket={bucket} />
-          ))
-        ) : (
-          <ProjectTasksEmpty />
-        )}
-      </SidebarGroupContent>
+      {!isCollapsed && (
+        <SidebarGroupContent
+          id="sidebar-project-tasks-content"
+          className="space-y-2 px-2"
+        >
+          {isLoading ? (
+            <ProjectTasksLoading />
+          ) : visibleBuckets.length > 0 ? (
+            visibleBuckets.map((bucket) => (
+              <ProjectTaskBucketCard key={bucket.project.id} bucket={bucket} />
+            ))
+          ) : (
+            <ProjectTasksEmpty />
+          )}
+        </SidebarGroupContent>
+      )}
     </SidebarGroup>
   );
 }
@@ -153,7 +190,7 @@ function ProjectTaskBucketCard({ bucket }: { bucket: ProjectTaskBucket }) {
     >
       <div className="flex items-start justify-between gap-2">
         <Link
-          href={`/workspace/coding/${encodeURIComponent(bucket.project.id)}`}
+          href={codingProjectPath(bucket.project.id)}
           className="min-w-0 flex-1"
         >
           <span className="flex items-center gap-1.5 text-xs font-semibold">
@@ -180,13 +217,13 @@ function ProjectTaskBucketCard({ bucket }: { bucket: ProjectTaskBucket }) {
 
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         <Link
-          href={`/workspace/coding/${encodeURIComponent(bucket.project.id)}`}
+          href={codingProjectPath(bucket.project.id)}
           className="hover:bg-sidebar-accent rounded-md border border-sidebar-border/70 px-2 py-1 text-center text-[10px] transition-colors"
         >
           打开项目
         </Link>
         <Link
-          href={`/workspace/coding/${encodeURIComponent(bucket.project.id)}`}
+          href={codingProjectNewTaskPath(bucket.project.id)}
           className="hover:bg-sidebar-accent rounded-md border border-sidebar-border/70 px-2 py-1 text-center text-[10px] transition-colors"
         >
           项目新任务
@@ -196,7 +233,11 @@ function ProjectTaskBucketCard({ bucket }: { bucket: ProjectTaskBucket }) {
       {bucket.threads.length > 0 ? (
         <div className="mt-2 space-y-1">
           {bucket.threads.map((thread) => (
-            <ProjectTaskThreadRow key={thread.thread_id} thread={thread} />
+            <ProjectTaskThreadRow
+              key={thread.thread_id}
+              projectId={bucket.project.id}
+              thread={thread}
+            />
           ))}
         </div>
       ) : (
@@ -208,10 +249,16 @@ function ProjectTaskBucketCard({ bucket }: { bucket: ProjectTaskBucket }) {
   );
 }
 
-function ProjectTaskThreadRow({ thread }: { thread: ProjectTaskThread }) {
+function ProjectTaskThreadRow({
+  projectId,
+  thread,
+}: {
+  projectId: string;
+  thread: ProjectTaskThread;
+}) {
   return (
     <Link
-      href={pathOfThread(thread)}
+      href={codingProjectThreadPath(projectId, thread.thread_id)}
       className="hover:bg-sidebar-accent flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors"
       title={titleOfThread(thread)}
     >
