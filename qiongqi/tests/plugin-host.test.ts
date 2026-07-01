@@ -76,6 +76,16 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(res.instructions.length).toBeGreaterThan(0)
   })
 
+  it('exposes the latest activations through diagnostics', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    host.resolveTurn({ prompt: '/skill:tdd now', workspace: '' })
+
+    expect(host.diagnostics().lastActivations).toEqual([
+      expect.objectContaining({ skillId: 'tdd' })
+    ])
+  })
+
   it('injects the resolved skill package root for bundled skill resources', async () => {
     const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
     const res = host.resolveTurn({ prompt: '/skill:tdd now', workspace: '/workspace/project' })

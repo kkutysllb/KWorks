@@ -3,18 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   acceptStageSuggestion,
   applyCodingReviewFix,
-  createCodingSkill,
   createProject,
   createWorktree,
   deleteProject,
-  deleteCodingSkill,
   discardProjectFileChange,
   getProjectEnvironment,
   getDeliveryStages,
   getLatestCodingReview,
   getCodingSession,
   getCodingRoiSummary,
-  getCodingSkill,
   getProjectDiff,
   getProject,
   getProjectStage,
@@ -33,12 +30,10 @@ import {
   setCodingSkillEnabled,
   setProjectStage,
   dismissStageSuggestion,
-  updateCodingSkill,
 } from "./api";
 import type {
   CodingReviewApplyFixRequest,
   CodingReviewRequest,
-  CodingSkillWriteRequest,
   CreateProjectRequest,
   CreateWorktreeRequest,
   DiscardProjectFileChangeRequest,
@@ -366,7 +361,7 @@ export function useCodingRoiReports(threadId: string | null | undefined) {
 
 export function useCodingSkills(projectRoot: string | null | undefined) {
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["coding", "skills", projectRoot],
+    queryKey: ["coding", "skills"],
     queryFn: () => listCodingSkills(projectRoot),
   });
   return {
@@ -378,27 +373,10 @@ export function useCodingSkills(projectRoot: string | null | undefined) {
   };
 }
 
-export function useCodingSkillDetail(
-  skillId: string | null | undefined,
-  projectRoot: string | null | undefined,
-) {
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["coding", "skills", projectRoot, skillId],
-    queryFn: () => getCodingSkill(skillId!, projectRoot),
-    enabled: !!skillId,
-  });
-  return {
-    detail: data ?? null,
-    isLoading,
-    isFetching,
-    error,
-    refetch,
-  };
-}
-
 export function useSetCodingSkillEnabled(
   projectRoot: string | null | undefined,
 ) {
+  void projectRoot;
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -410,60 +388,13 @@ export function useSetCodingSkillEnabled(
     }) => setCodingSkillEnabled(skillId, request),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot],
+        queryKey: ["coding", "skills"],
       });
-    },
-  });
-}
-
-export function useCreateCodingSkill(projectRoot: string | null | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (request: CodingSkillWriteRequest & { id: string }) =>
-      createCodingSkill(request),
-    onSuccess: (detail) => {
+      void queryClient.invalidateQueries({ queryKey: ["work-modes"] });
       void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot],
+        queryKey: ["work-mode-skills", "coding"],
       });
-      void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot, detail.skill.id],
-      });
-    },
-  });
-}
-
-export function useUpdateCodingSkill(projectRoot: string | null | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      skillId,
-      request,
-    }: {
-      skillId: string;
-      request: CodingSkillWriteRequest;
-    }) => updateCodingSkill(skillId, request),
-    onSuccess: (detail) => {
-      void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot, detail.skill.id],
-      });
-    },
-  });
-}
-
-export function useDeleteCodingSkill(projectRoot: string | null | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (skillId: string) => deleteCodingSkill(skillId, projectRoot),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({
-        queryKey: ["coding", "skills", projectRoot],
-      });
-      void queryClient.removeQueries({
-        queryKey: ["coding", "skills", projectRoot, result.skill_id],
-      });
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
     },
   });
 }

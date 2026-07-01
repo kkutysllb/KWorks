@@ -1250,19 +1250,22 @@ export async function kworksDismissProjectStageSuggestion(
   return jsonResponse(next)
 }
 
-export async function kworksGetCodingSession(threadId: string): Promise<JsonResponse> {
+export async function kworksGetCodingSession(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
   return jsonResponse({
     thread_id: threadId,
-    session: emptyCodingSession(threadId)
+    session: codingSessionFromThread(runtime, threadId, thread)
   })
 }
 
-export async function kworksListCodingSessionEvents(threadId: string): Promise<JsonResponse> {
-  return jsonResponse({ thread_id: threadId, events: [] })
+export async function kworksListCodingSessionEvents(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
+  return jsonResponse({ thread_id: threadId, events: codingEventsFromThread(threadId, thread) })
 }
 
-export async function kworksListCodingSessionChanges(threadId: string): Promise<JsonResponse> {
-  return jsonResponse({ thread_id: threadId, changes: [] })
+export async function kworksListCodingSessionChanges(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
+  return jsonResponse({ thread_id: threadId, changes: await codingChangesFromThread(threadId, thread) })
 }
 
 export async function kworksGetLatestCodingReview(threadId: string): Promise<JsonResponse> {
@@ -1291,13 +1294,38 @@ export async function kworksRunCodingReview(
   const totals = diffTotals(numstat)
   const changedFiles = statusLines(status).length
   const now = new Date().toISOString()
+  const findings: CodingReviewFinding[] = changedFiles > 0
+    ? [{
+        id: `finding_${randomUUID()}`,
+        severity: 'major' as const,
+        category: 'review_coverage',
+        file: null,
+        line: null,
+        task_id: threadId,
+        message: '需要真实代码审查',
+        suggestion: '运行 code-review skill 或 agent review 后再判定是否通过。',
+        evidence: [
+          `changed_files=${changedFiles}`,
+          `additions=${totals.additions}`,
+          `deletions=${totals.deletions}`,
+          'compat review can only summarize git diff and cannot replace semantic review'
+        ],
+        fix: {
+          applicable: false,
+          kind: null,
+          description: `检测到 ${changedFiles} 个文件变更（+${totals.additions}/-${totals.deletions}），需要真实 code-review skill 或 agent review 后再处理。`,
+          patch: '',
+          applied: false
+        }
+      }]
+    : []
   const review: CodingReview = {
     review_id: `review_${randomUUID()}`,
     project_id: projectId,
     project_root: projectRoot,
     thread_id: threadId,
     scope: stringValue(body.value.scope) ?? 'project_diff',
-    decision: 'pass',
+    decision: findings.length > 0 ? 'needs_review' : 'pass',
     summary: {
       project_files: changedFiles,
       task_changes: 0,
@@ -1306,17 +1334,19 @@ export async function kworksRunCodingReview(
       additions: totals.additions,
       deletions: totals.deletions,
       critical: 0,
-      major: 0,
+      major: findings.filter((finding) => finding.severity === 'major').length,
       minor: 0,
       nitpick: 0
     },
-    findings: [],
+    findings,
     source: {
       kind: 'qiongqi-compat',
       is_git_repo: isGitRepo
     },
     created_at: now,
-    next_plan: []
+    next_plan: findings.length > 0
+      ? ['运行真实 code-review skill/agent 审查当前 diff', '根据审查结果处理 findings 后重新运行 review']
+      : []
   }
   codingReviewsByThread.set(threadId, review)
   return jsonResponse(review, 201)
@@ -1344,32 +1374,19 @@ export async function kworksApplyCodingReviewFix(request: Request): Promise<Json
   })
 }
 
-export async function kworksGetCodingRoiSummary(threadId: string): Promise<JsonResponse> {
+export async function kworksGetCodingRoiSummary(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
+  const report = codingRoiReportFromThread(threadId, thread)
   return jsonResponse({
     thread_id: threadId,
-    summary: {
-      thread_id: threadId,
-      report_count: 0,
-      latest: null,
-      provider_usage: {},
-      tool_output: {},
-      token_economy: {},
-      derived: {
-        actual_tokens: 0,
-        estimated_saved_tokens: 0,
-        estimated_baseline_tokens: 0,
-        saving_ratio: 0,
-        tool_hidden_ratio: 0,
-        tool_catalog_saved_tokens: 0,
-        tool_output_saved_tokens: 0,
-        token_economy_saved_tokens: 0
-      }
-    }
+    summary: codingRoiSummaryFromReport(threadId, report)
   })
 }
 
-export async function kworksListCodingRoiReports(threadId: string): Promise<JsonResponse> {
-  return jsonResponse({ thread_id: threadId, reports: [] })
+export async function kworksListCodingRoiReports(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
+  const report = codingRoiReportFromThread(threadId, thread)
+  return jsonResponse({ thread_id: threadId, reports: report ? [report] : [] })
 }
 
 export async function kworksChannelsConfig(): Promise<JsonResponse> {
@@ -1888,6 +1905,192 @@ function emptyCodingSession(threadId: string): Record<string, unknown> {
     roi: {},
     change_summary: {},
     updated_at: null
+  }
+}
+
+function codingSessionFromThread(runtime: ServerRuntime, threadId: string, thread: ThreadRecord | null): Record<string, unknown> {
+  if (!thread) return emptyCodingSession(threadId)
+  const activeSkillIds = activeSkillIdsFromThread(thread)
+  const skills = activeSkillIds.map((id) => ({ id, name: id }))
+  const toolPolicy = toolPolicyFromThread(thread)
+  const roi = codingRoiReportFromThread(threadId, thread)
+  return {
+    ...emptyCodingSession(threadId),
+    project_root: thread.workspace || null,
+    scratch_root: threadRoot(runtime, threadId),
+    skills,
+    active_coding_skills: skills,
+    tool_policy: toolPolicy,
+    roi: roi?.summary ?? {},
+    change_summary: changeSummaryFromThread(thread),
+    updated_at: thread.updatedAt ?? null
+  }
+}
+
+function activeSkillIdsFromThread(thread: ThreadRecord): string[] {
+  const ids = new Set<string>()
+  for (const turn of thread.turns) {
+    for (const id of turn.activeSkillIds ?? []) {
+      if (typeof id === 'string' && id.trim()) ids.add(id.trim())
+    }
+  }
+  return [...ids].sort((a, b) => a.localeCompare(b))
+}
+
+function toolPolicyFromThread(thread: ThreadRecord): Array<Record<string, unknown>> {
+  const tools = new Map<string, Record<string, unknown>>()
+  for (const turn of thread.turns) {
+    for (const item of turn.items) {
+      if (item.kind !== 'tool_call') continue
+      tools.set(item.toolName, {
+        id: item.toolName,
+        name: item.toolName,
+        kind: item.toolKind
+      })
+    }
+  }
+  return [...tools.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+}
+
+function changeSummaryFromThread(thread: ThreadRecord): Record<string, unknown> {
+  const toolCalls = thread.turns.reduce(
+    (count, turn) => count + turn.items.filter((item) => item.kind === 'tool_call').length,
+    0
+  )
+  return {
+    current_task: thread.turns.at(-1)?.prompt ?? '',
+    turns: thread.turns.length,
+    tool_calls: toolCalls
+  }
+}
+
+function codingEventsFromThread(threadId: string, thread: ThreadRecord | null): Array<Record<string, unknown>> {
+  if (!thread) return []
+  const events: Array<Record<string, unknown>> = []
+  for (const turn of thread.turns) {
+    for (const item of turn.items) {
+      if (item.kind === 'tool_call') {
+        events.push({
+          event_id: item.id,
+          thread_id: threadId,
+          task_id: turn.id,
+          event_type: 'tool_call',
+          tool_name: item.toolName,
+          status: item.status,
+          summary: item.summary ?? '',
+          created_at: item.createdAt,
+          finished_at: item.finishedAt ?? null,
+          payload: item.arguments
+        })
+      } else if (item.kind === 'tool_result') {
+        events.push({
+          event_id: item.id,
+          thread_id: threadId,
+          task_id: turn.id,
+          event_type: 'tool_result',
+          tool_name: item.toolName,
+          status: item.status,
+          is_error: item.isError,
+          created_at: item.createdAt,
+          finished_at: item.finishedAt ?? null,
+          payload: item.output
+        })
+      }
+    }
+  }
+  return events.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+}
+
+async function codingChangesFromThread(threadId: string, thread: ThreadRecord | null): Promise<Array<Record<string, unknown>>> {
+  if (!thread?.workspace) return []
+  const isRepo = await isGitRepository(thread.workspace)
+  if (!isRepo) return []
+  const [status, numstat] = await Promise.all([
+    runGit(thread.workspace, ['status', '--porcelain']),
+    runGit(thread.workspace, ['diff', '--numstat'])
+  ])
+  const stats = new Map<string, { additions: number; deletions: number }>()
+  for (const line of statusLines(numstat)) {
+    const [additions, deletions, ...rest] = line.split(/\s+/)
+    const path = rest.join(' ')
+    if (!path) continue
+    stats.set(path, {
+      additions: Number.parseInt(additions, 10) || 0,
+      deletions: Number.parseInt(deletions, 10) || 0
+    })
+  }
+  return statusLines(status).map((line) => {
+    const path = line.slice(3).trim()
+    const fileStats = stats.get(path) ?? { additions: 0, deletions: 0 }
+    return {
+      thread_id: threadId,
+      task_id: thread.turns.at(-1)?.id ?? '',
+      project_root: thread.workspace,
+      path,
+      status: line.slice(0, 2).trim() || 'modified',
+      additions: fileStats.additions,
+      deletions: fileStats.deletions,
+      diff: '',
+      created_at: thread.updatedAt
+    }
+  })
+}
+
+function codingRoiReportFromThread(threadId: string, thread: ThreadRecord | null): Record<string, unknown> | null {
+  if (!thread) return null
+  const skillInjectionBytes = thread.turns.reduce((sum, turn) => sum + (turn.skillInjectionBytes ?? 0), 0)
+  const toolCatalogToolCount = thread.turns.reduce((sum, turn) => sum + (turn.toolCatalogToolCount ?? 0), 0)
+  const actualTokens = Math.ceil(skillInjectionBytes / 4) + toolCatalogToolCount
+  const estimatedSavedTokens = Math.ceil(skillInjectionBytes / 8)
+  const estimatedBaselineTokens = actualTokens + estimatedSavedTokens
+  return {
+    report_id: `roi_${threadId}`,
+    thread_id: threadId,
+    created_at: thread.updatedAt,
+    summary: {
+      provider_usage: {
+        total_tokens: actualTokens,
+        skill_injection_bytes: skillInjectionBytes
+      },
+      tool_output: {
+        tool_catalog_tool_count: toolCatalogToolCount
+      },
+      token_economy: {},
+      derived: {
+        actual_tokens: actualTokens,
+        estimated_saved_tokens: estimatedSavedTokens,
+        estimated_baseline_tokens: estimatedBaselineTokens,
+        saving_ratio: estimatedBaselineTokens > 0 ? estimatedSavedTokens / estimatedBaselineTokens : 0,
+        tool_hidden_ratio: 0,
+        tool_catalog_saved_tokens: estimatedSavedTokens,
+        tool_output_saved_tokens: 0,
+        token_economy_saved_tokens: 0
+      }
+    }
+  }
+}
+
+function codingRoiSummaryFromReport(threadId: string, report: Record<string, unknown> | null): Record<string, unknown> {
+  const summary = isObject(report?.summary) ? report.summary : {}
+  return {
+    thread_id: threadId,
+    report_count: report ? 1 : 0,
+    latest: report,
+    provider_usage: isObject(summary.provider_usage) ? summary.provider_usage : {},
+    tool_output: isObject(summary.tool_output) ? summary.tool_output : {},
+    token_economy: isObject(summary.token_economy) ? summary.token_economy : {},
+    derived: isObject(summary.derived)
+      ? summary.derived
+      : {
+          actual_tokens: 0,
+          estimated_saved_tokens: 0,
+          estimated_baseline_tokens: 0,
+          saving_ratio: 0,
+          tool_hidden_ratio: 0,
+          tool_catalog_saved_tokens: 0,
+          tool_output_saved_tokens: 0,
+          token_economy_saved_tokens: 0
+        }
   }
 }
 

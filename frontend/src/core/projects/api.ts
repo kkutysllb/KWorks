@@ -9,8 +9,6 @@ import type {
   CodingReviewApplyFixRequest,
   CodingReviewApplyFixResult,
   CodingReviewRequest,
-  CodingSkillDeleteResult,
-  CodingSkillWriteRequest,
   CodingSkillDetail,
   CodingSkill,
   DeliveryStagesResponse,
@@ -37,6 +35,32 @@ import type {
   WorktreeInfo,
   WorktreeRemoveResult,
 } from "./types";
+
+type WorkModeSkillDto = {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  family?: string;
+  license?: string;
+  enabled: boolean;
+  locked?: boolean;
+  registered?: boolean;
+  status?: string;
+  builtin?: boolean;
+  editable?: boolean;
+  deletable?: boolean;
+  root?: string;
+  version?: string;
+  validationError?: string;
+  commands?: unknown[];
+  permissions?: Record<string, unknown>;
+  contributions?: Record<string, unknown>;
+  triggers?: {
+    promptPatterns?: unknown;
+  };
+  allowedTools?: unknown;
+};
 
 // ---------------------------------------------------------------------------
 // Projects
@@ -399,108 +423,27 @@ export async function listCodingRoiReports(
 export async function listCodingSkills(
   projectRoot: string | null | undefined,
 ): Promise<CodingSkill[]> {
-  const query = projectRoot
-    ? `?project_root=${encodeURIComponent(projectRoot)}`
-    : "";
-  const res = await fetch(`${getBackendBaseURL()}/api/coding/skills${query}`);
+  void projectRoot;
+  const res = await fetch(`${getBackendBaseURL()}/api/work-modes/coding/skills`);
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new Error(
       err.detail ?? `Failed to load coding skills: ${res.statusText}`,
     );
   }
-  const data = (await res.json()) as { skills: CodingSkill[] };
-  return data.skills;
-}
-
-export async function getCodingSkill(
-  skillId: string,
-  projectRoot: string | null | undefined,
-): Promise<CodingSkillDetail> {
-  const query = projectRoot
-    ? `?project_root=${encodeURIComponent(projectRoot)}`
-    : "";
-  const res = await fetch(
-    `${getBackendBaseURL()}/api/coding/skills/${encodeURIComponent(skillId)}${query}`,
-  );
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      err.detail ?? `Failed to load coding skill: ${res.statusText}`,
-    );
-  }
-  return res.json() as Promise<CodingSkillDetail>;
-}
-
-export async function createCodingSkill(
-  request: CodingSkillWriteRequest & { id: string },
-): Promise<CodingSkillDetail> {
-  const res = await fetch(`${getBackendBaseURL()}/api/coding/skills`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      err.detail ?? `Failed to create coding skill: ${res.statusText}`,
-    );
-  }
-  return res.json() as Promise<CodingSkillDetail>;
-}
-
-export async function updateCodingSkill(
-  skillId: string,
-  request: CodingSkillWriteRequest,
-): Promise<CodingSkillDetail> {
-  const res = await fetch(
-    `${getBackendBaseURL()}/api/coding/skills/${encodeURIComponent(skillId)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    },
-  );
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      err.detail ?? `Failed to update coding skill: ${res.statusText}`,
-    );
-  }
-  return res.json() as Promise<CodingSkillDetail>;
-}
-
-export async function deleteCodingSkill(
-  skillId: string,
-  projectRoot: string | null | undefined,
-): Promise<CodingSkillDeleteResult> {
-  const query = projectRoot
-    ? `?project_root=${encodeURIComponent(projectRoot)}`
-    : "";
-  const res = await fetch(
-    `${getBackendBaseURL()}/api/coding/skills/${encodeURIComponent(skillId)}${query}`,
-    { method: "DELETE" },
-  );
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      err.detail ?? `Failed to delete coding skill: ${res.statusText}`,
-    );
-  }
-  return res.json() as Promise<CodingSkillDeleteResult>;
+  const data = (await res.json()) as { skills: WorkModeSkillDto[] };
+  return (data.skills ?? []).map(codingSkillFromWorkModeSkill);
 }
 
 export async function setCodingSkillEnabled(
   skillId: string,
   request: SetCodingSkillEnabledRequest,
 ): Promise<CodingSkillDetail> {
+  void request.project_root;
+  void request.scope;
   const res = await fetch(
-    `${getBackendBaseURL()}/api/coding/skills/${encodeURIComponent(skillId)}/enabled`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    },
+    `${getBackendBaseURL()}/api/work-modes/coding/skills/${encodeURIComponent(skillId)}`,
+    { method: request.enabled ? "PUT" : "DELETE" },
   );
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
@@ -508,7 +451,67 @@ export async function setCodingSkillEnabled(
       err.detail ?? `Failed to update coding skill: ${res.statusText}`,
     );
   }
-  return res.json() as Promise<CodingSkillDetail>;
+  const data = (await res.json()) as { workMode?: { skills?: WorkModeSkillDto[] } };
+  const skill = data.workMode?.skills?.find((item) => item.id === skillId);
+  return {
+    skill: codingSkillFromWorkModeSkill(
+      skill ?? {
+        id: skillId,
+        name: skillId,
+        description: "",
+        enabled: request.enabled,
+      },
+    ),
+    instructions: "",
+  };
+}
+
+function codingSkillFromWorkModeSkill(skill: WorkModeSkillDto): CodingSkill {
+  const manifestErrors = skill.validationError ? [skill.validationError] : [];
+  const activationKeywords = stringList(skill.triggers?.promptPatterns);
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    category: skill.category ?? "",
+    family: skill.family,
+    license: skill.license ?? "",
+    scope: skill.builtin || skill.locked ? "global" : "project",
+    legacy: false,
+    activation_keywords: activationKeywords,
+    always_activate: false,
+    allowed_tools: stringList(skill.allowedTools),
+    permissions: skill.permissions ?? null,
+    skill_file: skill.root ? `${skill.root}/SKILL.md` : "",
+    enabled: skill.enabled,
+    manifest_errors: manifestErrors,
+    commands: commandList(skill.commands),
+    ui: null,
+    locked: skill.locked,
+    registered: skill.registered,
+    status: skill.status,
+    builtin: skill.builtin,
+    editable: skill.editable,
+    deletable: skill.deletable,
+    root: skill.root,
+    version: skill.version,
+    validationError: skill.validationError,
+  };
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function commandList(value: unknown): Array<Record<string, string>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, string> => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+        return Object.values(item).every((entry) => typeof entry === "string");
+      })
+    : [];
 }
 
 // ---------------------------------------------------------------------------

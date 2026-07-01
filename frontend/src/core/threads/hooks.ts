@@ -58,6 +58,17 @@ type SendMessageOptions = {
   additionalKwargs?: Record<string, unknown>;
 };
 
+type ThreadSubmitContext = LocalSettings["context"] &
+  Record<string, unknown> & {
+    agent_name?: string;
+    model_name?: string;
+    taskMode?: "agent" | "plan";
+    executionProfile?: "fast" | "balanced" | "deep";
+    collaborationPolicy?: "single" | "auto";
+    reasoning_effort?: "minimal" | "low" | "medium" | "high";
+    workModeId?: string;
+  };
+
 type DisplayThreadState = {
   messages: Message[];
   values: AgentThreadState;
@@ -290,7 +301,7 @@ export function useThreadStream({
   threadId,
   context,
   isMock,
-  assistantId: _assistantId = "lead_agent",
+  assistantId = "lead_agent",
   onSend,
   onStart,
   onFinish,
@@ -606,9 +617,10 @@ export function useThreadStream({
       let uploadedFileInfo: UploadedFileInfo[] = [];
 
       try {
-        const baseSubmitContext = {
+        const baseSubmitContext: ThreadSubmitContext = {
           ...context,
           ...extraContext,
+          ...(assistantId ? { agent_name: assistantId } : {}),
         };
         const buildSubmitContext = (targetThreadId: string | undefined) => ({
           ...baseSubmitContext,
@@ -758,7 +770,7 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, t.uploads.uploadingFiles, context, queryClient, threadId],
+    [thread, t.uploads.uploadingFiles, context, queryClient, threadId, assistantId],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,

@@ -235,6 +235,9 @@ export interface CodingSkill {
   id: string;
   name: string;
   description: string;
+  category: string;
+  family?: string;
+  license: string;
   scope: "project" | "global";
   legacy: boolean;
   activation_keywords: string[];
@@ -246,6 +249,15 @@ export interface CodingSkill {
   manifest_errors: string[];
   commands: Array<Record<string, string>>;
   ui: Record<string, unknown> | null;
+  locked?: boolean;
+  registered?: boolean;
+  status?: string;
+  builtin?: boolean;
+  editable?: boolean;
+  deletable?: boolean;
+  root?: string;
+  version?: string;
+  validationError?: string;
 }
 
 export interface CodingSkillDetail {
@@ -257,23 +269,6 @@ export interface SetCodingSkillEnabledRequest {
   project_root?: string | null;
   scope: "project" | "global";
   enabled: boolean;
-}
-
-export interface CodingSkillWriteRequest {
-  project_root?: string | null;
-  id?: string;
-  name: string;
-  description: string;
-  instructions: string;
-  activation_keywords: string[];
-  always_activate: boolean;
-  allowed_tools: string[];
-  permissions?: Record<string, unknown> | null;
-}
-
-export interface CodingSkillDeleteResult {
-  deleted: boolean;
-  skill_id: string;
 }
 
 export interface QiongqiChange {

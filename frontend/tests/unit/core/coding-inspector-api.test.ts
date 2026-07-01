@@ -41,8 +41,8 @@ describe("coding inspector API", () => {
     expect(types).toContain("saving_ratio");
     expect(types).toContain("export interface CodingSkill");
     expect(types).toContain("export interface SetCodingSkillEnabledRequest");
-    expect(types).toContain("export interface CodingSkillWriteRequest");
-    expect(types).toContain("export interface CodingSkillDeleteResult");
+    expect(types).not.toContain("export interface CodingSkillWriteRequest");
+    expect(types).not.toContain("export interface CodingSkillDeleteResult");
     expect(api).toContain("export async function getCodingSession");
     expect(api).toContain(
       "/api/coding/sessions/${encodeURIComponent(threadId)}",
@@ -62,21 +62,14 @@ describe("coding inspector API", () => {
     expect(api).toContain("/roi/summary");
     expect(api).toContain("Promise<QiongqiRoiSummary>");
     expect(api).toContain("export async function listCodingSkills");
-    expect(api).toContain("/api/coding/skills");
-    expect(api).toContain("encodeURIComponent(projectRoot)");
-    expect(api).not.toContain(
-      "new URL(`${getBackendBaseURL()}/api/coding/skills`)",
-    );
-    expect(api).toContain("export async function getCodingSkill");
-    expect(api).toContain("Failed to load coding skill");
-    expect(api).toContain("export async function createCodingSkill");
-    expect(api).toContain('method: "POST"');
-    expect(api).toContain("export async function updateCodingSkill");
-    expect(api).toContain("export async function deleteCodingSkill");
-    expect(api).toContain('method: "DELETE"');
+    expect(api).toContain("/api/work-modes/coding/skills");
+    expect(api).not.toContain("/api/coding/skills");
+    expect(api).not.toContain("export async function getCodingSkill");
+    expect(api).not.toContain("export async function createCodingSkill");
+    expect(api).not.toContain("export async function updateCodingSkill");
+    expect(api).not.toContain("export async function deleteCodingSkill");
     expect(api).toContain("export async function setCodingSkillEnabled");
-    expect(api).toContain("/enabled");
-    expect(api).toContain('method: "PUT"');
+    expect(api).toContain('method: request.enabled ? "PUT" : "DELETE"');
     expect(hooks).toContain("export function useCodingSession");
     expect(hooks).toContain("export function useCodingSessionEvents");
     expect(hooks).toContain("export function useCodingSessionChanges");
@@ -85,11 +78,11 @@ describe("coding inspector API", () => {
     expect(hooks).toContain("export function useApplyCodingReviewFix");
     expect(hooks).toContain("export function useCodingRoiSummary");
     expect(hooks).toContain("export function useCodingSkills");
-    expect(hooks).toContain("export function useCodingSkillDetail");
     expect(hooks).toContain("export function useSetCodingSkillEnabled");
-    expect(hooks).toContain("export function useCreateCodingSkill");
-    expect(hooks).toContain("export function useUpdateCodingSkill");
-    expect(hooks).toContain("export function useDeleteCodingSkill");
+    expect(hooks).not.toContain("export function useCodingSkillDetail");
+    expect(hooks).not.toContain("export function useCreateCodingSkill");
+    expect(hooks).not.toContain("export function useUpdateCodingSkill");
+    expect(hooks).not.toContain("export function useDeleteCodingSkill");
     expect(hooks).toContain(
       'queryKey: ["coding", "sessions", threadId, "session"]',
     );
@@ -110,14 +103,13 @@ describe("coding inspector API", () => {
     expect(hooks).toContain(
       'queryKey: ["coding", "sessions", threadId, "roi", "summary"]',
     );
-    expect(hooks).toContain('queryKey: ["coding", "skills", projectRoot]');
-    expect(hooks).toContain(
-      'queryKey: ["coding", "skills", projectRoot, skillId]',
-    );
+    expect(hooks).toContain('queryKey: ["coding", "skills"]');
     expect(hooks).toContain("setCodingSkillEnabled(skillId, request)");
-    expect(hooks).toContain("createCodingSkill(request)");
-    expect(hooks).toContain("updateCodingSkill(skillId, request)");
-    expect(hooks).toContain("deleteCodingSkill(skillId, projectRoot)");
+    expect(hooks).toContain('queryKey: ["work-modes"]');
+    expect(hooks).toContain('queryKey: ["work-mode-skills", "coding"]');
+    expect(hooks).not.toContain("createCodingSkill(request)");
+    expect(hooks).not.toContain("updateCodingSkill(skillId, request)");
+    expect(hooks).not.toContain("deleteCodingSkill(skillId, projectRoot)");
 
     expect(skillApi).toContain("export async function loadWorkModes");
     expect(skillApi).toContain("export async function loadWorkModeSkills");

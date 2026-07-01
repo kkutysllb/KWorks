@@ -162,7 +162,7 @@ export class SkillPluginHost {
         allowedTools: p.manifest.tools.allowed
       })),
       validationErrors: [...this.validationErrors],
-      lastActivations: []
+      lastActivations: [...this.lastActivations]
     }
   }
 

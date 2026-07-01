@@ -18,6 +18,7 @@ import {
   createSkillDraft,
   generateSkillDraft,
   installSkillDraft,
+  loadWorkModeSkills,
 } from "@/core/skills/api";
 
 describe("skills API", () => {
@@ -71,6 +72,40 @@ describe("skills API", () => {
           workModeId: "task",
         }),
       },
+    );
+  });
+
+  test("loads coding work-mode skills through the canonical work-mode endpoint", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        skills: [
+          {
+            id: "code-review",
+            name: "Code Review",
+            description: "Review code",
+            category: "public",
+            license: "builtin",
+            enabled: true,
+            locked: false,
+            registered: true,
+            status: "registered",
+          },
+        ],
+      }),
+    });
+
+    await expect(loadWorkModeSkills("coding")).resolves.toEqual([
+      expect.objectContaining({
+        id: "code-review",
+        enabled: true,
+        registered: true,
+      }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:19987/api/work-modes/coding/skills",
     );
   });
 

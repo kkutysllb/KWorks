@@ -498,17 +498,17 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/api/coding/sessions/:threadId', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksGetCodingSession(ctx.params.threadId)
+    return kworksGetCodingSession(runtime, ctx.params.threadId)
   })
   router.add('GET', '/api/coding/sessions/:threadId/events', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksListCodingSessionEvents(ctx.params.threadId)
+    return kworksListCodingSessionEvents(runtime, ctx.params.threadId)
   })
   router.add('GET', '/api/coding/sessions/:threadId/changes', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksListCodingSessionChanges(ctx.params.threadId)
+    return kworksListCodingSessionChanges(runtime, ctx.params.threadId)
   })
   router.add('GET', '/api/coding/sessions/:threadId/review', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
@@ -518,12 +518,12 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/api/coding/sessions/:threadId/roi/summary', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksGetCodingRoiSummary(ctx.params.threadId)
+    return kworksGetCodingRoiSummary(runtime, ctx.params.threadId)
   })
   router.add('GET', '/api/coding/sessions/:threadId/roi', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksListCodingRoiReports(ctx.params.threadId)
+    return kworksListCodingRoiReports(runtime, ctx.params.threadId)
   })
   router.add('POST', '/api/coding/reviews', async (request) => {
     const actor = await authenticateOrInternal(request, runtime)

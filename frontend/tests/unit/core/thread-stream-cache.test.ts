@@ -261,6 +261,25 @@ function QiongQiContextSubmitHarness({ threadId }: { threadId: string }) {
   );
 }
 
+function AssistantSubmitHarness({ threadId }: { threadId: string }) {
+  const { sendMessage } = useThreadStream({
+    threadId,
+    assistantId: "coding_agent",
+    context: { mode: undefined, workModeId: "coding" },
+    isMock: false,
+  });
+  return React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        void sendMessage(threadId, { text: "code this", files: [] });
+      },
+    },
+    "submit",
+  );
+}
+
 function SubmitContextOverrideHarness({ threadId }: { threadId: string }) {
   const { sendMessage } = useThreadStream({
     threadId,
@@ -599,6 +618,39 @@ describe("useThreadStream cache bridge", () => {
       thread_id: "thread-a",
     });
     expect(submitOptions?.context).not.toHaveProperty("orchestration_mode");
+  });
+
+  test("maps assistantId into qiongqi thread agent metadata context", async () => {
+    submitMock.mockImplementation(async () => undefined);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        React.createElement(AssistantSubmitHarness, {
+          threadId: "thread-a",
+        }),
+      );
+    });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const submitOptions = submitMock.mock.calls[0]?.[1] as
+      | { context?: Record<string, unknown> }
+      | undefined;
+    expect(submitOptions?.context).toMatchObject({
+      workModeId: "coding",
+      agent_name: "coding_agent",
+    });
   });
 
   test("lets per-submit context override stale thread settings", async () => {
