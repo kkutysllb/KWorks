@@ -46,9 +46,30 @@ dmg:
       y: 220
 win:
   icon: build/icon.ico
+  # 不签名：未配置 CSC_LINK/certificateFile 时 electron-builder 会自动跳过签名。
+  # 用户首次运行时 SmartScreen 会提示「Windows 已保护你的电脑」，
+  # 点「更多信息 → 仍要运行」即可（与未签名的开发版应用体验一致）。
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  differentialPackage: true
+  shortcutName: KWorks
 linux:
   icon: build/icon.png
+  category: Office
+  # AppImage：单一文件，双击即用，覆盖 Ubuntu/Debian/Fedora/Arch 等绝大多数发行版
+  target:
+    - AppImage
+  maintainer: KWorks Team <13609247807@139.com>
 publish:
   provider: github
   owner: kkutysllb
   repo: KWorks
+  # 三平台并行构建时，首个平台创建 Release，后续平台会追加产物到同一 Release。
+  # allowUpdates 让 electron-builder 在 Release 已存在时自动上传 assets 而非报错。
+  allowUpdates: true
+  # 并发上传时用 HTML 上自动生成的 releaseNotes，不需要额外 changelog 文件
+  releaseType: release
