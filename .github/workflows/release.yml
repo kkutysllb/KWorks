@@ -5,9 +5,9 @@
 #   2. Actions 页面手动运行（workflow_dispatch）→ 构建产物上传到 Artifacts（不发布）
 #
 # 工作原理：
-#   matrix 让 3 个平台在各自的 runner 上并行运行（macos/windows/ubuntu-latest）。
+#   matrix 让 3 个平台在各自的 runner 上并行运行（macos-14/windows-2022/ubuntu-22.04）。
 #   每个平台独立编译原生模块（node-pty + better-sqlite3），产出各自平台的安装包。
-#   三个平台的产物最终汇聚到同一个 GitHub Release（通过 tag 关联，allowUpdates 追加）。
+#   三个平台的产物最终汇聚到同一个 GitHub Release（通过 tag 关联）。
 #
 # macOS 必需 Secrets（用 desktop/scripts/export-mac-secrets.mjs 生成）：
 #   MAC_CERTIFICATE                  — Developer ID .p12 的 base64
@@ -41,16 +41,18 @@ jobs:
       fail-fast: false # 一个平台失败不影响其他平台继续构建
       matrix:
         include:
-          - os: macos-latest
+          # 所有平台固定具体镜像版本，不用 *-latest（避免 GitHub 升级镜像时意外破坏构建）
+          # macOS: macos-14 = Apple Silicon (M1)，可同时打 arm64 + x64
+          - os: macos-14
             platform: mac
             artifact_suffix: mac
-          # ⚠️ 不能用 windows-latest：当前指向 windows-2025 镜像，预装 VS 18 (2026 Preview)。
-          # node-gyp 11.x 的 find-visualstudio.js 不认识 VS 18，报 unknown version。
-          # 固定 windows-2022 → 预装 VS 2022 (17.x)，node-gyp 完全支持。
+          # Windows: windows-2022 预装 VS 2022，node-gyp 完全支持
+          # ⚠️ 不要用 windows-latest（当前指向 VS 18，node-gyp 11.x 不认识）
           - os: windows-2022
             platform: win
             artifact_suffix: win
-          - os: ubuntu-latest
+          # Linux: ubuntu-22.04 兼容性最好（AppImage 在低版本 glibc 上运行）
+          - os: ubuntu-22.04
             platform: linux
             artifact_suffix: linux
 
@@ -88,7 +90,7 @@ jobs:
 
       # ─────────────────────────────────────────────────────────────
       # Linux：安装 AppImage 打包所需的系统库
-      # ubuntu-latest 默认已有，但为确保 AppImage 构建成功率显式补齐
+      # ubuntu-22.04 默认已有大部分，但为确保 AppImage 构建成功率显式补齐
       # ─────────────────────────────────────────────────────────────
       - name: 🐧 Install Linux build deps (AppImage)
         if: runner.os == 'Linux'
@@ -146,7 +148,7 @@ jobs:
       # ⚠️ 不要使用 ilammy/msvc-dev-cmd！
       # 该 action 会设置 VSINSTALLDIR 指向 VS 18 (2026 Preview)，
       # node-gyp 11.x 不认识 VS 18，报 "unknown version undefined"。
-      # windows-latest 自带 VS 2022 Enterprise + C++ workload，
+      # windows-2022 自带 VS 2022 Enterprise + C++ workload，
       # node-gyp 通过 vswhere.exe 自动发现，无需任何额外步骤。
 
       # ─────────────────────────────────────────────────────────────
