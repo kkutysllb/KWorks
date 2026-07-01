@@ -28,14 +28,15 @@ on:
   workflow_dispatch:
 
 # 同一个 tag 的三平台构建组各自独立，互不取消
-concurrency:
-  group: release-${{ github.ref }}-${{ matrix.os }}
-  cancel-in-progress: false
-
 jobs:
   release:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # concurrency 必须在 job 级别：用到了 matrix.os 这个 job-level context。
+    # 若放在 workflow 顶层，workflow 文件会因访问不到 matrix context 而加载失败。
+    concurrency:
+      group: release-${{ github.ref }}-${{ matrix.os }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false # 一个平台失败不影响其他平台继续构建
       matrix:
