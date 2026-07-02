@@ -377,6 +377,17 @@ describe('daily usage service', () => {
       '2026-05-03'
     ])
     expect(response.days.map((bucket) => bucket.total_tokens)).toEqual([120, 140, 0])
+    const modelDays = (response as {
+      model_days?: Array<{ date: string; model: string; total_tokens: number }>
+    }).model_days ?? []
+    expect(modelDays.map((bucket) => `${bucket.date}|${bucket.model}|${bucket.total_tokens}`)).toEqual([
+      '2026-05-01|Opus 4.7|0',
+      '2026-05-01|Opus 4.8|120',
+      '2026-05-02|Opus 4.7|50',
+      '2026-05-02|Opus 4.8|90',
+      '2026-05-03|Opus 4.7|0',
+      '2026-05-03|Opus 4.8|0'
+    ])
     expect(response.buckets.map((bucket) => bucket.model)).toEqual(['Opus 4.8', 'Opus 4.7'])
     expect(response.buckets[0]).toMatchObject({
       input_tokens: 160,

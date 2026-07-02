@@ -3984,8 +3984,15 @@ describe('HTTP server', () => {
     )
 
     expect(response.status).toBe(200)
-    const body = await readJson(response) as { buckets?: Array<{ model?: string; total_tokens?: number }> }
+    const body = await readJson(response) as {
+      buckets?: Array<{ model?: string; total_tokens?: number }>
+      model_days?: Array<{ date?: string; model?: string; total_tokens?: number }>
+    }
     expect(body.buckets?.[0]).toMatchObject({
+      model: 'deepseek-chat',
+      total_tokens: 16
+    })
+    expect(body.model_days?.find((bucket) => bucket.total_tokens === 16)).toMatchObject({
       model: 'deepseek-chat',
       total_tokens: 16
     })

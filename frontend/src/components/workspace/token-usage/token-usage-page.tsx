@@ -491,7 +491,6 @@ export function TokenUsagePage() {
     }
     return result;
   }, [loadState]);
-  const fallbackTimeseries = modelTimeseries.__all__ ?? [];
 
   const currentBjMonth = getCurrentBeijingMonth();
 
@@ -687,7 +686,7 @@ export function TokenUsagePage() {
                 key={model}
                 model={resolveModelDisplay(model)}
                 colorIdx={idx}
-                tsData={modelTimeseries[model] ?? fallbackTimeseries}
+                tsData={modelTimeseries[model] ?? []}
                 inputTokens={data.input_tokens}
                 outputTokens={data.output_tokens}
                 totalTokens={data.tokens}

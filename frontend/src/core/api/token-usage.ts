@@ -55,8 +55,12 @@ interface QiongQiModelUsageBucket extends QiongQiUsageCounters {
   model: string;
 }
 
-interface QiongQiModelDayBucket extends QiongQiUsageCounters {
+interface QiongQiDailyUsageBucket extends QiongQiUsageCounters {
   date: string;
+}
+
+interface QiongQiModelDayBucket extends QiongQiDailyUsageBucket {
+  model: string;
 }
 
 interface QiongQiThreadUsageBucket extends QiongQiUsageCounters {
@@ -66,13 +70,8 @@ interface QiongQiThreadUsageBucket extends QiongQiUsageCounters {
 interface QiongQiModelUsageResponse {
   group_by: "model";
   buckets?: QiongQiModelUsageBucket[];
-  days?: QiongQiModelDayBucket[];
-  totals?: QiongQiUsageCounters;
-}
-
-interface QiongQiDailyUsageResponse {
-  group_by: "day";
-  buckets?: QiongQiModelDayBucket[];
+  days?: QiongQiDailyUsageBucket[];
+  model_days?: QiongQiModelDayBucket[];
   totals?: QiongQiUsageCounters;
 }
 
@@ -138,25 +137,6 @@ async function fetchQiongQiModelUsage(
     throw new Error(`Failed to fetch token usage: ${res.status}`);
   }
   return (await res.json()) as QiongQiModelUsageResponse;
-}
-
-async function fetchQiongQiDailyUsage(
-  filter?: MonthFilter,
-): Promise<QiongQiDailyUsageResponse> {
-  const { from, to } = dateWindowFromFilter(filter);
-  const params = new URLSearchParams({
-    group_by: "day",
-    from,
-    to,
-    timezone: "Asia/Shanghai",
-  });
-  const res = await fetch(`${getBackendBaseURL()}/api/usage?${params}`, {
-    method: "GET",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch token usage timeseries: ${res.status}`);
-  }
-  return (await res.json()) as QiongQiDailyUsageResponse;
 }
 
 export async function fetchQiongQiThreadUsage(
@@ -235,6 +215,34 @@ export async function fetchTokenUsageStats(
   };
 }
 
+function modelDayBucketsFromResponse(
+  data: QiongQiModelUsageResponse,
+): QiongQiModelDayBucket[] {
+  const modelDays = data.model_days ?? [];
+  if (modelDays.length > 0) return modelDays;
+
+  const modelBuckets = data.buckets ?? [];
+  if (modelBuckets.length !== 1) return [];
+
+  const model = modelBuckets[0]?.model?.trim();
+  if (!model) return [];
+  return (data.days ?? []).map((day) => ({
+    ...day,
+    model,
+  }));
+}
+
+function limitToRecentDates(
+  items: QiongQiModelDayBucket[],
+  days: number,
+): QiongQiModelDayBucket[] {
+  if (!Number.isFinite(days) || days <= 0) return items;
+  const recentDates = new Set(
+    [...new Set(items.map((item) => item.date))].sort().slice(-days),
+  );
+  return items.filter((item) => recentDates.has(item.date));
+}
+
 /**
  * Fetch daily token usage timeseries, grouped by date and model.
  * Optionally filter by calendar month instead of rolling days window.
@@ -243,16 +251,16 @@ export async function fetchTokenUsageTimeseries(
   days = 30,
   filter?: MonthFilter,
 ): Promise<TokenUsageTimeseriesItem[]> {
-  const data = await fetchQiongQiDailyUsage(filter);
-  return (data.buckets ?? [])
+  const data = await fetchQiongQiModelUsage(filter);
+  return limitToRecentDates(modelDayBucketsFromResponse(data), days)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.model.localeCompare(b.model))
     .map((day) => ({
       date: day.date,
-      model_name: "__all__",
+      model_name: day.model,
       run_count: day.turns ?? 0,
       llm_call_count: day.turns ?? 0,
       total_tokens: day.total_tokens ?? 0,
       input_tokens: day.input_tokens ?? 0,
       output_tokens: day.output_tokens ?? 0,
-    }))
-    .slice(-days);
+    }));
 }

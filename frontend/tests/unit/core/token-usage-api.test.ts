@@ -67,8 +67,46 @@ describe("token usage API", () => {
       )
       .mockResolvedValueOnce(
         okJson({
-          group_by: "day",
+          group_by: "model",
           buckets: [
+            {
+              model: "deepseek-chat",
+              input_tokens: 100,
+              output_tokens: 40,
+              total_tokens: 140,
+              turns: 2,
+              thread_count: 1,
+            },
+            {
+              model: "minimax-m3",
+              input_tokens: 20,
+              output_tokens: 10,
+              total_tokens: 30,
+              turns: 1,
+              thread_count: 1,
+            },
+          ],
+          model_days: [
+            {
+              date: "2026-06-27",
+              model: "deepseek-chat",
+              input_tokens: 100,
+              output_tokens: 40,
+              total_tokens: 140,
+              turns: 2,
+              thread_count: 1,
+            },
+            {
+              date: "2026-06-28",
+              model: "minimax-m3",
+              input_tokens: 20,
+              output_tokens: 10,
+              total_tokens: 30,
+              turns: 1,
+              thread_count: 1,
+            },
+          ],
+          days: [
             {
               date: "2026-06-27",
               input_tokens: 100,
@@ -77,13 +115,21 @@ describe("token usage API", () => {
               turns: 2,
               thread_count: 1,
             },
+            {
+              date: "2026-06-28",
+              input_tokens: 20,
+              output_tokens: 10,
+              total_tokens: 30,
+              turns: 1,
+              thread_count: 1,
+            },
           ],
           totals: {
-            input_tokens: 100,
-            output_tokens: 40,
-            total_tokens: 140,
-            turns: 2,
-            thread_count: 1,
+            input_tokens: 120,
+            output_tokens: 50,
+            total_tokens: 170,
+            turns: 3,
+            thread_count: 2,
           },
         }),
       );
@@ -99,7 +145,7 @@ describe("token usage API", () => {
     expect(urls.every((url) => url.includes("/api/usage"))).toBe(true);
     expect(urls).toEqual([
       expect.stringContaining("group_by=model"),
-      expect.stringContaining("group_by=day"),
+      expect.stringContaining("group_by=model"),
     ]);
     expect(urls.some((url) => url.includes("/api/threads/token-usage"))).toBe(false);
     expect(stats).toMatchObject({
@@ -125,12 +171,21 @@ describe("token usage API", () => {
     expect(timeseries).toEqual([
       {
         date: "2026-06-27",
-        model_name: "__all__",
+        model_name: "deepseek-chat",
         run_count: 2,
         llm_call_count: 2,
         total_tokens: 140,
         input_tokens: 100,
         output_tokens: 40,
+      },
+      {
+        date: "2026-06-28",
+        model_name: "minimax-m3",
+        run_count: 1,
+        llm_call_count: 1,
+        total_tokens: 30,
+        input_tokens: 20,
+        output_tokens: 10,
       },
     ]);
   });
