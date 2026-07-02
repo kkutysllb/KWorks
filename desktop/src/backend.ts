@@ -54,6 +54,7 @@ import {
   resolveKWorksWorkspaceRoot,
   resolveQiongqiLaunchConfig,
 } from "./qiongqi-launch-config.js";
+import { buildChildProcessEnv } from "./process-env.js";
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -367,8 +368,7 @@ export class BackendManager extends EventEmitter {
     const kworksWorkspaceRoot = resolveKWorksWorkspaceRoot(process.env, "desktop");
     const runtimeWorkspace = kworksUserWorkspacePaths(kworksWorkspaceRoot, RUNTIME_BOOTSTRAP_USER_ID);
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
+    const env: NodeJS.ProcessEnv = buildChildProcessEnv(process.env, {
       // Isolation: desktop state lives under ~/.kworks-workspace.
       KWorks_HOME: getKworksHome(),
       KWorks_DATA_DIR: join(getKworksHome(), "data"),
@@ -401,7 +401,7 @@ export class BackendManager extends EventEmitter {
       QIONGQI_API_KEY: qiongqiLaunchConfig.apiKey,
       QIONGQI_BASE_URL: qiongqiLaunchConfig.baseUrl,
       ...(qiongqiLaunchConfig.model ? { QIONGQI_MODEL: qiongqiLaunchConfig.model } : {}),
-    };
+    });
 
     if (isPackaged()) {
       env.ELECTRON_RUN_AS_NODE = "1";

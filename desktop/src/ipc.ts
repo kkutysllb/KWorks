@@ -18,6 +18,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { BackendManager, resolveGatewayPort, type BackendStatus } from "./backend.js";
 import { isAllowedExternalUrl } from "./url-policy.js";
 import { getGrantedPathsPath, getKworksHome, REPO_ROOT } from "./paths.js";
+import { buildChildProcessEnv } from "./process-env.js";
 import {
   detectMigrationSources as detectSources,
   executeMigration as runMigration,
@@ -121,8 +122,6 @@ function guessMime(ext: string): string | undefined {
 
 const terminalProcesses = new Map<string, TerminalProcess>();
 
-const DEFAULT_TERMINAL_PATH =
-  "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 const POSIX_SHELL_CANDIDATES = [
   process.env.SHELL,
   "/bin/zsh",
@@ -221,11 +220,7 @@ function resolveTerminalCwd(folderPath: string): string {
 }
 
 function buildTerminalEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") env[key] = value;
-  }
-  env.PATH = env.PATH || DEFAULT_TERMINAL_PATH;
+  const env = buildChildProcessEnv(process.env);
   env.TERM = env.TERM || "xterm-256color";
   env.COLORTERM = env.COLORTERM || "truecolor";
   return env;
