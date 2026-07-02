@@ -78,6 +78,65 @@ describe('HTTP server', () => {
     }
   })
 
+  it('allows desktop SSE resume headers in CORS preflight requests', async () => {
+    const router = new Router()
+    router.add('GET', '/v1/threads/thread-1/events', () => new Response(null, { status: 204 }))
+    const server = await startNodeHttpServer({
+      router,
+      host: '127.0.0.1',
+      port: 0,
+      corsOrigins: ['app://-']
+    })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/v1/threads/thread-1/events`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'app://-',
+          'access-control-request-method': 'GET',
+          'access-control-request-headers': 'last-event-id'
+        }
+      })
+
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-origin')).toBe('app://-')
+      expect(response.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('last-event-id')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('allows desktop csrf headers in CORS preflight requests', async () => {
+    const router = new Router()
+    router.add('PUT', '/api/models/test-model', () => new Response(null, { status: 204 }))
+    const server = await startNodeHttpServer({
+      router,
+      host: '127.0.0.1',
+      port: 0,
+      corsOrigins: ['app://-']
+    })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/models/test-model`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'app://-',
+          'access-control-request-method': 'PUT',
+          'access-control-request-headers': 'content-type,authorization,x-csrf-token'
+        }
+      })
+
+      const allowHeaders = response.headers.get('access-control-allow-headers')?.toLowerCase()
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-origin')).toBe('app://-')
+      expect(allowHeaders).toContain('content-type')
+      expect(allowHeaders).toContain('authorization')
+      expect(allowHeaders).toContain('x-csrf-token')
+    } finally {
+      await server.close()
+    }
+  })
+
   it('returns readiness with degraded storage diagnostics without auth', async () => {
     const h = buildHarness()
     h.runtime.storageDiagnostics = () => ({
