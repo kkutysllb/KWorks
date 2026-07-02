@@ -11,7 +11,7 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -47,7 +47,6 @@ import {
   MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
-import { TodoList } from "@/components/workspace/todo-list";
 import {
   useCodingSessionChanges,
   useDiscardProjectFileChange,
@@ -57,15 +56,16 @@ import type { QiongqiChange } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
-import type { Todo } from "@/core/todos";
 import { useThreadStream } from "@/core/threads/hooks";
 import type { Message } from "@/core/threads/qiongqi-types";
+import type { Todo } from "@/core/todos";
 import { isTodoWriteToolName } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
 interface AgentPanelProps {
   projectId: string;
   onThreadIdChange?: (threadId: string | undefined) => void;
+  onTodosChange?: (todos: Todo[]) => void;
   onFocusFile?: (
     filePath: string,
     target?: "code" | "task-changes" | "diff" | "review",
@@ -97,6 +97,7 @@ export function AgentPanel({
   projectId,
   onFocusFile,
   onThreadIdChange,
+  onTodosChange,
 }: AgentPanelProps) {
   return (
     <FollowupsProvider>
@@ -106,6 +107,7 @@ export function AgentPanel({
             projectId={projectId}
             onFocusFile={onFocusFile}
             onThreadIdChange={onThreadIdChange}
+            onTodosChange={onTodosChange}
           />
         </PromptInputProvider>
       </SubtasksProvider>
@@ -116,6 +118,7 @@ export function AgentPanel({
 function AgentPanelInner({
   projectId,
   onThreadIdChange,
+  onTodosChange,
   onFocusFile,
 }: AgentPanelProps) {
   const { project } = useProject(projectId);
@@ -157,7 +160,6 @@ function AgentPanelInner({
   const [lastToolLabel, setLastToolLabel] = useState<string | null>(null);
   const { textInput } = usePromptInputController();
   const [draggingCodingPath, setDraggingCodingPath] = useState(false);
-  const [todoPanelOccupiesSpace, setTodoPanelOccupiesSpace] = useState(false);
   const activeThreadIdForQueries = threadId;
 
   const syncCodingProjectContext = useCallback(() => {
@@ -392,7 +394,9 @@ function AgentPanelInner({
   );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
-    if (!event.dataTransfer.types.includes("application/x-kworks-coding-path")) {
+    if (
+      !event.dataTransfer.types.includes("application/x-kworks-coding-path")
+    ) {
       return;
     }
     event.preventDefault();
@@ -408,7 +412,9 @@ function AgentPanelInner({
 
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
-      const raw = event.dataTransfer.getData("application/x-kworks-coding-path");
+      const raw = event.dataTransfer.getData(
+        "application/x-kworks-coding-path",
+      );
       if (!raw) return;
       event.preventDefault();
       setDraggingCodingPath(false);
@@ -432,19 +438,29 @@ function AgentPanelInner({
 
   const hasCodingChanges = changes.length > 0;
   const visibleTodos = useMemo(
-    () =>
-      todosFromThreadStateOrToolCalls(thread.values.todos, thread.messages),
+    () => todosFromThreadStateOrToolCalls(thread.values.todos, thread.messages),
     [thread.values.todos, thread.messages],
   );
+  const visibleTodosRef = useRef(visibleTodos);
+  const visibleTodoSignature = useMemo(
+    () => getTodoItemsSignature(visibleTodos),
+    [visibleTodos],
+  );
+  useEffect(() => {
+    visibleTodosRef.current = visibleTodos;
+  }, [visibleTodos]);
+  useEffect(() => {
+    onTodosChange?.(visibleTodosRef.current);
+  }, [onTodosChange, visibleTodoSignature]);
+  useEffect(() => {
+    return () => onTodosChange?.([]);
+  }, [onTodosChange]);
   const messageListPaddingBottom = showFollowups
     ? MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
       MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM +
       MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM
     : MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
       (hasCodingChanges ? MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM : 0);
-  const todoPanelContentOffsetClass = todoPanelOccupiesSpace
-    ? "xl:pr-[22rem]"
-    : "";
 
   const status = thread.error
     ? "error"
@@ -465,7 +481,7 @@ function AgentPanelInner({
       <ChatBox threadId={uiThreadId} artifactsMode="disabled">
         <div
           className={cn(
-            "relative flex size-full min-h-0 flex-col",
+            "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden",
             draggingCodingPath && "ring-2 ring-emerald-500/50 ring-inset",
           )}
           onDragLeave={handleDragLeave}
@@ -484,20 +500,9 @@ function AgentPanelInner({
           </div>
 
           {/* Messages */}
-          <main className="relative flex min-h-0 grow flex-col">
-            <div className="pointer-events-none absolute top-3 right-3 left-3 z-40 flex justify-end">
-              <TodoList
-                className="pointer-events-auto"
-                todos={visibleTodos}
-                onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
-                variant="floating"
-              />
-            </div>
+          <main className="relative flex min-h-0 min-w-0 grow flex-col overflow-hidden">
             <MessageList
-              className={cn(
-                "size-full transition-[padding] duration-200 ease-out",
-                todoPanelContentOffsetClass,
-              )}
+              className="size-full min-w-0"
               threadId={uiThreadId}
               thread={thread}
               paddingBottom={messageListPaddingBottom}
@@ -509,16 +514,19 @@ function AgentPanelInner({
               }
             />
             {/* Input */}
-            <div className="absolute inset-x-0 bottom-0 z-30 flex justify-center px-6 pb-5">
-              <div className="relative flex w-full max-w-4xl flex-col items-center gap-2">
+            <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5">
+              <div className="relative flex w-full max-w-4xl min-w-0 flex-col items-center gap-2">
                 <CodingChangeSummaryCard
                   changes={changes}
                   projectId={projectId}
                   onFocusFile={onFocusFile}
                 />
-                <div className="w-full">
+                <div
+                  className="w-full min-w-0"
+                  data-testid="coding-agent-input-shell"
+                >
                   <InputBox
-                    className="bg-background/5 min-h-32 w-full [&_[data-slot=input-group-control]]:min-h-20 [&_[data-slot=input-group]]:min-h-32"
+                    className="bg-background/5 min-h-32 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-20 [&_[data-slot=input-group]]:min-h-32"
                     threadId={uiThreadId}
                     autoFocus={false}
                     status={status}
@@ -1017,6 +1025,16 @@ function normalizeTodoItems(value: unknown): Todo[] {
       ? { status: item.status }
       : {}),
   }));
+}
+
+function getTodoItemsSignature(todos: readonly Todo[]): string {
+  return todos
+    .map((todo, index) =>
+      [todo.id ?? index, todo.content ?? "", todo.status ?? "pending"].join(
+        ":",
+      ),
+    )
+    .join("|");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

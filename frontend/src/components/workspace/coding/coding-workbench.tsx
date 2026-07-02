@@ -56,6 +56,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
+import { TodoList } from "@/components/workspace/todo-list";
 import {
   copyProjectTerminalPath,
   onEmbeddedTerminalData,
@@ -95,6 +96,7 @@ import type {
   StageSuggestion,
 } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
+import type { Todo } from "@/core/todos";
 import { cn } from "@/lib/utils";
 
 import { AgentPanel } from "./agent-panel";
@@ -253,6 +255,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   );
   const [environmentCardCollapsed, setEnvironmentCardCollapsed] =
     useState(false);
+  const [agentTodos, setAgentTodos] = useState<Todo[]>([]);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalTabs, setTerminalTabs] = useState<EmbeddedTerminalTab[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -318,6 +321,8 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   const showFileExplorer = !leftCollapsed;
   const showWorkbenchPane = !rightCollapsed;
   const showEnvironmentCard = !showWorkbenchPane && !environmentCardCollapsed;
+  const showFloatingPanels =
+    !showWorkbenchPane && (showEnvironmentCard || agentTodos.length > 0);
 
   const startPanelResize = (
     side: "left" | "right",
@@ -630,34 +635,43 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
           </div>
           <div className="mt-0 flex min-h-0 flex-1 overflow-hidden">
             <div className="relative flex size-full min-w-0 overflow-hidden">
-              <EnvironmentInfoFloatingCard
-                additions={totalAdditions}
-                deletions={totalDeletions}
-                branch={gitBranch}
-                githubCli={environment?.github_cli ?? null}
-                sourceLabel={environment?.source.label ?? "仅本地"}
-                sourceRemote={environment?.source.remote ?? null}
-                head={environment?.head ?? null}
-                ahead={environment?.ahead ?? 0}
-                behind={environment?.behind ?? 0}
-                changedFiles={totalChangedFiles}
-                commitPending={commitMutation.isPending}
-                pushPending={pushMutation.isPending}
-                commitDisabled={
-                  !environment?.is_git_repo ||
-                  (environment?.changed_files ?? 0) === 0
-                }
-                pushDisabled={!environment?.is_git_repo}
-                onCommit={() => setCommitDialogOpen(true)}
-                onPush={() => void handlePush()}
-                path={project.path}
-                rightRailVisible={!showWorkbenchPane}
-                visible={showEnvironmentCard}
-              />
+              {showFloatingPanels && (
+                <CodingFloatingPanelStack rightRailVisible={!showWorkbenchPane}>
+                  {showEnvironmentCard && (
+                    <EnvironmentInfoFloatingCard
+                      additions={totalAdditions}
+                      deletions={totalDeletions}
+                      branch={gitBranch}
+                      githubCli={environment?.github_cli ?? null}
+                      sourceLabel={environment?.source.label ?? "仅本地"}
+                      sourceRemote={environment?.source.remote ?? null}
+                      head={environment?.head ?? null}
+                      ahead={environment?.ahead ?? 0}
+                      behind={environment?.behind ?? 0}
+                      changedFiles={totalChangedFiles}
+                      commitPending={commitMutation.isPending}
+                      pushPending={pushMutation.isPending}
+                      commitDisabled={
+                        !environment?.is_git_repo ||
+                        (environment?.changed_files ?? 0) === 0
+                      }
+                      pushDisabled={!environment?.is_git_repo}
+                      onCommit={() => setCommitDialogOpen(true)}
+                      onPush={() => void handlePush()}
+                      path={project.path}
+                    />
+                  )}
+                  <TodoList
+                    className="pointer-events-auto max-w-full"
+                    todos={agentTodos}
+                    variant="floating"
+                  />
+                </CodingFloatingPanelStack>
+              )}
               {showFileExplorer ? (
                 <>
                   <aside
-                    className="overflow-hidden border-r"
+                    className="shrink-0 overflow-hidden border-r"
                     style={{ width: leftPanelWidth }}
                   >
                     <FileExplorer
@@ -691,11 +705,10 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 </CollapsedSidePanelRail>
               )}
               {/* Middle: QiongQi engine */}
-              <section className="min-w-0 flex-1">
+              <section className="relative min-w-0 flex-1 overflow-hidden">
                 <div
                   className={cn(
-                    "flex h-full min-h-0 flex-col transition-[padding] duration-200",
-                    showEnvironmentCard && "xl:pr-[340px] 2xl:pr-[360px]",
+                    "flex h-full min-h-0 min-w-0 flex-col overflow-hidden",
                   )}
                 >
                   <AgentInspector
@@ -705,6 +718,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                     threadId={codingThreadId}
                     selectedTaskId={selectedTaskId}
                     onThreadIdChange={setAgentThreadId}
+                    onTodosChange={setAgentTodos}
                     activeTab={activeInspectorTab}
                     onActiveTabChange={setActiveInspectorTab}
                   />
@@ -719,7 +733,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                   />
                   <aside
                     data-testid="coding-workbench-right-panel"
-                    className="overflow-hidden border-l"
+                    className="shrink-0 overflow-hidden border-l"
                     style={{ width: rightPanelWidth }}
                   >
                     <div className="relative flex h-full min-h-0 flex-col">
@@ -1153,12 +1167,15 @@ function EmbeddedXtermViewport({
       .trim();
   }, []);
 
-  const getTerminalTheme = useCallback(() => ({
-    background: readCssVar("--background") || "#0a0a0a",
-    foreground: readCssVar("--foreground") || "#fafafa",
-    cursor: readCssVar("--foreground") || "#fafafa",
-    selectionBackground: readCssVar("--muted") || "#333333",
-  }), [readCssVar]);
+  const getTerminalTheme = useCallback(
+    () => ({
+      background: readCssVar("--background") || "#0a0a0a",
+      foreground: readCssVar("--foreground") || "#fafafa",
+      cursor: readCssVar("--foreground") || "#fafafa",
+      selectionBackground: readCssVar("--muted") || "#333333",
+    }),
+    [readCssVar],
+  );
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -1261,6 +1278,7 @@ function AgentInspector({
   activeTab,
   onActiveTabChange,
   onFocusFile,
+  onTodosChange,
   onThreadIdChange,
   projectId,
   projectRoot,
@@ -1272,6 +1290,7 @@ function AgentInspector({
     tab: "agent" | "events" | "session" | "workflow" | "skills",
   ) => void;
   onFocusFile?: WorkbenchFocusHandler;
+  onTodosChange?: (todos: Todo[]) => void;
   projectId: string;
   projectRoot: string;
   threadId: string;
@@ -1279,7 +1298,10 @@ function AgentInspector({
   onThreadIdChange?: (threadId: string | undefined) => void;
 }) {
   return (
-    <div className="bg-background flex h-full min-h-0 flex-col border-l">
+    <div
+      className="bg-background flex h-full min-h-0 flex-col border-l"
+      data-testid="coding-agent-inspector"
+    >
       <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold tracking-wide uppercase">
@@ -1291,12 +1313,7 @@ function AgentInspector({
         value={activeTab}
         onValueChange={(value) =>
           onActiveTabChange(
-            value as
-              | "agent"
-              | "events"
-              | "session"
-              | "workflow"
-              | "skills",
+            value as "agent" | "events" | "session" | "workflow" | "skills",
           )
         }
         className="flex min-h-0 flex-1 flex-col"
@@ -1333,6 +1350,7 @@ function AgentInspector({
               projectId={projectId}
               onFocusFile={onFocusFile}
               onThreadIdChange={onThreadIdChange}
+              onTodosChange={onTodosChange}
             />
           </PersistentInspectorPanel>
           <PersistentInspectorPanel active={activeTab === "events"}>
@@ -1360,6 +1378,26 @@ function AgentInspector({
   );
 }
 
+function CodingFloatingPanelStack({
+  children,
+  rightRailVisible,
+}: {
+  children: React.ReactNode;
+  rightRailVisible: boolean;
+}) {
+  return (
+    <div
+      data-testid="coding-floating-panel-stack"
+      className={cn(
+        "pointer-events-none absolute top-3 z-20 flex w-[320px] max-w-[calc(100%-1.5rem)] flex-col gap-3 transition-all",
+        rightRailVisible ? "right-12" : "right-3",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function EnvironmentInfoFloatingCard({
   additions,
   ahead,
@@ -1375,11 +1413,9 @@ function EnvironmentInfoFloatingCard({
   path,
   pushDisabled,
   pushPending,
-  rightRailVisible,
   sourceLabel,
   sourceRemote,
   behind,
-  visible,
 }: {
   additions: number;
   ahead: number;
@@ -1401,11 +1437,9 @@ function EnvironmentInfoFloatingCard({
   path: string;
   pushDisabled: boolean;
   pushPending: boolean;
-  rightRailVisible: boolean;
   sourceLabel: string;
   sourceRemote: string | null;
   behind: number;
-  visible: boolean;
 }) {
   const githubConnected = githubCli?.available && githubCli?.authenticated;
   const githubLabel = githubConnected
@@ -1414,10 +1448,9 @@ function EnvironmentInfoFloatingCard({
 
   return (
     <div
+      data-testid="coding-environment-card"
       className={cn(
-        "bg-background/96 absolute top-3 z-20 w-[320px] max-w-[calc(100%-1.5rem)] rounded-2xl border p-3 shadow-xl backdrop-blur transition-all",
-        rightRailVisible ? "right-12" : "right-3",
-        visible ? "opacity-100" : "pointer-events-none opacity-0",
+        "bg-background/96 pointer-events-auto w-full rounded-2xl border p-3 shadow-xl backdrop-blur",
       )}
     >
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -2416,10 +2449,7 @@ function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
                 />
               ) : (
                 filteredSkills.map((skill) => (
-                  <SkillCard
-                    key={`${skill.scope}-${skill.id}`}
-                    skill={skill}
-                  />
+                  <SkillCard key={`${skill.scope}-${skill.id}`} skill={skill} />
                 ))
               )}
             </div>
@@ -2785,11 +2815,7 @@ function SkillCategoryFilter({
   );
 }
 
-function SkillCard({
-  skill,
-}: {
-  skill: CodingSkill;
-}) {
+function SkillCard({ skill }: { skill: CodingSkill }) {
   const category = SKILL_CATEGORIES.find((item) =>
     (item.ids as readonly string[]).includes(skill.id),
   );

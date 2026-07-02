@@ -27,6 +27,11 @@ export type MockThread = {
   agent_name?: string;
   workModeId?: string;
   workspaceRoot?: string;
+  todos?: Array<{
+    id?: string;
+    content: string;
+    status?: "pending" | "in_progress" | "completed";
+  }>;
 };
 
 export type MockProject = {
@@ -319,6 +324,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
           {
             values: {
               title: matchingThread.title ?? "Untitled",
+              todos: matchingThread.todos ?? [],
               messages: [
                 {
                   type: "human",
@@ -360,6 +366,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
         body: JSON.stringify({
           values: {
             title: matchingThread?.title ?? "Untitled",
+            todos: matchingThread?.todos ?? [],
             messages: matchingThread
               ? [
                   {
@@ -505,12 +512,14 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
     return route.fallback();
   });
 
-  void page.route(/\/api\/coding\/sessions\/([^/]+)\/changes(?:\?|$)/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ thread_id: "mock", changes: [] }),
-    }),
+  void page.route(
+    /\/api\/coding\/sessions\/([^/]+)\/changes(?:\?|$)/,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ thread_id: "mock", changes: [] }),
+      }),
   );
 
   void page.route(/\/api\/coding\/sessions\/([^/]+)\/review(?:\?|$)/, (route) =>
@@ -529,15 +538,17 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
     }),
   );
 
-  void page.route(/\/api\/coding\/sessions\/([^/]+)\/roi\/summary(?:\?|$)/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        thread_id: "mock",
-        summary: null,
+  void page.route(
+    /\/api\/coding\/sessions\/([^/]+)\/roi\/summary(?:\?|$)/,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          thread_id: "mock",
+          summary: null,
+        }),
       }),
-    }),
   );
 
   void page.route(/\/api\/coding\/sessions\/([^/]+)\/roi(?:\?|$)/, (route) =>
@@ -720,6 +731,20 @@ function threadToQiongqiRecord(thread: MockThread) {
             text: `Response in thread ${title}`,
             createdAt: updatedAt,
           },
+          ...(thread.todos?.length
+            ? [
+                {
+                  id: `tool-todo-${thread.thread_id}`,
+                  kind: "tool_call",
+                  toolName: "todo_write",
+                  callId: `call-todo-${thread.thread_id}`,
+                  toolKind: "tool_call",
+                  arguments: { todos: thread.todos },
+                  summary: "更新任务步骤",
+                  createdAt: updatedAt,
+                },
+              ]
+            : []),
         ],
       },
     ],

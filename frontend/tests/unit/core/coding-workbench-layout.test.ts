@@ -65,7 +65,12 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("{showFileExplorer ? (");
     expect(workbench).toContain("style={{ width: leftPanelWidth }}");
     expect(workbench).toContain("style={{ width: rightPanelWidth }}");
-    expect(workbench).toContain("xl:pr-[340px] 2xl:pr-[360px]");
+    expect(workbench).not.toContain("xl:pr-[340px] 2xl:pr-[360px]");
+    expect(workbench).toContain("CodingFloatingPanelStack");
+    expect(workbench).toContain("showFloatingPanels");
+    expect(workbench).toContain("agentTodos.length > 0");
+    expect(workbench).toContain("onTodosChange={setAgentTodos}");
+    expect(workbench).toContain("todos={agentTodos}");
     expect(workbench).toContain('data-testid="coding-workbench-right-panel"');
     expect(workbench).toContain("const [workbenchView, setWorkbenchView]");
     expect(workbench).toContain('value="agent"');
@@ -231,7 +236,8 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("<ReviewPanel");
     expect(workbench).toContain('label="Code Review"');
     expect(workbench).toContain("EnvironmentInfoFloatingCard");
-    expect(workbench).toContain("visible={showEnvironmentCard}");
+    expect(workbench).toContain("{showFloatingPanels && (");
+    expect(workbench).toContain("{showEnvironmentCard && (");
     expect(workbench).toContain("gitBranch");
     expect(workbench).toContain("useProjectEnvironment");
     expect(workbench).toContain("useCodingSessionChanges");
