@@ -149,9 +149,10 @@ export function getSkillsMigrationMarkerPath(): string {
 /**
  * The QiongQi runtime source bundled with KWorks.
  *
- * Development uses the vendored source under the repository. Packaged macOS
- * builds extract a signed single-file archive into the writable runtime cache;
- * packaged Windows/Linux builds use the direct `extraResources/qiongqi` copy.
+ * Development uses the vendored source under the repository. Packaged builds
+ * prefer the bundled archive and extract it into the writable runtime cache.
+ * Windows/Linux also ship a direct `extraResources/qiongqi` copy as a fallback
+ * for older packages and emergency diagnostics.
  */
 export function getQiongqiRuntimeDir(): string {
   if (isPackaged()) {

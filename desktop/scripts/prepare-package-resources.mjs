@@ -53,7 +53,7 @@ function envFlag(name) {
 }
 
 function shouldPrepareQiongqiArchive() {
-  return envFlag("KWORKS_PREPARE_QIONGQI_ARCHIVE") ?? process.platform === "darwin";
+  return envFlag("KWORKS_PREPARE_QIONGQI_ARCHIVE") ?? true;
 }
 
 function shouldSignQiongqiArchive() {

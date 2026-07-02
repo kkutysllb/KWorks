@@ -19,6 +19,11 @@ const SKILLS_DIR = join(REPO_ROOT, "skills");
 const QIONGQI_RUNTIME_ARCHIVE_RELATIVE = "build/qiongqi-runtime.tar.gz";
 const QIONGQI_RUNTIME_ARCHIVE = join(DESKTOP_DIR, "build", "qiongqi-runtime.tar.gz");
 const QIONGQI_RUNTIME_DIR = join(DESKTOP_DIR, "build", "qiongqi-runtime", "qiongqi");
+const REQUIRED_RUNTIME_PACKAGES = [
+  "@qiongqi/http",
+  "@qiongqi/contracts",
+  "@qiongqi/preset-coding",
+];
 
 const checks = [];
 
@@ -46,7 +51,7 @@ function envFlag(name) {
 }
 
 function requiresQiongqiRuntimeArchive() {
-  return envFlag("KWORKS_REQUIRE_QIONGQI_ARCHIVE") ?? process.platform === "darwin";
+  return envFlag("KWORKS_REQUIRE_QIONGQI_ARCHIVE") ?? true;
 }
 
 function verifyQiongqiRuntimeArchive() {
@@ -87,6 +92,15 @@ function verifyQiongqiRuntimeListing(label, listing) {
     pass(`${label} deployed serve entry`);
   }
 
+  for (const packageName of REQUIRED_RUNTIME_PACKAGES) {
+    const packageEntry = `qiongqi/node_modules/${packageName}/package.json`;
+    if (listing.includes(packageEntry)) {
+      pass(`${label} contains ${packageEntry}`);
+    } else {
+      fail(`${label} contains ${packageEntry}`, "Missing from runtime listing");
+    }
+  }
+
   const rejectedNativeToolPattern =
     /@esbuild|esbuild\/bin\/esbuild|@rollup|rollup\.darwin|vitest|node-gyp/;
   const rejected = listing
@@ -103,12 +117,7 @@ function verifyQiongqiRuntimeListing(label, listing) {
 }
 
 function verifyQiongqiRuntimePackageLinks() {
-  const requiredPackages = [
-    "@qiongqi/http",
-    "@qiongqi/contracts",
-    "@qiongqi/preset-coding",
-  ];
-  for (const packageName of requiredPackages) {
+  for (const packageName of REQUIRED_RUNTIME_PACKAGES) {
     const path = join(QIONGQI_RUNTIME_DIR, "node_modules", ...packageName.split("/"));
     if (!existsSync(path)) {
       fail(`resources/qiongqi package ${packageName}`, `Missing: ${path}`);

@@ -18,13 +18,12 @@ extraResources:
       - 32x32.png
   - from: build/icon.png
     to: icon.png
+  - from: build/qiongqi-runtime.tar.gz
+    to: qiongqi-runtime.tar.gz
 afterSign: scripts/notarize.cjs
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
-  extraResources:
-    - from: build/qiongqi-runtime.tar.gz
-      to: qiongqi-runtime.tar.gz
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

@@ -1,6 +1,6 @@
 {
   "name": "kworks-desktop",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "KWorks desktop — fully self-contained Electron shell wrapping the KWorks frontend and Node QiongQi runtime.",
   "homepage": "https://github.com/kkutysllb/kk_KWorks",
@@ -17,6 +17,7 @@
     "build:frontend": "pnpm --dir ../frontend run build:desktop",
     "prepare:package-resources": "node scripts/prepare-package-resources.mjs",
     "verify:package-resources": "node scripts/verify-package-resources.mjs",
+    "verify:built-package-resources": "node scripts/verify-built-package-resources.mjs",
     "fix:node-pty-permissions": "node scripts/fix-node-pty-permissions.mjs",
     "postinstall": "node scripts/fix-node-pty-permissions.mjs",
     "build:app": "pnpm run build && pnpm run build:frontend && pnpm run prepare:package-resources && pnpm run verify:package-resources && electron-builder",

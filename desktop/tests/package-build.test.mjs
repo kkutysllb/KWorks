@@ -15,6 +15,18 @@ const releaseWorkflowSource = readFileSync(
   "utf8",
 );
 
+function topLevelYamlSection(source, sectionName) {
+  const match = source.match(new RegExp(`^${sectionName}:\\n(?:^[ \\t].*\\n?)*`, "m"));
+  return match?.[0] ?? "";
+}
+
+function functionBlock(source, functionName) {
+  const start = source.indexOf(`function ${functionName}(`);
+  if (start === -1) return "";
+  const next = source.indexOf("\nfunction ", start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
 test("packaged app build verifies the embedded Node QiongQi runtime", () => {
   assert.doesNotMatch(packageJson.scripts["build:app"], /build:gateway/);
   assert.match(packageJson.scripts.build, /node scripts\/rename-preload\.mjs/);
@@ -95,10 +107,11 @@ test("packaged app ships the production QiongQi runtime per platform", () => {
     new URL("../electron-builder.yml", import.meta.url),
     "utf8",
   );
+  const topLevelExtraResources = topLevelYamlSection(builderConfig, "extraResources");
   assert.match(builderConfig, /artifactName:\s*"\$\{productName\}-\$\{version\}-\$\{os\}-\$\{arch\}\.\$\{ext\}"/);
   assert.match(
-    builderConfig,
-    /mac:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\.tar\.gz[\s\S]*to: qiongqi-runtime\.tar\.gz/,
+    topLevelExtraResources,
+    /from: build\/qiongqi-runtime\.tar\.gz[\s\S]*to: qiongqi-runtime\.tar\.gz/,
   );
   assert.match(
     builderConfig,
@@ -152,6 +165,7 @@ test("release workflow keeps Windows electron-builder packaging observable", () 
   assert.match(releaseWorkflowSource, /name: Prepare package resources/);
   assert.match(releaseWorkflowSource, /name: Verify package resources/);
   assert.match(releaseWorkflowSource, /name: Build Electron package/);
+  assert.match(releaseWorkflowSource, /name: Verify packaged Electron resources/);
   assert.match(releaseWorkflowSource, /DEBUG:\s+\$\{\{ runner\.os == 'Windows'/);
   assert.match(releaseWorkflowSource, /electron-builder,electron-builder:\*/);
   assert.match(releaseWorkflowSource, /timeout-minutes:\s+45/);
@@ -176,7 +190,7 @@ test("QiongQi package builds invoke TypeScript directly instead of pnpm shims", 
   assert.doesNotMatch(buildSource, /execSync/);
 });
 
-test("package resource verifier checks the macOS archive only when required", () => {
+test("package resource verifier checks the QiongQi archive when required", () => {
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /requiresQiongqiRuntimeArchive/);
   assert.match(verifierSource, /KWORKS_REQUIRE_QIONGQI_ARCHIVE/);
@@ -187,4 +201,49 @@ test("package resource verifier checks the macOS archive only when required", ()
   assert.match(verifierSource, /isSymbolicLink/);
   assert.match(verifierSource, /@esbuild|esbuild\/bin\/esbuild|@rollup/);
   assert.match(verifierSource, /maxBuffer/);
+});
+
+test("package resource verifier checks required QiongQi packages inside the archive", () => {
+  const verifierSource = readFileSync(verifierUrl, "utf8");
+  assert.match(verifierSource, /qiongqi\/node_modules\/\$\{packageName\}\/package\.json/);
+});
+
+test("package resource preparation creates the QiongQi archive on every packaged platform", () => {
+  const prepareArchiveFunction = functionBlock(
+    prepareResourcesSource,
+    "shouldPrepareQiongqiArchive",
+  );
+  assert.match(
+    prepareArchiveFunction,
+    /function shouldPrepareQiongqiArchive\(\) {\s*return envFlag\("KWORKS_PREPARE_QIONGQI_ARCHIVE"\) \?\? true;\s*}/,
+  );
+  assert.doesNotMatch(
+    prepareArchiveFunction,
+    /process\.platform === "darwin"/,
+  );
+});
+
+test("package resource verifier requires the QiongQi archive on every packaged platform", () => {
+  const verifierSource = readFileSync(verifierUrl, "utf8");
+  const requireArchiveFunction = functionBlock(
+    verifierSource,
+    "requiresQiongqiRuntimeArchive",
+  );
+  assert.match(
+    requireArchiveFunction,
+    /function requiresQiongqiRuntimeArchive\(\) {\s*return envFlag\("KWORKS_REQUIRE_QIONGQI_ARCHIVE"\) \?\? true;\s*}/,
+  );
+});
+
+test("release workflow verifies the final unpacked resources after electron-builder", () => {
+  const buildIndex = releaseWorkflowSource.indexOf("name: Build Electron package");
+  const verifyBuiltIndex = releaseWorkflowSource.indexOf("name: Verify packaged Electron resources");
+  const uploadIndex = releaseWorkflowSource.indexOf("name: Upload build artifacts");
+
+  assert.notEqual(buildIndex, -1);
+  assert.notEqual(verifyBuiltIndex, -1);
+  assert.notEqual(uploadIndex, -1);
+  assert.equal(buildIndex < verifyBuiltIndex, true);
+  assert.equal(verifyBuiltIndex < uploadIndex, true);
+  assert.match(releaseWorkflowSource, /pnpm run verify:built-package-resources/);
 });
