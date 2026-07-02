@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
-import { dispatchRequest } from '@qiongqi/http'
+import { Router, dispatchRequest, startNodeHttpServer } from '@qiongqi/http'
 import { kworksUserWorkspacePaths } from '@qiongqi/http'
 import { createApprovalRequest } from '@qiongqi/domain'
 import { makeAssistantReasoningItem, makeAssistantTextItem, makeErrorItem } from '@qiongqi/domain'
@@ -48,6 +48,34 @@ describe('HTTP server', () => {
     expect(response.status).toBe(200)
     const body = await readJson(response)
     expect(body).toEqual({ status: 'ok', service: 'qiongqi', mode: 'serve' })
+  })
+
+  it('allows desktop auth headers in CORS preflight requests', async () => {
+    const router = new Router()
+    router.add('POST', '/api/v1/auth/initialize', () => new Response(null, { status: 204 }))
+    const server = await startNodeHttpServer({
+      router,
+      host: '127.0.0.1',
+      port: 0,
+      corsOrigins: ['app://-']
+    })
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/v1/auth/initialize`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'app://-',
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type,x-kworks-desktop'
+        }
+      })
+
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-origin')).toBe('app://-')
+      expect(response.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('x-kworks-desktop')
+    } finally {
+      await server.close()
+    }
   })
 
   it('returns readiness with degraded storage diagnostics without auth', async () => {
