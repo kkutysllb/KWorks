@@ -115,13 +115,6 @@ for (const relativePath of PACKAGE_DIST_INDEXES) {
 
 mkdirSync(BUILD_DIR, { recursive: true });
 rmSync(RUNTIME_ARCHIVE, { force: true });
-
-if (!shouldPrepareQiongqiArchive()) {
-  rmSync(RUNTIME_STAGING_DIR, { recursive: true, force: true });
-  console.log("[OK] QiongQi source runtime verified; archive skipped for this platform");
-  process.exit(0);
-}
-
 rmSync(RUNTIME_STAGING_DIR, { recursive: true, force: true });
 mkdirSync(RUNTIME_STAGING_DIR, { recursive: true });
 
@@ -150,6 +143,11 @@ requirePath(
   join(RUNTIME_STAGING_QIONGQI_DIR, "node_modules"),
   "QiongQi deployed node_modules",
 );
+
+if (!shouldPrepareQiongqiArchive()) {
+  console.log(`[OK] Prepared QiongQi production runtime at ${RUNTIME_STAGING_QIONGQI_DIR}`);
+  process.exit(0);
+}
 
 signMacNativeBinaries(RUNTIME_STAGING_QIONGQI_DIR);
 

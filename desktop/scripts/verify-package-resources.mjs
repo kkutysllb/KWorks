@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ const QIONGQI_DIR = join(REPO_ROOT, "qiongqi");
 const SKILLS_DIR = join(REPO_ROOT, "skills");
 const QIONGQI_RUNTIME_ARCHIVE_RELATIVE = "build/qiongqi-runtime.tar.gz";
 const QIONGQI_RUNTIME_ARCHIVE = join(DESKTOP_DIR, "build", "qiongqi-runtime.tar.gz");
+const QIONGQI_RUNTIME_DIR = join(DESKTOP_DIR, "build", "qiongqi-runtime", "qiongqi");
 
 const checks = [];
 
@@ -63,14 +64,25 @@ function verifyQiongqiRuntimeArchive() {
     return;
   }
 
-  const listing = result.stdout ?? "";
+  verifyQiongqiRuntimeListing(
+    "resources/qiongqi-runtime.tar.gz",
+    result.stdout ?? "",
+  );
+}
+
+function verifyQiongqiRuntimeDirectory() {
+  const listing = collectEntries(QIONGQI_RUNTIME_DIR, "qiongqi").join("\n");
+  verifyQiongqiRuntimeListing("resources/qiongqi deployed runtime", listing);
+}
+
+function verifyQiongqiRuntimeListing(label, listing) {
   if (!listing.includes("qiongqi/dist/serve-entry.js")) {
     fail(
-      "resources/qiongqi-runtime.tar.gz deployed serve entry",
+      `${label} deployed serve entry`,
       "Missing: qiongqi/dist/serve-entry.js",
     );
   } else {
-    pass("resources/qiongqi-runtime.tar.gz deployed serve entry");
+    pass(`${label} deployed serve entry`);
   }
 
   const rejectedNativeToolPattern =
@@ -80,11 +92,27 @@ function verifyQiongqiRuntimeArchive() {
     .filter((entry) => rejectedNativeToolPattern.test(entry));
   if (rejected.length > 0) {
     fail(
-      "resources/qiongqi-runtime.tar.gz excludes dev native build tools",
+      `${label} excludes dev native build tools`,
       rejected.slice(0, 10).join("\n"),
     );
   } else {
-    pass("resources/qiongqi-runtime.tar.gz excludes dev native build tools");
+    pass(`${label} excludes dev native build tools`);
+  }
+}
+
+function collectEntries(rootDir, relativeRoot) {
+  const entries = [];
+  walkEntries(rootDir, relativeRoot, entries);
+  return entries;
+}
+
+function walkEntries(dir, relativeDir, entries) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const relativePath = `${relativeDir}/${entry.name}`;
+    entries.push(relativePath);
+    if (entry.isDirectory()) {
+      walkEntries(join(dir, entry.name), relativePath, entries);
+    }
   }
 }
 
@@ -101,6 +129,17 @@ requirePath(
   "resources/qiongqi built serve entry",
 );
 requirePath(join(QIONGQI_DIR, "node_modules"), "resources/qiongqi node_modules");
+if (requirePath(QIONGQI_RUNTIME_DIR, "resources/qiongqi deployed runtime")) {
+  requirePath(
+    join(QIONGQI_RUNTIME_DIR, "dist", "serve-entry.js"),
+    "resources/qiongqi deployed serve entry",
+  );
+  requirePath(
+    join(QIONGQI_RUNTIME_DIR, "node_modules"),
+    "resources/qiongqi deployed node_modules",
+  );
+  verifyQiongqiRuntimeDirectory();
+}
 if (requiresQiongqiRuntimeArchive()) {
   if (requirePath(QIONGQI_RUNTIME_ARCHIVE, "resources/qiongqi-runtime.tar.gz")) {
     verifyQiongqiRuntimeArchive();

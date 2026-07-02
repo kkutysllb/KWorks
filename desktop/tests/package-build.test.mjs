@@ -48,7 +48,7 @@ test("package resource preparation does not pass a Windows drive path to tar", (
   assert.match(prepareResourcesSource, /cwd:\s*DESKTOP_DIR/);
 });
 
-test("macOS QiongQi archive is generated from production deploy output", () => {
+test("QiongQi runtime is generated from production deploy output", () => {
   assert.match(prepareResourcesSource, /resolvePnpmCommand/);
   assert.match(prepareResourcesSource, /npm_execpath/);
   assert.match(prepareResourcesSource, /@qiongqi\/cli/);
@@ -56,6 +56,7 @@ test("macOS QiongQi archive is generated from production deploy output", () => {
   assert.match(prepareResourcesSource, /--legacy/);
   assert.match(prepareResourcesSource, /--prod/);
   assert.match(prepareResourcesSource, /RUNTIME_STAGING_QIONGQI_DIR/);
+  assert.doesNotMatch(prepareResourcesSource, /archive skipped for this platform/);
   assert.doesNotMatch(prepareResourcesSource, /"-C",\s*\n\s*REPO_ROOT,\s*\n\s*"qiongqi"/);
 });
 
@@ -78,7 +79,7 @@ test("packaged app ships small tray icons separately from the app icon", () => {
   assert.match(builderConfig, /32x32\.png/);
 });
 
-test("macOS packaged app ships the vendored qiongqi runtime as a single archive", () => {
+test("packaged app ships the production QiongQi runtime per platform", () => {
   const builderConfig = readFileSync(
     new URL("../electron-builder.yml", import.meta.url),
     "utf8",
@@ -89,11 +90,11 @@ test("macOS packaged app ships the vendored qiongqi runtime as a single archive"
   );
   assert.match(
     builderConfig,
-    /win:[\s\S]*extraResources:[\s\S]*from: \.\.\/qiongqi[\s\S]*to: qiongqi/,
+    /win:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\/qiongqi[\s\S]*to: qiongqi/,
   );
   assert.match(
     builderConfig,
-    /linux:[\s\S]*extraResources:[\s\S]*from: \.\.\/qiongqi[\s\S]*to: qiongqi/,
+    /linux:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\/qiongqi[\s\S]*to: qiongqi/,
   );
 });
 
@@ -113,6 +114,7 @@ test("package resource verifier checks the macOS archive only when required", ()
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /requiresQiongqiRuntimeArchive/);
   assert.match(verifierSource, /KWORKS_REQUIRE_QIONGQI_ARCHIVE/);
+  assert.match(verifierSource, /resources\/qiongqi deployed serve entry/);
   assert.match(verifierSource, /qiongqi\/dist\/serve-entry\.js/);
   assert.match(verifierSource, /@esbuild|esbuild\/bin\/esbuild|@rollup/);
   assert.match(verifierSource, /maxBuffer/);

@@ -49,13 +49,8 @@ dmg:
 win:
   icon: build/icon.ico
   extraResources:
-    - from: ../qiongqi
+    - from: build/qiongqi-runtime/qiongqi
       to: qiongqi
-      filter:
-        - '**/*'
-        - '!node_modules/.cache/**'
-        - '!**/.turbo/**'
-        - '!**/.DS_Store'
   # 不签名：未配置 CSC_LINK/certificateFile 时 electron-builder 会自动跳过签名。
   # 用户首次运行时 SmartScreen 会提示「Windows 已保护你的电脑」，
   # 点「更多信息 → 仍要运行」即可（与未签名的开发版应用体验一致）。
@@ -71,13 +66,8 @@ linux:
   icon: build/icon.png
   category: Office
   extraResources:
-    - from: ../qiongqi
+    - from: build/qiongqi-runtime/qiongqi
       to: qiongqi
-      filter:
-        - '**/*'
-        - '!node_modules/.cache/**'
-        - '!**/.turbo/**'
-        - '!**/.DS_Store'
   # AppImage：单一文件，双击即用，覆盖 Ubuntu/Debian/Fedora/Arch 等绝大多数发行版
   target:
     - AppImage
