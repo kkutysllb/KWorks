@@ -110,6 +110,16 @@ test("release workflow prepares packaged resources before electron-builder", () 
   assert.equal(verifyIndex < builderIndex, true);
 });
 
+test("release workflow does not publish a Windows build", () => {
+  assert.doesNotMatch(releaseWorkflowSource, /os: windows-2022/);
+  assert.doesNotMatch(releaseWorkflowSource, /platform: win/);
+  assert.doesNotMatch(releaseWorkflowSource, /artifact_suffix: win/);
+  assert.match(releaseWorkflowSource, /os: macos-14/);
+  assert.match(releaseWorkflowSource, /platform: mac/);
+  assert.match(releaseWorkflowSource, /os: ubuntu-22\.04/);
+  assert.match(releaseWorkflowSource, /platform: linux/);
+});
+
 test("package resource verifier checks the macOS archive only when required", () => {
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /requiresQiongqiRuntimeArchive/);

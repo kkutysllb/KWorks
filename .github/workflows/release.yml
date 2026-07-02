@@ -1,13 +1,13 @@
-# KWorks Desktop — Release Pipeline (macOS / Windows / Linux)
+# KWorks Desktop — Release Pipeline (macOS / Linux)
 #
 # 触发方式：
-#   1. 推送 tag `v*`（如 v0.1.0）→ 三平台并行构建 → 发布到同一个 GitHub Release
+#   1. 推送 tag `v*`（如 v0.1.0）→ macOS/Linux 并行构建 → 发布到同一个 GitHub Release
 #   2. Actions 页面手动运行（workflow_dispatch）→ 构建产物上传到 Artifacts（不发布）
 #
 # 工作原理：
-#   matrix 让 3 个平台在各自的 runner 上并行运行（macos-14/windows-2022/ubuntu-22.04）。
+#   matrix 让 2 个平台在各自的 runner 上并行运行（macos-14/ubuntu-22.04）。
 #   每个平台独立编译原生模块（node-pty + better-sqlite3），产出各自平台的安装包。
-#   三个平台的产物最终汇聚到同一个 GitHub Release（通过 tag 关联）。
+#   两个平台的产物最终汇聚到同一个 GitHub Release（通过 tag 关联）。
 #
 # macOS 必需 Secrets（用 desktop/scripts/export-mac-secrets.mjs 生成）：
 #   MAC_CERTIFICATE                  — Developer ID .p12 的 base64
@@ -16,7 +16,7 @@
 #   APPLE_APP_SPECIFIC_PASSWORD      — appleid.apple.com 生成的应用专用密码
 #   APPLE_TEAM_ID                    — 开发者团队 ID（如 DHV5D72JNF）
 #
-# Windows / Linux 无需任何证书或额外配置。
+# Linux 无需任何证书或额外配置。
 # GH_TOKEN 用 Actions 自动注入的 GITHUB_TOKEN。
 
 name: Release
@@ -46,11 +46,6 @@ jobs:
           - os: macos-14
             platform: mac
             artifact_suffix: mac
-          # Windows: windows-2022 预装 VS 2022，node-gyp 完全支持
-          # ⚠️ 不要用 windows-latest（当前指向 VS 18，node-gyp 11.x 不认识）
-          - os: windows-2022
-            platform: win
-            artifact_suffix: win
           # Linux: ubuntu-22.04 兼容性最好（AppImage 在低版本 glibc 上运行）
           - os: ubuntu-22.04
             platform: linux
@@ -121,11 +116,9 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # 原生模块编译准备（必须在 qiongqi/desktop 的 pnpm install 之前完成）
       # better-sqlite3 + node-pty 都是 C++ 原生模块，install 时触发 node-gyp rebuild。
-      # 需要两个条件：(1) Python distutils 可用（node-gyp 9.x 依赖，Py3.12+ 已移除）
-      #              (2) Windows 上 MSVC C++ 工具链已激活（node-gyp 找不到 VS）
+      # Python distutils 可用性在 Python 3.12+ 上需要显式兜底（node-gyp 9.x 依赖）。
       # ─────────────────────────────────────────────────────────────
-      - name: 🐍 Ensure Python distutils (macOS/Linux)
-        if: runner.os != 'Windows'
+      - name: 🐍 Ensure Python distutils
         run: |
           if python3 -c "import distutils.version" 2>/dev/null; then
             echo "✓ distutils 可用"
@@ -133,23 +126,6 @@ jobs:
             echo "⚠️ distutils 缺失（Python 3.12+），安装 setuptools..."
             pip3 install --user setuptools || pip3 install --break-system-packages setuptools
           fi
-
-      - name: 🐍 Ensure Python distutils (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (python -c "import distutils.version" 2>$null)) {
-            Write-Host "⚠️ distutils 缺失，安装 setuptools..."
-            python -m pip install --user setuptools
-          } else {
-            Write-Host "✓ distutils 可用"
-          }
-
-      # ⚠️ 不要使用 ilammy/msvc-dev-cmd！
-      # 该 action 会设置 VSINSTALLDIR 指向 VS 18 (2026 Preview)，
-      # node-gyp 11.x 不认识 VS 18，报 "unknown version undefined"。
-      # windows-2022 自带 VS 2022 Enterprise + C++ workload，
-      # node-gyp 通过 vswhere.exe 自动发现，无需任何额外步骤。
 
       # ─────────────────────────────────────────────────────────────
       # 构建 qiongqi（含 better-sqlite3 C++ 原生模块，每平台各自编译）
@@ -221,7 +197,7 @@ jobs:
           # 提升到 4GB 避免 macOS 签名阶段 "JavaScript heap out of memory"
           NODE_OPTIONS: --max-old-space-size=4096
           # macOS: secrets 配置了才自动发现证书签名，否则跳过签名
-          # Windows/Linux: 永远 false
+          # Linux: 永远 false
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
         run: |
           # tag 触发 → 发布到 Release；手动触发 → 仅构建不上传
@@ -249,7 +225,6 @@ jobs:
           path: |
             desktop/release/*.dmg
             desktop/release/*.zip
-            desktop/release/*.exe
             desktop/release/*.blockmap
             desktop/release/*.AppImage
             desktop/release/latest*.yml
