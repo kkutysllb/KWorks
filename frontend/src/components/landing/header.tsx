@@ -1,3 +1,5 @@
+import { GitHubLogoIcon } from "@radix-ui/react-icons";
+
 import { cn } from "@/lib/utils";
 
 export type HeaderProps = {
@@ -22,6 +24,17 @@ export async function Header({ className, homeURL }: HeaderProps) {
           </h1>
         </a>
       </div>
+      <nav className="mr-8 ml-auto flex items-center gap-6 text-sm font-medium">
+        <a
+          aria-label="GitHub"
+          className="desktop-no-drag text-secondary-foreground hover:text-foreground transition-colors"
+          href="https://github.com/kkutysllb/kk_KWorks"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <GitHubLogoIcon className="size-5" />
+        </a>
+      </nav>
       <hr className="from-border/0 via-border/70 to-border/0 absolute top-16 right-0 left-0 z-10 m-0 h-px w-full border-none bg-linear-to-r" />
     </header>
   );

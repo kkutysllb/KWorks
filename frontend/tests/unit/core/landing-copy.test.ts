@@ -10,13 +10,19 @@ function read(path: string): string {
 }
 
 describe("landing page copy", () => {
-  test("uses KWorks branding without header Docs or GitHub links", () => {
+  test("uses KWorks branding with GitHub but without header Docs", () => {
     const header = read("src/components/landing/header.tsx");
+    const desktopBuild = read("scripts/desktop-build.mjs");
 
     expect(header).toContain("KWorks");
+    expect(header).toContain("GitHubLogoIcon");
+    expect(header).toContain("github.com/kkutysllb/kk_KWorks");
     expect(header).not.toContain("Docs");
-    expect(header).not.toContain("GitHubLogoIcon");
-    expect(header).not.toContain("github.com");
+    expect(header).not.toContain(">KK<");
+    expect(desktopBuild).toContain("GitHubLogoIcon");
+    expect(desktopBuild).toContain("github.com/kkutysllb/kk_KWorks");
+    expect(desktopBuild).not.toContain("Docs");
+    expect(desktopBuild).not.toContain(">KK<");
   });
 
   test("positions QiongQi as the desktop execution engine", () => {

@@ -17,7 +17,9 @@ import {
   GitCompareIcon,
   GitCommitHorizontalIcon,
   PackageOpenIcon,
+  PanelLeftCloseIcon,
   PanelLeftOpenIcon,
+  PanelRightCloseIcon,
   PanelRightOpenIcon,
   PlusIcon,
   XIcon,
@@ -615,17 +617,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
               <MonitorCogIcon className="h-4 w-4" />
             </Button>
             <Button
-              aria-label="打开项目终端"
-              className="size-8 shrink-0"
-              size="icon-sm"
-              title="打开项目终端"
-              type="button"
-              variant="ghost"
-              onClick={() => void handleOpenTerminal()}
-            >
-              <TerminalIcon className="h-4 w-4" />
-            </Button>
-            <Button
               aria-label="新建项目终端"
               className="size-8 shrink-0"
               size="icon-sm"
@@ -635,30 +626,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
               onClick={() => void handleOpenTerminal()}
             >
               <PlusIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              aria-label="切换文件树"
-              aria-pressed={showFileExplorer}
-              className="size-8 shrink-0"
-              size="icon-sm"
-              title="切换文件树"
-              type="button"
-              variant="ghost"
-              onClick={handleToggleFileExplorer}
-            >
-              <PanelLeftOpenIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              aria-label="切换代码面板"
-              aria-pressed={showWorkbenchPane}
-              className="size-8 shrink-0"
-              size="icon-sm"
-              title="切换代码面板"
-              type="button"
-              variant="ghost"
-              onClick={handleToggleWorkbenchPane}
-            >
-              <PanelRightOpenIcon className="h-4 w-4" />
             </Button>
           </div>
           <div className="mt-0 flex min-h-0 flex-1 overflow-hidden">
@@ -684,15 +651,25 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 onCommit={() => setCommitDialogOpen(true)}
                 onPush={() => void handlePush()}
                 path={project.path}
+                rightRailVisible={!showWorkbenchPane}
                 visible={showEnvironmentCard}
               />
-              {showFileExplorer && (
+              {showFileExplorer ? (
                 <>
                   <aside
                     className="overflow-hidden border-r"
                     style={{ width: leftPanelWidth }}
                   >
                     <FileExplorer
+                      headerAction={
+                        <PanelToggleButton
+                          ariaLabel="折叠文件浏览器"
+                          title="折叠文件浏览器"
+                          onClick={handleToggleFileExplorer}
+                        >
+                          <PanelLeftCloseIcon className="h-4 w-4" />
+                        </PanelToggleButton>
+                      }
                       projectId={projectId}
                       selectedFile={selectedFile}
                       onSelectFile={handleSelectExplorerFile}
@@ -703,8 +680,17 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                     onPointerDown={(event) => startPanelResize("left", event)}
                   />
                 </>
+              ) : (
+                <CollapsedSidePanelRail
+                  ariaLabel="展开文件浏览器"
+                  side="left"
+                  title="展开文件浏览器"
+                  onClick={handleToggleFileExplorer}
+                >
+                  <PanelLeftOpenIcon className="h-4 w-4" />
+                </CollapsedSidePanelRail>
               )}
-              {/* Middle: QiongQi Engine Agent Inspector */}
+              {/* Middle: QiongQi engine */}
               <section className="min-w-0 flex-1">
                 <div
                   className={cn(
@@ -725,7 +711,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 </div>
               </section>
               {/* Right: Code / Diff / Results / Review */}
-              {showWorkbenchPane && (
+              {showWorkbenchPane ? (
                 <>
                   <PanelResizeHandle
                     ariaLabel="调整代码面板宽度"
@@ -737,26 +723,34 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                     style={{ width: rightPanelWidth }}
                   >
                     <div className="relative flex h-full min-h-0 flex-col">
-                      {workbenchView === "code" && (
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                      <div className="bg-background/95 flex h-10 shrink-0 items-center justify-between gap-2 border-b px-3">
+                        <span className="text-muted-foreground truncate text-xs font-semibold tracking-wider uppercase">
+                          {workbenchPanelTitle(workbenchView)}
+                        </span>
+                        <PanelToggleButton
+                          ariaLabel="折叠代码面板"
+                          title="折叠代码面板"
+                          onClick={handleToggleWorkbenchPane}
+                        >
+                          <PanelRightCloseIcon className="h-4 w-4" />
+                        </PanelToggleButton>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        {workbenchView === "code" && (
                           <CodeViewer
                             projectId={projectId}
                             filePath={selectedFile}
                           />
-                        </div>
-                      )}
-                      {workbenchView === "diff" && showWorkbenchPane && (
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                        )}
+                        {workbenchView === "diff" && showWorkbenchPane && (
                           <CodingDiffPanel
                             projectId={projectId}
                             selectedFilePath={selectedFile}
                             focusLine={focusedLine}
                           />
-                        </div>
-                      )}
-                      {workbenchView === "task-changes" &&
-                        showWorkbenchPane && (
-                          <div className="min-h-0 flex-1 overflow-hidden">
+                        )}
+                        {workbenchView === "task-changes" &&
+                          showWorkbenchPane && (
                             <CodingTaskChangesPanel
                               threadId={codingThreadId}
                               selectedFilePath={selectedFile}
@@ -764,26 +758,31 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                               onSelectTask={setSelectedTaskId}
                               onFocusFile={focusWorkbenchFile}
                             />
-                          </div>
-                        )}
-                      {workbenchView === "results" && showWorkbenchPane && (
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                          )}
+                        {workbenchView === "results" && showWorkbenchPane && (
                           <CodingResultsPanel threadId={resultsThreadId} />
-                        </div>
-                      )}
-                      {workbenchView === "review" && showWorkbenchPane && (
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                        )}
+                        {workbenchView === "review" && showWorkbenchPane && (
                           <ReviewPanel
                             projectId={projectId}
                             projectRoot={project.path}
                             threadId={codingThreadId}
                             onFocusFile={focusWorkbenchFile}
                           />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </aside>
                 </>
+              ) : (
+                <CollapsedSidePanelRail
+                  ariaLabel="展开代码面板"
+                  side="right"
+                  title="展开代码面板"
+                  onClick={handleToggleWorkbenchPane}
+                >
+                  <PanelRightOpenIcon className="h-4 w-4" />
+                </CollapsedSidePanelRail>
               )}
             </div>
           </div>
@@ -904,6 +903,77 @@ function WorkbenchToolbarButton({
       {label}
     </button>
   );
+}
+
+function PanelToggleButton({
+  ariaLabel,
+  children,
+  onClick,
+  title,
+}: {
+  ariaLabel: string;
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <Button
+      aria-label={ariaLabel}
+      className="size-7 shrink-0"
+      size="icon-sm"
+      title={title}
+      type="button"
+      variant="ghost"
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function CollapsedSidePanelRail({
+  ariaLabel,
+  children,
+  onClick,
+  side,
+  title,
+}: {
+  ariaLabel: string;
+  children: React.ReactNode;
+  onClick: () => void;
+  side: "left" | "right";
+  title: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-background/95 flex w-9 shrink-0 items-start justify-center py-2",
+        side === "left" ? "border-r" : "border-l",
+      )}
+    >
+      <PanelToggleButton ariaLabel={ariaLabel} title={title} onClick={onClick}>
+        {children}
+      </PanelToggleButton>
+    </div>
+  );
+}
+
+function workbenchPanelTitle(
+  view: "code" | "task-changes" | "diff" | "results" | "review",
+): string {
+  switch (view) {
+    case "task-changes":
+      return "任务变更";
+    case "diff":
+      return "项目 Diff";
+    case "results":
+      return "结果";
+    case "review":
+      return "Code Review";
+    case "code":
+    default:
+      return "代码面板";
+  }
 }
 
 function EmbeddedTerminalTabsPanel({
@@ -1213,7 +1283,7 @@ function AgentInspector({
       <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold tracking-wide uppercase">
-            QiongQi Engine Agent Inspector（穷奇引擎智能体检查器）
+            穷奇引擎 / QiongQi Engine
           </p>
         </div>
       </div>
@@ -1305,6 +1375,7 @@ function EnvironmentInfoFloatingCard({
   path,
   pushDisabled,
   pushPending,
+  rightRailVisible,
   sourceLabel,
   sourceRemote,
   behind,
@@ -1330,6 +1401,7 @@ function EnvironmentInfoFloatingCard({
   path: string;
   pushDisabled: boolean;
   pushPending: boolean;
+  rightRailVisible: boolean;
   sourceLabel: string;
   sourceRemote: string | null;
   behind: number;
@@ -1343,7 +1415,8 @@ function EnvironmentInfoFloatingCard({
   return (
     <div
       className={cn(
-        "bg-background/96 absolute top-3 right-3 z-20 w-[320px] max-w-[calc(100%-1.5rem)] rounded-2xl border p-3 shadow-xl backdrop-blur transition-all",
+        "bg-background/96 absolute top-3 z-20 w-[320px] max-w-[calc(100%-1.5rem)] rounded-2xl border p-3 shadow-xl backdrop-blur transition-all",
+        rightRailVisible ? "right-12" : "right-3",
         visible ? "opacity-100" : "pointer-events-none opacity-0",
       )}
     >

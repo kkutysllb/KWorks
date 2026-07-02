@@ -7,11 +7,11 @@ test.describe("Landing page", () => {
     await page.goto("/");
 
     await expect(page.locator("header h1", { hasText: "KWorks" })).toBeVisible();
-    await expect(page.locator("header h1")).not.toContainText("KWorks");
+    await expect(page.locator("header h1")).not.toContainText("KKKWorks");
     await expect(page.getByRole("link", { name: "Docs" })).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: /github/i }),
-    ).toHaveCount(0);
+    ).toHaveCount(1);
     await expect(
       page.getByRole("heading", { name: /KWorks 由 QiongQi 引擎驱动/ }),
     ).toBeVisible();

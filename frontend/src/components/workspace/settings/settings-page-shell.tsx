@@ -10,9 +10,7 @@ import {
   ConfigSettingsPage,
   type ConfigWriteStatus,
 } from "@/components/workspace/settings/config-settings-page";
-import { ImportSettingsPage } from "@/components/workspace/settings/import-settings-page";
-import { ImportWizardDialog } from "@/components/workspace/settings/import-wizard-dialog";
-import { isDesktop } from "@/core/config";
+import { WorkModeSettingsPage } from "@/components/workspace/settings/work-mode-settings-page";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +33,6 @@ export function SettingsPageShell({
 }: SettingsPageShellProps) {
   const { t } = useI18n();
   const { activeSection, setActiveSection, sections } = useSettingsLayout();
-  const [wizardOpen, setWizardOpen] = useState(false);
   const [configWriteStatus, setConfigWriteStatus] =
     useState<ConfigWriteStatus>({ kind: "idle" });
   const isPage = mode === "page";
@@ -77,7 +74,6 @@ export function SettingsPageShell({
           <SettingsSectionContent
             activeSection={activeSection}
             onWriteStatusChange={setConfigWriteStatus}
-            onOpenImportWizard={() => setWizardOpen(true)}
             className="flex h-full min-h-0 min-w-0 flex-col rounded-xl border"
           />
         </div>
@@ -126,14 +122,9 @@ export function SettingsPageShell({
           <SettingsSectionContent
             activeSection={activeSection}
             onWriteStatusChange={setConfigWriteStatus}
-            onOpenImportWizard={() => setWizardOpen(true)}
             className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border"
           />
         </div>
-      )}
-
-      {isDesktop() && (
-        <ImportWizardDialog open={wizardOpen} onOpenChange={setWizardOpen} />
       )}
     </div>
   );
@@ -142,12 +133,10 @@ export function SettingsPageShell({
 function SettingsSectionContent({
   activeSection,
   className,
-  onOpenImportWizard,
   onWriteStatusChange,
 }: {
   activeSection: SettingsSection;
   className?: string;
-  onOpenImportWizard: () => void;
   onWriteStatusChange: (status: ConfigWriteStatus) => void;
 }) {
   return (
@@ -155,15 +144,13 @@ function SettingsSectionContent({
       <div className="flex min-h-full min-w-0 flex-1 flex-col p-6">
         {activeSection === "account" && <AccountSettingsPage />}
         {activeSection === "appearance" && <AppearanceSettingsPage />}
+        {activeSection === "work-modes" && <WorkModeSettingsPage />}
         {isQiongqiSection(activeSection) && (
           <ConfigSettingsPage
             initialPage={QIONGQI_SECTION_PAGE[activeSection]}
             showNav={false}
             onWriteStatusChange={onWriteStatusChange}
           />
-        )}
-        {activeSection === "import" && (
-          <ImportSettingsPage onOpenWizard={onOpenImportWizard} />
         )}
       </div>
     </ScrollArea>

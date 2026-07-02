@@ -83,10 +83,8 @@ const CONFLICT_FILES = [];
 // ── Other source files to patch for static export compatibility ──────────
 const SOURCE_PATCHES = [
   {
-    // Header contains a docs link to `/${lang}/docs` which is a [lang] dynamic
-    // route — moved aside during desktop build (no generateStaticParams).
-    // Replace with an external link to the GitHub repo so the landing page
-    // still shows a "Docs" entry without hitting a non-existent route.
+    // Keep the desktop landing header static-export safe: no docs route, only
+    // the external GitHub link.
     file: join(ROOT, "src", "components", "landing", "header.tsx"),
     content: `import { GitHubLogoIcon } from "@radix-ui/react-icons";
 
@@ -101,36 +99,26 @@ export async function Header({ className, homeURL }: HeaderProps) {
   return (
     <header
       className={cn(
-        "container-md fixed top-0 right-0 left-0 z-20 mx-auto flex h-16 items-center justify-between backdrop-blur-xs",
+        "desktop-titlebar-drag container-md fixed top-0 right-0 left-0 z-20 mx-auto flex h-16 items-center justify-between backdrop-blur-xs",
         className,
       )}
     >
       <div className="flex items-center gap-6">
         <a href={homeURL ?? "/"}>
           <h1 className="font-serif text-xl">
-            <span className="bg-gradient-to-r from-pink-500 via-amber-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent font-extrabold tracking-wider">
-              KK
-            </span>
             <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
               KWorks
             </span>
           </h1>
         </a>
       </div>
-      <nav className="mr-8 ml-auto flex items-center gap-8 text-sm font-medium">
+      <nav className="mr-8 ml-auto flex items-center gap-6 text-sm font-medium">
         <a
+          aria-label="GitHub"
+          className="desktop-no-drag text-secondary-foreground hover:text-foreground transition-colors"
           href="https://github.com/kkutysllb/kk_KWorks"
-          target="_blank"
           rel="noopener noreferrer"
-          className="text-secondary-foreground hover:text-foreground transition-colors"
-        >
-          Docs
-        </a>
-        <a
-          href="https://github.com/kkutysllb/kk_KWorks"
           target="_blank"
-          rel="noopener noreferrer"
-          className="text-secondary-foreground hover:text-foreground transition-colors"
         >
           <GitHubLogoIcon className="size-5" />
         </a>

@@ -5,13 +5,13 @@ import {
   BrainIcon,
   CpuIcon,
   DatabaseIcon,
-  DownloadIcon,
   GlobeIcon,
   NetworkIcon,
   PaletteIcon,
   RadioTowerIcon,
   SparklesIcon,
   UserIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -25,7 +25,6 @@ import {
 } from "react";
 
 import { type ConfigPage } from "@/components/workspace/settings/config-settings-page";
-import { isDesktop } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 
 export type SettingsSection =
@@ -38,8 +37,8 @@ export type SettingsSection =
   | "qiongqi-mcp"
   | "qiongqi-web"
   | "qiongqi-skills"
-  | "qiongqi-subagents"
-  | "import";
+  | "work-modes"
+  | "qiongqi-subagents";
 
 export type QiongqiSettingsSection = Extract<
   SettingsSection,
@@ -70,8 +69,8 @@ const KNOWN_SECTIONS: SettingsSection[] = [
   "qiongqi-mcp",
   "qiongqi-web",
   "qiongqi-skills",
+  "work-modes",
   "qiongqi-subagents",
-  "import",
 ];
 
 export const QIONGQI_SECTION_PAGE: Record<QiongqiSettingsSection, ConfigPage> =
@@ -135,15 +134,15 @@ export const SETTINGS_SECTION_COLORS: Record<
     bar: "from-cyan-400 to-blue-500",
     bg: "bg-cyan-500/10",
   },
+  "work-modes": {
+    iconActive: "text-amber-400",
+    bar: "from-amber-400 to-orange-500",
+    bg: "bg-amber-500/10",
+  },
   "qiongqi-subagents": {
     iconActive: "text-cyan-400",
     bar: "from-cyan-400 to-blue-500",
     bg: "bg-cyan-500/10",
-  },
-  import: {
-    iconActive: "text-emerald-400",
-    bar: "from-emerald-400 to-teal-500",
-    bg: "bg-emerald-500/10",
   },
 };
 
@@ -185,20 +184,13 @@ function useSettingsSections(): SettingsSectionItem[] {
       { id: "qiongqi-mcp", label: "MCP", icon: NetworkIcon },
       { id: "qiongqi-web", label: "Web 能力", icon: GlobeIcon },
       { id: "qiongqi-skills", label: "技能", icon: SparklesIcon },
+      { id: "work-modes", label: "工作模式", icon: WorkflowIcon },
       { id: "qiongqi-subagents", label: "智能体协作", icon: BoxIcon },
     ];
-    if (isDesktop()) {
-      base.push({
-        id: "import",
-        label: t.settings.sections.import,
-        icon: DownloadIcon,
-      });
-    }
     return base;
   }, [
     t.settings.sections.account,
     t.settings.sections.appearance,
-    t.settings.sections.import,
   ]);
 }
 

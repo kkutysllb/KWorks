@@ -29,7 +29,9 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("left-panel-toggle");
     expect(workbench).not.toContain("left-panel-toggle-expanded");
     expect(workbench).not.toContain("right-panel-toggle-expanded");
-    expect(workbench).toContain("Agent Inspector");
+    expect(workbench).toContain("穷奇引擎 / QiongQi Engine");
+    expect(workbench).not.toContain("QiongQi Engine Agent Inspector");
+    expect(workbench).not.toContain("穷奇引擎智能体检查器");
     expect(workbench).toContain("showFileExplorer");
     expect(workbench).toContain("showWorkbenchPane");
     expect(workbench).toContain("openWorkbenchPane");
@@ -60,7 +62,7 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("ResizablePanelGroup");
     expect(workbench).not.toContain("ResizablePanel");
     expect(workbench).not.toContain("ResizableHandle");
-    expect(workbench).toContain("{showFileExplorer && (");
+    expect(workbench).toContain("{showFileExplorer ? (");
     expect(workbench).toContain("style={{ width: leftPanelWidth }}");
     expect(workbench).toContain("style={{ width: rightPanelWidth }}");
     expect(workbench).toContain("xl:pr-[340px] 2xl:pr-[360px]");
@@ -179,11 +181,20 @@ describe("coding workbench layout", () => {
       "setEnvironmentCardCollapsed((value) => !value)",
     );
     expect(workbench).toContain("MonitorCogIcon");
-    expect(workbench).toContain('aria-label="打开项目终端"');
     expect(workbench).toContain('aria-label="新建项目终端"');
+    expect(workbench).not.toContain('aria-label="打开项目终端"');
     expect(workbench).toContain("PlusIcon");
-    expect(workbench).toContain('aria-label="切换文件树"');
-    expect(workbench).toContain('aria-label="切换代码面板"');
+    expect(workbench).not.toContain('aria-label="切换文件树"');
+    expect(workbench).not.toContain('aria-label="切换代码面板"');
+    expect(workbench).toContain("PanelToggleButton");
+    expect(workbench).toContain("CollapsedSidePanelRail");
+    expect(workbench).toContain('ariaLabel="折叠文件浏览器"');
+    expect(workbench).toContain('ariaLabel="展开文件浏览器"');
+    expect(workbench).toContain('ariaLabel="折叠代码面板"');
+    expect(workbench).toContain('ariaLabel="展开代码面板"');
+    expect(workbench).toContain("PanelLeftCloseIcon");
+    expect(workbench).toContain("PanelRightCloseIcon");
+    expect(workbench).toContain("rightRailVisible");
     expect(workbench).toContain("openProjectTerminal(project.path)");
     expect(workbench).toContain("startEmbeddedTerminal(project.path)");
     expect(workbench).toContain("EmbeddedTerminalTabsPanel");

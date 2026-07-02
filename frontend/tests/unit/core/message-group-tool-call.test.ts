@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { zhCN } from "@/core/i18n";
+import { explainToolCall } from "@/core/tools/utils";
 import { describeToolCallDisplay } from "@/core/tools/tool-call-display";
 
 describe("message group tool call display", () => {
@@ -49,6 +50,22 @@ describe("message group tool call display", () => {
         value: "frontend/src/app/page.tsx",
       },
     });
+  });
+
+  test("labels both current and legacy todo write tools as todo updates", () => {
+    expect(
+      explainToolCall(
+        { name: "todo_write", args: { todos: [] } } as never,
+        zhCN,
+      ),
+    ).toBe(zhCN.toolCalls.writeTodos);
+
+    expect(
+      explainToolCall(
+        { name: "write_todos", args: { todos: [] } } as never,
+        zhCN,
+      ),
+    ).toBe(zhCN.toolCalls.writeTodos);
   });
 
   test("shows search patterns and folders for qiongqi search tools", () => {

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, test } from "vitest";
@@ -35,6 +35,61 @@ describe("settings config layout", () => {
     expect(source).not.toContain(
       'isPage ? "px-8 pb-8 md:grid-cols-[260px_minmax(0,1fr)]"',
     );
+  });
+
+  test("replaces the legacy import menu with work mode management", () => {
+    const layout = read(
+      "src/components/workspace/settings/settings-layout-state.tsx",
+    );
+    const shell = read(
+      "src/components/workspace/settings/settings-page-shell.tsx",
+    );
+    const localeTypes = read("src/core/i18n/locales/types.ts");
+    const zhLocale = read("src/core/i18n/locales/zh-CN.ts");
+    const enLocale = read("src/core/i18n/locales/en-US.ts");
+
+    expect(layout).toContain('| "work-modes"');
+    expect(layout).toContain('"work-modes"');
+    expect(layout).toContain('label: "工作模式"');
+    expect(layout).toContain("WorkflowIcon");
+    expect(layout).not.toContain('id: "import"');
+    expect(layout).not.toContain('| "import"');
+    expect(layout).not.toContain("DownloadIcon");
+    expect(layout).not.toContain("t.settings.sections.import");
+
+    expect(shell).toContain("WorkModeSettingsPage");
+    expect(shell).toContain('activeSection === "work-modes"');
+    expect(shell).not.toContain("ImportSettingsPage");
+    expect(shell).not.toContain("ImportWizardDialog");
+    expect(shell).not.toContain("onOpenImportWizard");
+
+    expect(localeTypes).not.toContain("settings: {\n    import:");
+    expect(zhLocale).not.toContain('import: "数据导入"');
+    expect(enLocale).not.toContain('import: "Import Data"');
+    expect(
+      existsSync(
+        resolve(
+          repoRoot,
+          "src/components/workspace/settings/import-settings-page.tsx",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        resolve(
+          repoRoot,
+          "src/components/workspace/settings/import-wizard-dialog.tsx",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        resolve(
+          repoRoot,
+          "src/components/workspace/migration-prompt-listener.tsx",
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("keeps config panels shrinkable inside the settings dialog", () => {

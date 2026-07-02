@@ -47,6 +47,7 @@ import {
   MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { TodoList } from "@/components/workspace/todo-list";
 import {
   useCodingSessionChanges,
   useDiscardProjectFileChange,
@@ -56,7 +57,10 @@ import type { QiongqiChange } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
+import type { Todo } from "@/core/todos";
 import { useThreadStream } from "@/core/threads/hooks";
+import type { Message } from "@/core/threads/qiongqi-types";
+import { isTodoWriteToolName } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
 interface AgentPanelProps {
@@ -153,6 +157,7 @@ function AgentPanelInner({
   const [lastToolLabel, setLastToolLabel] = useState<string | null>(null);
   const { textInput } = usePromptInputController();
   const [draggingCodingPath, setDraggingCodingPath] = useState(false);
+  const [todoPanelOccupiesSpace, setTodoPanelOccupiesSpace] = useState(false);
   const activeThreadIdForQueries = threadId;
 
   const syncCodingProjectContext = useCallback(() => {
@@ -426,12 +431,20 @@ function AgentPanelInner({
   );
 
   const hasCodingChanges = changes.length > 0;
+  const visibleTodos = useMemo(
+    () =>
+      todosFromThreadStateOrToolCalls(thread.values.todos, thread.messages),
+    [thread.values.todos, thread.messages],
+  );
   const messageListPaddingBottom = showFollowups
     ? MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
       MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM +
       MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM
     : MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
       (hasCodingChanges ? MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM : 0);
+  const todoPanelContentOffsetClass = todoPanelOccupiesSpace
+    ? "xl:pr-[22rem]"
+    : "";
 
   const status = thread.error
     ? "error"
@@ -472,8 +485,19 @@ function AgentPanelInner({
 
           {/* Messages */}
           <main className="relative flex min-h-0 grow flex-col">
+            <div className="pointer-events-none absolute top-3 right-3 left-3 z-40 flex justify-end">
+              <TodoList
+                className="pointer-events-auto"
+                todos={visibleTodos}
+                onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
+                variant="floating"
+              />
+            </div>
             <MessageList
-              className="size-full"
+              className={cn(
+                "size-full transition-[padding] duration-200 ease-out",
+                todoPanelContentOffsetClass,
+              )}
               threadId={uiThreadId}
               thread={thread}
               paddingBottom={messageListPaddingBottom}
@@ -951,4 +975,50 @@ function labelOfTool(name: string) {
 
 function isFileMutationTool(name: string) {
   return name === "write_file" || name === "str_replace" || name === "bash";
+}
+
+function todosFromThreadStateOrToolCalls(
+  threadTodos: unknown,
+  messages: readonly Message[],
+): Todo[] {
+  const currentTodos = normalizeTodoItems(threadTodos);
+  if (currentTodos.length > 0) return currentTodos;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message) continue;
+    const toolCalls = "tool_calls" in message ? message.tool_calls : undefined;
+    if (!Array.isArray(toolCalls)) continue;
+    for (let callIndex = toolCalls.length - 1; callIndex >= 0; callIndex -= 1) {
+      const toolCall = toolCalls[callIndex];
+      if (!toolCall || !isTodoWriteToolName(toolCall.name)) continue;
+      const todos = normalizeTodoItems(
+        (toolCall.args as { todos?: unknown } | undefined)?.todos,
+      );
+      if (todos.length > 0) return todos;
+    }
+  }
+
+  return [];
+}
+
+function normalizeTodoItems(value: unknown): Todo[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.items)
+      ? value.items
+      : [];
+  return rawItems.filter(isRecord).map((item) => ({
+    ...(typeof item.id === "string" ? { id: item.id } : {}),
+    ...(typeof item.content === "string" ? { content: item.content } : {}),
+    ...(item.status === "pending" ||
+    item.status === "in_progress" ||
+    item.status === "completed"
+      ? { status: item.status }
+      : {}),
+  }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

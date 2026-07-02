@@ -35,6 +35,7 @@ import {
   describeToolCallDisplay,
   type ToolCallDisplayDetail,
 } from "@/core/tools/tool-call-display";
+import { isTodoWriteToolName } from "@/core/tools/utils";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -448,7 +449,7 @@ function ToolCall({
         icon={MessageCircleQuestionMarkIcon}
       ></ChainOfThoughtStep>
     );
-  } else if (name === "write_todos") {
+  } else if (isTodoWriteToolName(name)) {
     return (
       <ChainOfThoughtStep
         key={id}
