@@ -146,6 +146,12 @@ test("release workflow uploads Windows installer artifacts and regenerates mac u
   assert.match(releaseWorkflowSource, /desktop\/scripts\/generate-mac-latest\.mjs release-assets/);
 });
 
+test("release workflow avoids mutating managed macOS Python for distutils", () => {
+  assert.match(releaseWorkflowSource, /python-distutils/);
+  assert.match(releaseWorkflowSource, /npm_config_python/);
+  assert.match(releaseWorkflowSource, /--break-system-packages/);
+});
+
 test("package resource verifier checks the macOS archive only when required", () => {
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /requiresQiongqiRuntimeArchive/);

@@ -130,6 +130,13 @@ jobs:
       - name: Ensure Python distutils
         shell: bash
         run: |
+          configure_python_for_node_gyp() {
+            local python_path="$1"
+            echo "PYTHON=$python_path" >> "$GITHUB_ENV"
+            echo "npm_config_python=$python_path" >> "$GITHUB_ENV"
+            echo "Configured node-gyp Python: $python_path"
+          }
+
           PYTHON_BIN=""
           if command -v python3 >/dev/null 2>&1; then
             PYTHON_BIN="python3"
@@ -142,9 +149,42 @@ jobs:
 
           if "$PYTHON_BIN" -c "import distutils.version" 2>/dev/null; then
             echo "distutils available"
+            configure_python_for_node_gyp "$PYTHON_BIN"
           else
-            echo "distutils missing; installing setuptools"
-            "$PYTHON_BIN" -m pip install --user setuptools || "$PYTHON_BIN" -m pip install setuptools
+            echo "distutils missing; preparing isolated Python environment"
+            VENV_DIR="${RUNNER_TEMP:-/tmp}/python-distutils"
+            rm -rf "$VENV_DIR"
+
+            if "$PYTHON_BIN" -m venv "$VENV_DIR"; then
+              VENV_PY="$VENV_DIR/bin/python"
+              if [ ! -x "$VENV_PY" ]; then
+                VENV_PY="$VENV_DIR/Scripts/python.exe"
+              fi
+
+              if [ -x "$VENV_PY" ] &&
+                "$VENV_PY" -m pip install --upgrade setuptools wheel &&
+                "$VENV_PY" -c "import distutils.version" 2>/dev/null; then
+                echo "distutils available in isolated Python environment"
+                configure_python_for_node_gyp "$VENV_PY"
+              else
+                echo "::warning::Could not prepare distutils in isolated Python environment"
+              fi
+            else
+              echo "::warning::Could not create isolated Python environment"
+            fi
+
+            if ! "$PYTHON_BIN" -c "import distutils.version" 2>/dev/null &&
+              ! "${VENV_PY:-$PYTHON_BIN}" -c "import distutils.version" 2>/dev/null; then
+              echo "Trying setuptools install with PEP 668 override as a fallback"
+              "$PYTHON_BIN" -m pip install --user --break-system-packages setuptools ||
+                "$PYTHON_BIN" -m pip install --break-system-packages setuptools ||
+                "$PYTHON_BIN" -m pip install --user setuptools ||
+                echo "::warning::Could not install setuptools during preflight; continuing so the native build step reports the real failure if needed"
+
+              if "$PYTHON_BIN" -c "import distutils.version" 2>/dev/null; then
+                configure_python_for_node_gyp "$PYTHON_BIN"
+              fi
+            fi
           fi
 
       - name: Build frontend
