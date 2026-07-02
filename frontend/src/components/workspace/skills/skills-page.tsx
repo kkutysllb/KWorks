@@ -346,9 +346,11 @@ function EmptySkill({ onCreateSkill }: { onCreateSkill: () => void }) {
 
 function SkillCard({
   skill,
+  readonly,
   onSkillEnabledChange,
 }: {
   skill: WorkModeSkill;
+  readonly?: boolean;
   onSkillEnabledChange: (skill: WorkModeSkill, enabled: boolean) => void;
 }) {
   const { t } = useI18n();
@@ -406,6 +408,7 @@ function SkillCard({
           size="sm"
           variant="ghost"
           disabled={
+            readonly ||
             (skill.locked ?? false) ||
             !skill.enabled ||
             env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
@@ -419,6 +422,7 @@ function SkillCard({
         <Switch
           checked={skill.enabled}
           disabled={
+            readonly ||
             (skill.locked ?? false) ||
             env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
           }
@@ -484,7 +488,8 @@ export function SkillsPage() {
     );
   }, [skills, search]);
 
-  const viewCountLabel = selectedSkillView?.readonly ? "内置" : "当前模式";
+  const viewCountLabel =
+    selectedSkillView?.id === BUILTIN_SKILL_VIEW_ID ? "内置" : "当前模式";
   const hasMutableWorkMode = Boolean(selectedSkillView?.workModeId);
 
   const handleCreateSkill = () => {
@@ -609,6 +614,7 @@ export function SkillsPage() {
                 <SkillCard
                   key={skill.id ?? skill.name}
                   skill={skill}
+                  readonly={isReadonlyView}
                   onSkillEnabledChange={
                     isReadonlyView ? () => undefined : handleSkillEnabledChange
                   }

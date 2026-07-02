@@ -105,6 +105,7 @@ export function buildWorkModeSkillViews(
       id: mode.id,
       label: workModeDisplayName(mode),
       workModeId: mode.id,
+      readonly: true,
       skills: visibleWorkModeSkills(mode.skills).filter(
         (skill) => !skill.locked,
       ),

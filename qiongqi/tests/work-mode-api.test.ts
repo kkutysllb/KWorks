@@ -50,33 +50,23 @@ describe('work mode skill APIs', () => {
     expect(removeLockedSkill.status).toBe(403)
   })
 
-  it('adds and removes mode-scoped skills', async () => {
+  it('rejects user edits to mode-scoped skills', async () => {
     const h = buildSkillHarness()
 
     const add = await api(h, '/api/work-modes/task/skills/custom-research', { method: 'PUT' })
-    expect(add.status).toBe(200)
+    expect(add.status).toBe(403)
     await expect(readJson(add)).resolves.toMatchObject({
-      workMode: {
-        id: 'task',
-        skills: expect.arrayContaining([
-          expect.objectContaining({ id: 'custom-research', enabled: true })
-        ])
-      }
+      detail: 'Work mode skills are read-only'
     })
 
     const remove = await api(h, '/api/work-modes/task/skills/xlsx-creator', { method: 'DELETE' })
-    expect(remove.status).toBe(200)
+    expect(remove.status).toBe(403)
     await expect(readJson(remove)).resolves.toMatchObject({
-      workMode: {
-        id: 'task',
-        skills: expect.arrayContaining([
-          expect.objectContaining({ id: 'xlsx-creator', enabled: false })
-        ])
-      }
+      detail: 'Work mode skills are read-only'
     })
   })
 
-  it('creates, updates, binds skills to, and deletes custom work modes', async () => {
+  it('creates, updates, keeps skill bindings read-only, and deletes custom work modes', async () => {
     const h = buildSkillHarness()
     const refreshRuntimeTools = vi.fn(async () => undefined)
     h.runtime.refreshRuntimeTools = refreshRuntimeTools
@@ -126,15 +116,10 @@ describe('work mode skill APIs', () => {
     })
 
     const addSkill = await api(h, '/api/work-modes/finance-review/skills/custom-research', { method: 'PUT' })
-    expect(addSkill.status).toBe(200)
-    expect(refreshRuntimeTools).toHaveBeenCalledTimes(3)
+    expect(addSkill.status).toBe(403)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(2)
     await expect(readJson(addSkill)).resolves.toMatchObject({
-      workMode: {
-        id: 'finance-review',
-        skills: expect.arrayContaining([
-          expect.objectContaining({ id: 'custom-research', enabled: true, locked: false })
-        ])
-      }
+      detail: 'Work mode skills are read-only'
     })
 
     const list = await api(h, '/api/work-modes')
@@ -148,7 +133,7 @@ describe('work mode skill APIs', () => {
 
     const remove = await api(h, '/api/work-modes/finance-review', { method: 'DELETE' })
     expect(remove.status).toBe(200)
-    expect(refreshRuntimeTools).toHaveBeenCalledTimes(4)
+    expect(refreshRuntimeTools).toHaveBeenCalledTimes(3)
 
     const afterDelete = await api(h, '/api/work-modes')
     const body = await readJson(afterDelete) as { workModes: Array<{ id: string }> }
@@ -250,28 +235,23 @@ describe('work mode skill APIs', () => {
     })
   })
 
-  it('updates coding mode skills through the legacy coding skill toggle route', async () => {
+  it('rejects coding mode skill updates through the legacy coding skill toggle route', async () => {
     const h = buildSkillHarness()
 
     const enable = await api(h, '/api/coding/skills/xlsx-creator/enabled', {
       method: 'PUT',
       body: JSON.stringify({ scope: 'global', enabled: true })
     })
-    expect(enable.status).toBe(200)
+    expect(enable.status).toBe(403)
     await expect(readJson(enable)).resolves.toMatchObject({
-      skill: {
-        id: 'xlsx-creator',
-        enabled: true,
-        activation_keywords: []
-      },
-      instructions: ''
+      detail: 'Work mode skills are read-only'
     })
 
     const list = await api(h, '/api/coding/skills')
     expect(list.status).toBe(200)
     await expect(readJson(list)).resolves.toMatchObject({
       skills: expect.arrayContaining([
-        expect.objectContaining({ id: 'xlsx-creator', enabled: true })
+        expect.objectContaining({ id: 'xlsx-creator', enabled: false })
       ])
     })
   })

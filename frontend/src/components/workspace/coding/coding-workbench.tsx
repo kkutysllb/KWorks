@@ -79,7 +79,6 @@ import {
   useProjectGitPush,
   useProjectStage,
   useProjectDiff,
-  useSetCodingSkillEnabled,
   useSetProjectStage,
   useProject,
   useWorktrees,
@@ -2279,8 +2278,6 @@ function currentStageTitle(
 function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
   const { skills, isLoading, isFetching, error, refetch } =
     useCodingSkills(projectRoot);
-  const setSkillEnabled = useSetCodingSkillEnabled(projectRoot);
-  const pendingSkillId = setSkillEnabled.variables?.skillId ?? null;
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [skillSearch, setSkillSearch] = useState("");
 
@@ -2320,11 +2317,6 @@ function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-3 p-3">
-            {setSkillEnabled.error && (
-              <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-2 py-1.5 text-xs">
-                {getErrorMessage(setSkillEnabled.error)}
-              </div>
-            )}
             <div className="space-y-2">
               <div className="relative">
                 <SearchIcon className="text-muted-foreground pointer-events-none absolute top-[50%] left-2 h-3.5 w-3.5 -translate-y-1/2" />
@@ -2353,18 +2345,7 @@ function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
                 filteredSkills.map((skill) => (
                   <SkillCard
                     key={`${skill.scope}-${skill.id}`}
-                    pending={pendingSkillId === skill.id}
                     skill={skill}
-                    onToggle={(enabled) =>
-                      setSkillEnabled.mutate({
-                        skillId: skill.id,
-                        request: {
-                          project_root: projectRoot,
-                          scope: skill.scope,
-                          enabled,
-                        },
-                      })
-                    }
                   />
                 ))
               )}
@@ -2732,13 +2713,9 @@ function SkillCategoryFilter({
 }
 
 function SkillCard({
-  onToggle,
-  pending,
   skill,
 }: {
-  pending: boolean;
   skill: CodingSkill;
-  onToggle: (enabled: boolean) => void;
 }) {
   const category = SKILL_CATEGORIES.find((item) =>
     (item.ids as readonly string[]).includes(skill.id),
@@ -2769,12 +2746,11 @@ function SkillCard({
           </div>
         </div>
         <Switch
-          aria-label={`${skill.enabled ? "禁用" : "启用"} ${skill.name}`}
+          aria-label={`${skill.name} 启用状态`}
           checked={skill.enabled}
-          disabled={pending}
+          disabled
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
-          onCheckedChange={onToggle}
         />
       </div>
       <p className="text-muted-foreground mt-2 line-clamp-3 text-xs leading-5">

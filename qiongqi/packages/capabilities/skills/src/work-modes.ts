@@ -23,11 +23,15 @@ export function resolveEffectiveSkillIds(
   const modeId = resolveWorkModeId(config, requestedModeId)
   const overrides = config.modeSkillOverrides[modeId]
   const locked = new Set(config.lockedSkillIds)
+  const defaultIds = resolveWorkModeDefaultSkillIds(config, modeId)
   const removed = new Set((overrides?.removedSkillIds ?? []).filter((id) => !locked.has(id)))
+  if (isBuiltInWorkMode(config, modeId)) {
+    for (const id of defaultIds) removed.delete(id)
+  }
   const effective = new Set<string>()
 
   for (const id of config.lockedSkillIds) effective.add(id)
-  for (const id of resolveWorkModeDefaultSkillIds(config, modeId)) {
+  for (const id of defaultIds) {
     if (!removed.has(id)) effective.add(id)
   }
   for (const id of overrides?.addedSkillIds ?? []) {
@@ -46,6 +50,14 @@ export function resolveWorkModeDefaultSkillIds(
   for (const id of builtin?.defaultSkillIds ?? []) ids.add(id)
   for (const id of config.workModes.modes[modeId]?.defaultSkillIds ?? []) ids.add(id)
   return [...ids]
+}
+
+function isBuiltInWorkMode(
+  config: Pick<SkillsCapabilityConfig, 'workModes'>,
+  modeId: string
+): boolean {
+  const mode = config.workModes.modes[modeId]
+  return mode?.builtin === true
 }
 
 export function assertSkillCanBeDisabled(lockedSkillIds: readonly string[], skillId: string): void {

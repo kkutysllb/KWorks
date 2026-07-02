@@ -44,7 +44,7 @@ describe("work mode skills UI", () => {
     ]);
   });
 
-  test("groups visible skills into builtin and per-work-mode tabs", () => {
+  test("groups enabled readonly skills into builtin and per-work-mode tabs", () => {
     const workModes: WorkMode[] = [
       {
         id: "task",
@@ -82,6 +82,7 @@ describe("work mode skills UI", () => {
     expect(
       views.find((view) => view.id === "coding")?.skills.map(skillId),
     ).toEqual(["code-review"]);
+    expect(views.every((view) => view.readonly)).toBe(true);
   });
 
   test("normalizes the built-in task work mode display name", () => {

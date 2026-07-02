@@ -130,6 +130,54 @@ describe('work mode skill contracts', () => {
     ])
   })
 
+  it('restores built-in work mode defaults when stale overrides removed every default skill', () => {
+    const cfg = QiongqiCapabilitiesConfig.parse({
+      skills: {
+        modeSkillOverrides: {
+          task: {
+            addedSkillIds: [],
+            removedSkillIds: [
+              'data-analysis',
+              'chart-visualization',
+              'deep-research',
+              'ppt-generation',
+              'xlsx-creator',
+              'pdf-processing'
+            ]
+          }
+        }
+      }
+    })
+
+    expect(resolveEffectiveSkillIds(cfg.skills, 'task')).toEqual(
+      expect.arrayContaining([
+        'data-analysis',
+        'chart-visualization',
+        'deep-research',
+        'ppt-generation',
+        'xlsx-creator',
+        'pdf-processing'
+      ])
+    )
+  })
+
+  it('keeps built-in default skills enabled when stale overrides removed one default skill', () => {
+    const cfg = QiongqiCapabilitiesConfig.parse({
+      skills: {
+        modeSkillOverrides: {
+          task: {
+            addedSkillIds: [],
+            removedSkillIds: ['deep-research']
+          }
+        }
+      }
+    })
+
+    expect(resolveEffectiveSkillIds(cfg.skills, 'task')).toEqual(
+      expect.arrayContaining(['deep-research'])
+    )
+  })
+
   it('rejects removing locked skills from a mode', () => {
     expect(() => assertSkillCanBeRemovedFromMode(DEFAULT_LOCKED_SKILL_IDS, 'web'))
       .toThrow(/required by all work modes/i)

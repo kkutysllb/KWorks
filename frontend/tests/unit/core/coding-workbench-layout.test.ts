@@ -95,10 +95,11 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("useCodingSessionEvents");
     expect(workbench).toContain("useCodingSession");
     expect(workbench).toContain("useCodingSkills");
-    expect(workbench).toContain("useSetCodingSkillEnabled");
+    expect(workbench).not.toContain("useSetCodingSkillEnabled");
     expect(workbench).toContain("<Switch");
+    expect(workbench).toContain("disabled");
     expect(workbench).toContain("event.stopPropagation()");
-    expect(workbench).toContain("onCheckedChange");
+    expect(workbench).not.toContain("onCheckedChange={onToggle}");
     expect(workbench).toContain("内置技能");
     expect(workbench).toContain("activationKeywordsForSkill(skill)");
     expect(workbench).toContain(".slice(0, 4)");

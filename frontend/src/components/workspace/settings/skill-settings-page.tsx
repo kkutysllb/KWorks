@@ -105,13 +105,14 @@ function SkillSettingsList({
     skillViews[0];
   const activeSkillViewId = selectedSkillView?.id ?? selectedSkillViewId;
   const activeWorkModeId = selectedSkillView?.workModeId ?? defaultModeId;
+  const isReadonlyView = selectedSkillView?.readonly ?? false;
   const skills = selectedSkillView?.skills ?? [];
   const { mutate: addSkillToWorkMode } = useAddSkillToWorkMode();
   const { mutate: removeSkillFromWorkMode } = useRemoveSkillFromWorkMode();
   const { mutate: registerSkill } = useRegisterSkill();
   const { mutate: unregisterSkill } = useUnregisterSkill();
   const { mutate: deleteSkill } = useDeleteSkill();
-  const hasMutableWorkMode = Boolean(selectedSkillView?.workModeId);
+  const hasMutableWorkMode = Boolean(selectedSkillView?.workModeId) && !isReadonlyView;
   const handleCreateSkill = () => {
     onClose?.();
     const params = new URLSearchParams({
@@ -227,87 +228,90 @@ function SkillSettingsList({
               <Switch
                 checked={skill.enabled}
                 disabled={
+                  isReadonlyView ||
                   (skill.locked ?? false) ||
                   env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
                 }
                 onCheckedChange={(checked) => toggleModeSkill(skill, checked)}
               />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="size-8">
-                    <MoreHorizontalIcon className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() =>
-                      registerSkill(skill.id ?? skill.name, {
-                        onError: (err) =>
-                          toast.error(
-                            err instanceof Error ? err.message : "注册技能失败",
-                          ),
-                      })
-                    }
-                  >
-                    <PlugIcon className="size-4" />
-                    注册
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      openSkillTask("skill-manage", "repair", skill)
-                    }
-                  >
-                    <PlugIcon className="size-4" />
-                    对话修复
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      openSkillTask("skill-creator", "edit", skill)
-                    }
-                    disabled={!skill.editable}
-                  >
-                    <FilePenLineIcon className="size-4" />
-                    对话编辑
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      unregisterSkill(skill.id ?? skill.name, {
-                        onError: (err) =>
-                          toast.error(
-                            err instanceof Error ? err.message : "注销技能失败",
-                          ),
-                      })
-                    }
-                    disabled={skill.locked}
-                  >
-                    <PlugIcon className="size-4" />
-                    注销
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => toggleModeSkill(skill, false)}
-                    disabled={(skill.locked ?? false) || !skill.enabled}
-                    className="text-destructive"
-                  >
-                    <Trash2Icon className="size-4" />
-                    从当前模式移除
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      deleteSkill(skill.id ?? skill.name, {
-                        onError: (err) =>
-                          toast.error(
-                            err instanceof Error ? err.message : "删除技能失败",
-                          ),
-                      })
-                    }
-                    disabled={(skill.locked ?? false) || !skill.deletable}
-                    className="text-destructive"
-                  >
-                    <Trash2Icon className="size-4" />
-                    删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!isReadonlyView && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="size-8">
+                      <MoreHorizontalIcon className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() =>
+                        registerSkill(skill.id ?? skill.name, {
+                          onError: (err) =>
+                            toast.error(
+                              err instanceof Error ? err.message : "注册技能失败",
+                            ),
+                        })
+                      }
+                    >
+                      <PlugIcon className="size-4" />
+                      注册
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        openSkillTask("skill-manage", "repair", skill)
+                      }
+                    >
+                      <PlugIcon className="size-4" />
+                      对话修复
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        openSkillTask("skill-creator", "edit", skill)
+                      }
+                      disabled={!skill.editable}
+                    >
+                      <FilePenLineIcon className="size-4" />
+                      对话编辑
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        unregisterSkill(skill.id ?? skill.name, {
+                          onError: (err) =>
+                            toast.error(
+                              err instanceof Error ? err.message : "注销技能失败",
+                            ),
+                        })
+                      }
+                      disabled={skill.locked}
+                    >
+                      <PlugIcon className="size-4" />
+                      注销
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => toggleModeSkill(skill, false)}
+                      disabled={(skill.locked ?? false) || !skill.enabled}
+                      className="text-destructive"
+                    >
+                      <Trash2Icon className="size-4" />
+                      从当前模式移除
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        deleteSkill(skill.id ?? skill.name, {
+                          onError: (err) =>
+                            toast.error(
+                              err instanceof Error ? err.message : "删除技能失败",
+                            ),
+                        })
+                      }
+                      disabled={(skill.locked ?? false) || !skill.deletable}
+                      className="text-destructive"
+                    >
+                      <Trash2Icon className="size-4" />
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </ItemActions>
           </Item>
         ))}

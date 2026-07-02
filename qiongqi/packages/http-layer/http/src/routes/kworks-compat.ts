@@ -21,7 +21,6 @@ import {
 import {
   DEFAULT_LOCKED_SKILL_IDS,
   assertSkillCanBeDisabled,
-  assertSkillCanBeRemovedFromMode,
   resolveEffectiveSkillIds,
   resolveWorkModeDefaultSkillIds
 } from '@qiongqi/skills'
@@ -57,6 +56,7 @@ const USER_SETTING_SKILLS = 'capabilities.skills'
 const USER_SETTING_SKILLS_COMPAT = 'capabilities.skills.compat'
 const USER_SETTING_WEB = 'capabilities.web'
 const USER_SETTING_PROJECTS = 'coding.projects'
+const READ_ONLY_WORK_MODE_SKILLS_DETAIL = 'Work mode skills are read-only'
 const codingReviewsByThread = new Map<string, CodingReview>()
 
 type KWorksCronJobConfig = {
@@ -692,30 +692,11 @@ export async function kworksWorkModes(
   }
 
   if (request?.method === 'PUT' && modeId && skillId) {
-    const updated = updateModeSkillOverride(skillsConfig, modeId, skillId, 'add')
-    if (!updated.ok) return updated.response
-    const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, updated.skills)
-    if (!synced.ok) return synced.response
-    await refreshRuntimeTools(runtime)
-    return jsonResponse({
-      workMode: await workModeResponse(runtime, updated.skills, skillCompatFromCapability(updated.skills), modeId)
-    })
+    return jsonResponse({ detail: READ_ONLY_WORK_MODE_SKILLS_DETAIL }, 403)
   }
 
   if (request?.method === 'DELETE' && modeId && skillId) {
-    try {
-      assertSkillCanBeRemovedFromMode(skillsConfig.lockedSkillIds, skillId)
-    } catch (error) {
-      return jsonResponse({ detail: messageFromError(error) }, 403)
-    }
-    const updated = updateModeSkillOverride(skillsConfig, modeId, skillId, 'remove')
-    if (!updated.ok) return updated.response
-    const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, updated.skills)
-    if (!synced.ok) return synced.response
-    await refreshRuntimeTools(runtime)
-    return jsonResponse({
-      workMode: await workModeResponse(runtime, updated.skills, skillCompatFromCapability(updated.skills), modeId)
-    })
+    return jsonResponse({ detail: READ_ONLY_WORK_MODE_SKILLS_DETAIL }, 403)
   }
 
   if (request?.method === 'GET' && modeId) {
@@ -778,25 +759,7 @@ export async function kworksSetCodingSkillEnabled(
   const enabled = booleanValue(body.value.enabled)
   if (enabled === undefined) return jsonResponse({ detail: 'enabled must be a boolean' }, 400)
 
-  const config = await readEffectiveRuntimeConfig(runtime, actor)
-  const skillsConfig = config.capabilities?.skills ?? DEFAULT_QIONGQI_CAPABILITIES_CONFIG.skills
-  if (!enabled) {
-    try {
-      assertSkillCanBeRemovedFromMode(skillsConfig.lockedSkillIds, skillId)
-    } catch (error) {
-      return jsonResponse({ detail: messageFromError(error) }, 403)
-    }
-  }
-  const updated = updateModeSkillOverride(skillsConfig, 'coding', skillId, enabled ? 'add' : 'remove')
-  if (!updated.ok) return updated.response
-  const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, ownerUserId(actor), updated.skills)
-  if (!synced.ok) return synced.response
-  const nextMode = await workModeResponse(runtime, updated.skills, skillCompatFromCapability(updated.skills), 'coding')
-  const skill = (Array.isArray(nextMode?.skills) ? nextMode.skills : []).find((item) => stringValue(item.id) === skillId)
-  return jsonResponse({
-    skill: legacyCodingSkillEntry(skill ?? skillEntryFromCompatOnly(skillId, { enabled })),
-    instructions: ''
-  })
+  return jsonResponse({ detail: READ_ONLY_WORK_MODE_SKILLS_DETAIL }, 403)
 }
 
 export async function kworksInstallSkill(
