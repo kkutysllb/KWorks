@@ -240,7 +240,16 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTIFICATE }}
           p12-password: ${{ secrets.MAC_CERTIFICATE_PWD }}
 
-      - name: Build package (${{ matrix.display }})
+      - name: Build desktop shell
+        working-directory: desktop
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          pnpm run build
+          pnpm run build:frontend
+
+      - name: Prepare package resources
         working-directory: desktop
         shell: bash
         env:
@@ -250,12 +259,26 @@ jobs:
           CI: "true"
           NODE_OPTIONS: --max-old-space-size=4096
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
-        run: |
-          pnpm run build
-          pnpm run build:frontend
-          pnpm run prepare:package-resources
-          pnpm run verify:package-resources
-          npx electron-builder ${{ matrix.builder_args }} --publish never
+        run: pnpm run prepare:package-resources
+
+      - name: Verify package resources
+        working-directory: desktop
+        shell: bash
+        run: pnpm run verify:package-resources
+
+      - name: Build Electron package (${{ matrix.display }})
+        working-directory: desktop
+        shell: bash
+        timeout-minutes: 45
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI: "true"
+          DEBUG: ${{ runner.os == 'Windows' && 'electron-builder,electron-builder:*' || '' }}
+          NODE_OPTIONS: --max-old-space-size=4096
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
+        run: npx --yes electron-builder@26.8.1 ${{ matrix.builder_args }} --publish never
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

@@ -112,7 +112,7 @@ test("packaged app ships the production QiongQi runtime per platform", () => {
 test("release workflow prepares packaged resources before electron-builder", () => {
   const prepareIndex = releaseWorkflowSource.indexOf("pnpm run prepare:package-resources");
   const verifyIndex = releaseWorkflowSource.indexOf("pnpm run verify:package-resources");
-  const builderIndex = releaseWorkflowSource.indexOf("npx electron-builder");
+  const builderIndex = releaseWorkflowSource.indexOf("electron-builder@26.8.1");
 
   assert.notEqual(prepareIndex, -1);
   assert.notEqual(verifyIndex, -1);
@@ -144,6 +144,17 @@ test("release workflow uploads Windows installer artifacts and regenerates mac u
   assert.match(releaseWorkflowSource, /desktop\/release\/\*\.exe/);
   assert.match(releaseWorkflowSource, /desktop\/release\/\*\.exe\.blockmap/);
   assert.match(releaseWorkflowSource, /desktop\/scripts\/generate-mac-latest\.mjs release-assets/);
+});
+
+test("release workflow keeps Windows electron-builder packaging observable", () => {
+  assert.match(releaseWorkflowSource, /name: Build desktop shell/);
+  assert.match(releaseWorkflowSource, /name: Prepare package resources/);
+  assert.match(releaseWorkflowSource, /name: Verify package resources/);
+  assert.match(releaseWorkflowSource, /name: Build Electron package/);
+  assert.match(releaseWorkflowSource, /DEBUG:\s+\$\{\{ runner\.os == 'Windows'/);
+  assert.match(releaseWorkflowSource, /electron-builder,electron-builder:\*/);
+  assert.match(releaseWorkflowSource, /timeout-minutes:\s+45/);
+  assert.match(releaseWorkflowSource, /electron-builder@26\.8\.1/);
 });
 
 test("release workflow avoids mutating managed macOS Python for distutils", () => {
