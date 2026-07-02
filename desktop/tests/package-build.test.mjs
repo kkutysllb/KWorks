@@ -152,6 +152,18 @@ test("release workflow avoids mutating managed macOS Python for distutils", () =
   assert.match(releaseWorkflowSource, /--break-system-packages/);
 });
 
+test("QiongQi package builds invoke TypeScript directly instead of pnpm shims", () => {
+  const buildSource = readFileSync(
+    new URL("../../qiongqi/scripts/build.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(buildSource, /createRequire/);
+  assert.match(buildSource, /typescript\/bin\/tsc/);
+  assert.match(buildSource, /process\.execPath/);
+  assert.doesNotMatch(buildSource, /pnpm run build/);
+  assert.doesNotMatch(buildSource, /execSync/);
+});
+
 test("package resource verifier checks the macOS archive only when required", () => {
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /requiresQiongqiRuntimeArchive/);

@@ -27,8 +27,9 @@
  *
  * Usage: node scripts/build.mjs [--clean]
  */
-import { execSync } from 'node:child_process'
-import { rmSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { rmSync, existsSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -52,6 +53,7 @@ function findStrayEmit(dir) {
 }
 
 const clean = process.argv.includes('--clean')
+const CHILD_OUTPUT_LIMIT = 16 * 1024 * 1024
 
 // [name, dist-relative-path]
 const sequence = [
@@ -75,6 +77,31 @@ const sequence = [
   ['cli', 'packages/cli-layer/cli']
 ]
 
+function resolvePackageTsc(pkgDir) {
+  const pkgRequire = createRequire(resolve(pkgDir, 'package.json'))
+  return pkgRequire.resolve('typescript/bin/tsc')
+}
+
+function runPackageBuild(pkgDir) {
+  return spawnSync(process.execPath, [resolvePackageTsc(pkgDir), '-p', 'tsconfig.build.json'], {
+    cwd: pkgDir,
+    encoding: 'utf8',
+    maxBuffer: CHILD_OUTPUT_LIMIT,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+}
+
+function writeChildOutput(result) {
+  if (result.error) {
+    process.stderr.write(`${result.error.stack || result.error.message}\n`)
+  }
+  if (result.status !== 0 || result.signal) {
+    process.stderr.write(`tsc exited with status ${result.status ?? 'null'}${result.signal ? `, signal ${result.signal}` : ''}\n`)
+  }
+  if (result.stdout) process.stdout.write(result.stdout)
+  if (result.stderr) process.stderr.write(result.stderr)
+}
+
 if (clean) {
   console.log('cleaning dist/ and stray src/ artifacts in all packages...')
   for (const [, pkgPath] of sequence) {
@@ -91,29 +118,29 @@ if (clean) {
 let failed = []
 for (const [name, pkgPath] of sequence) {
   // Clean this package's stale dist to avoid TS5055 "would overwrite input".
-  const dist = resolve(root, pkgPath, 'dist')
+  const pkgDir = resolve(root, pkgPath)
+  const dist = resolve(pkgDir, 'dist')
+  const distIndex = resolve(dist, 'index.js')
   if (existsSync(dist)) rmSync(dist, { recursive: true, force: true })
 
   process.stdout.write(`build @qiongqi/${name} ... `)
-  try {
-    execSync('pnpm run build', { cwd: resolve(root, pkgPath), stdio: 'pipe' })
-    // Verify emit succeeded.
-    if (!existsSync(resolve(root, pkgPath, 'dist/index.js'))) {
-      throw new Error('dist/index.js not produced')
-    }
+  const result = runPackageBuild(pkgDir)
+  const emitted = existsSync(distIndex)
+
+  if (result.status === 0 && emitted) {
     process.stdout.write('OK\n')
-  } catch (err) {
+  } else if (emitted) {
     // The SCC type-only back-edges can produce non-zero exit even though
     // emit succeeded. Distinguish real failure (no dist) from tolerated
     // type errors (dist present).
-    if (existsSync(resolve(root, pkgPath, 'dist/index.js'))) {
-      process.stdout.write('OK (with non-fatal type warnings)\n')
-    } else {
-      process.stdout.write('FAILED\n')
-      if (err.stdout) process.stdout.write(err.stdout.toString())
-      if (err.stderr) process.stderr.write(err.stderr.toString())
-      failed.push(name)
+    process.stdout.write('OK (with non-fatal type warnings)\n')
+  } else {
+    process.stdout.write('FAILED\n')
+    if (result.status === 0 && !result.error) {
+      process.stderr.write(`TypeScript exited successfully but ${distIndex} was not produced.\n`)
     }
+    writeChildOutput(result)
+    failed.push(name)
   }
 }
 
