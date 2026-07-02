@@ -124,6 +124,7 @@ run(
   PNPM.command,
   [
     ...PNPM.args,
+    "--config.node-linker=hoisted",
     "--dir",
     QIONGQI_DIR,
     "--filter",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -73,6 +73,8 @@ function verifyQiongqiRuntimeArchive() {
 function verifyQiongqiRuntimeDirectory() {
   const listing = collectEntries(QIONGQI_RUNTIME_DIR, "qiongqi").join("\n");
   verifyQiongqiRuntimeListing("resources/qiongqi deployed runtime", listing);
+  verifyQiongqiRuntimePackageLinks();
+  verifyQiongqiRuntimeImport();
 }
 
 function verifyQiongqiRuntimeListing(label, listing) {
@@ -97,6 +99,47 @@ function verifyQiongqiRuntimeListing(label, listing) {
     );
   } else {
     pass(`${label} excludes dev native build tools`);
+  }
+}
+
+function verifyQiongqiRuntimePackageLinks() {
+  const requiredPackages = [
+    "@qiongqi/http",
+    "@qiongqi/contracts",
+    "@qiongqi/preset-coding",
+  ];
+  for (const packageName of requiredPackages) {
+    const path = join(QIONGQI_RUNTIME_DIR, "node_modules", ...packageName.split("/"));
+    if (!existsSync(path)) {
+      fail(`resources/qiongqi package ${packageName}`, `Missing: ${path}`);
+      continue;
+    }
+    if (lstatSync(path).isSymbolicLink()) {
+      fail(
+        `resources/qiongqi package ${packageName} is materialized`,
+        `Unexpected symlink: ${path}`,
+      );
+    } else {
+      pass(`resources/qiongqi package ${packageName} is materialized`);
+    }
+  }
+}
+
+function verifyQiongqiRuntimeImport() {
+  const entry = join(QIONGQI_RUNTIME_DIR, "dist", "serve-entry.js");
+  const result = spawnSync(process.execPath, [entry, "--help"], {
+    cwd: QIONGQI_RUNTIME_DIR,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    fail(
+      "resources/qiongqi deployed serve entry imports",
+      (result.stderr || result.stdout || `node exited with ${result.status}`).trim(),
+    );
+  } else {
+    pass("resources/qiongqi deployed serve entry imports");
   }
 }
 

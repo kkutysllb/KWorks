@@ -53,6 +53,7 @@ test("package resource preparation does not pass a Windows drive path to tar", (
 test("QiongQi runtime is generated from production deploy output", () => {
   assert.match(prepareResourcesSource, /resolvePnpmCommand/);
   assert.match(prepareResourcesSource, /npm_execpath/);
+  assert.match(prepareResourcesSource, /--config\.node-linker=hoisted/);
   assert.match(prepareResourcesSource, /@qiongqi\/cli/);
   assert.match(prepareResourcesSource, /deploy/);
   assert.match(prepareResourcesSource, /--legacy/);
@@ -181,6 +182,9 @@ test("package resource verifier checks the macOS archive only when required", ()
   assert.match(verifierSource, /KWORKS_REQUIRE_QIONGQI_ARCHIVE/);
   assert.match(verifierSource, /resources\/qiongqi deployed serve entry/);
   assert.match(verifierSource, /qiongqi\/dist\/serve-entry\.js/);
+  assert.match(verifierSource, /verifyQiongqiRuntimeImport/);
+  assert.match(verifierSource, /@qiongqi\/http/);
+  assert.match(verifierSource, /isSymbolicLink/);
   assert.match(verifierSource, /@esbuild|esbuild\/bin\/esbuild|@rollup/);
   assert.match(verifierSource, /maxBuffer/);
 });
