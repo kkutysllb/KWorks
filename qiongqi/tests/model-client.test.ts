@@ -431,6 +431,65 @@ describe('DeepseekCompatModelClient', () => {
     expect(messages[1]).toMatchObject({ role: 'user', content: 'continue' })
   })
 
+  it('folds GLM messages by model id even when routed through an OpenAI-compatible proxy', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; reasoning_effort?: unknown; thinking?: unknown }> = []
+    const response = {
+      id: 'glm-proxy-system-normalized',
+      model: 'glm-5.2',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ]
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://gateway.example/openai',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.reasoningEffort = 'high'
+    request.modeInstruction = 'Use office mode.'
+    request.contextInstructions = ['Workspace: /tmp/project']
+    request.history = [
+      makeCompactionItem({
+        id: 'compact_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        summary: 'Earlier context should stay in scope.',
+        replacedTokens: 123,
+        pinnedConstraints: []
+      }),
+      makeUserItem({ id: 'user_after_compact', turnId: 'turn_2', threadId: 'thr_1', text: 'continue' })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const body = sentBodies[0]
+    const messages = body?.messages ?? []
+    const systemMessages = messages.filter((message) => message.role === 'system')
+    expect(systemMessages).toHaveLength(1)
+    expect(String(messages[0]?.content)).toContain('Use office mode.')
+    expect(String(messages[0]?.content)).toContain('Earlier context should stay in scope.')
+    expect(JSON.stringify(messages)).not.toContain('reasoning_content')
+    expect(JSON.stringify(messages)).not.toContain('"type":"thinking"')
+  })
+
   it('omits reasoning controls for GLM models that do not support them', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; reasoning_effort?: unknown; thinking?: unknown }> = []
     const response = {
@@ -2046,7 +2105,7 @@ describe('DeepseekCompatModelClient', () => {
     expect(assistantToolMessage?.content).toBe('')
   })
 
-  it('treats fixed DeepSeek v4 models as thinking producers', async () => {
+  it('treats fixed DeepSeek v4 models as thinking producers without content-block thinking in chat completions', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; thinking?: unknown; reasoning_effort?: unknown }> = []
     const response = {
       id: 'r1',
@@ -2095,14 +2154,12 @@ describe('DeepseekCompatModelClient', () => {
 
     expect(body?.thinking).toEqual({ type: 'enabled' })
     expect(body?.reasoning_effort).toBeUndefined()
-    expect(assistantMessage?.content).toEqual([
-      { type: 'thinking', thinking: '' },
-      { type: 'text', text: 'Done.' }
-    ])
-    expect(assistantMessage?.reasoning_content).toBeUndefined()
+    expect(assistantMessage?.content).toBe('Done.')
+    expect(assistantMessage?.reasoning_content).toBe(' ')
+    expect(JSON.stringify(body?.messages ?? [])).not.toContain('"type":"thinking"')
   })
 
-  it('round-trips blank DeepSeek v4 thinking placeholders as chat-completions content blocks', async () => {
+  it('round-trips blank DeepSeek v4 thinking placeholders as chat-completions reasoning_content', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; thinking?: unknown }> = []
     const response = {
       id: 'r1',
@@ -2150,14 +2207,12 @@ describe('DeepseekCompatModelClient', () => {
     const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
 
     expect(sentBodies[0]?.thinking).toEqual({ type: 'enabled' })
-    expect(assistantMessage?.content).toEqual([
-      { type: 'thinking', thinking: '' },
-      { type: 'text', text: 'Done.' }
-    ])
-    expect(assistantMessage?.reasoning_content).toBeUndefined()
+    expect(assistantMessage?.content).toBe('Done.')
+    expect(assistantMessage?.reasoning_content).toBe(' ')
+    expect(JSON.stringify(sentBodies[0]?.messages ?? [])).not.toContain('"type":"thinking"')
   })
 
-  it('round-trips signed DeepSeek v4 thinking in chat-completions content blocks', async () => {
+  it('round-trips signed DeepSeek v4 thinking in chat-completions reasoning_content', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>>; thinking?: unknown }> = []
     const response = {
       id: 'r1',
@@ -2232,16 +2287,9 @@ describe('DeepseekCompatModelClient', () => {
     const assistantMessage = sentBodies[0]?.messages?.find((message) => message.role === 'assistant')
 
     expect(sentBodies[0]?.thinking).toEqual({ type: 'enabled' })
-    expect(assistantMessage?.content).toEqual([
-      {
-        type: 'thinking',
-        thinking: 'Need to inspect the uploaded archive first.',
-        signature: 'sig_deepseek_v4'
-      },
-      { type: 'text', text: 'I will inspect the archive.' }
-    ])
-    expect(assistantMessage?.reasoning_content).toBeUndefined()
-    expect(assistantMessage?.reasoning_signature).toBeUndefined()
+    expect(assistantMessage?.content).toBe('I will inspect the archive.')
+    expect(assistantMessage?.reasoning_content).toBe('Need to inspect the uploaded archive first.')
+    expect(assistantMessage?.reasoning_signature).toBe('sig_deepseek_v4')
     expect((assistantMessage?.tool_calls as Array<{ id?: string }> | undefined)?.map((call) => call.id))
       .toEqual(['call_a'])
   })
@@ -2965,6 +3013,126 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[1]).not.toHaveProperty('stream_options')
     expect(text).toBe('retried')
     expect(usage && usage.kind === 'usage' ? usage.usage.totalTokens : 0).toBe(7)
+  })
+
+  it('retries without reasoning controls when Zhipu reports generic 1214 messages errors', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const encoder = new TextEncoder()
+    const retryBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'))
+        controller.enqueue(
+          encoder.encode(
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}\n\n'
+          )
+        )
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      if (sentBodies.length === 1) {
+        return new Response(
+          JSON.stringify({ error: { code: '1214', message: 'messages 参数非法。请检查文档。' } }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      return new Response(retryBody, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      fetchImpl
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.reasoningEffort = 'high'
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const text = chunks
+      .filter((c) => c.kind === 'assistant_text_delta')
+      .map((c) => (c as { text: string }).text)
+      .join('')
+    expect(sentBodies).toHaveLength(2)
+    expect(sentBodies[0]).toHaveProperty('reasoning_effort')
+    expect(sentBodies[0]).toHaveProperty('thinking')
+    expect(sentBodies[1]).not.toHaveProperty('reasoning_effort')
+    expect(sentBodies[1]).not.toHaveProperty('thinking')
+    expect(text).toBe('ok')
+  })
+
+  it('retries without message reasoning_content when an OpenAI-compatible provider rejects it', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const response = {
+      id: 'compat-retry-no-reasoning-content',
+      model: 'deepseek-v4-pro',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'ok' }
+        }
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      if (sentBodies.length === 1) {
+        return new Response('reasoning_content is not allowed', { status: 400 })
+      }
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://gateway.example/v1',
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    request.reasoningEffort = 'high'
+    request.history = [
+      makeAssistantReasoningItem({
+        id: 'assistant_reasoning',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Think before answering.',
+        status: 'completed'
+      }),
+      makeAssistantTextItem({
+        id: 'assistant_text',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Done.',
+        status: 'completed'
+      })
+    ]
+
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    expect(sentBodies).toHaveLength(2)
+    expect(sentBodies[0]).toHaveProperty('reasoning_effort')
+    expect(JSON.stringify(sentBodies[0]?.messages ?? [])).toContain('reasoning_content')
+    expect(sentBodies[1]).not.toHaveProperty('reasoning_effort')
+    expect(sentBodies[1]).not.toHaveProperty('thinking')
+    expect(JSON.stringify(sentBodies[1]?.messages ?? [])).not.toContain('reasoning_content')
+    expect(chunks).toEqual([
+      { kind: 'assistant_text_delta', text: 'ok' },
+      expect.objectContaining({ kind: 'usage' }),
+      { kind: 'completed', stopReason: 'stop' }
+    ])
   })
 
   it('merges streamed tool-call deltas by index when the provider id arrives later', async () => {

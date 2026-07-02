@@ -209,30 +209,48 @@ export class ModelCompatClient implements ModelClient {
     }
     let response = result.response
     if (!response.ok) {
-      const text = await response.text()
-      if (endpointFormat === 'chat_completions' && shouldRetryWithoutStreamUsage(response.status, text, body)) {
-        const retryBody = this.buildRequestBody(request, stream, { includeStreamUsage: false })
-        const retry = await this.postChatCompletion(url, headers, retryBody, request.abortSignal, endpointFormat)
-        if (retry.kind === 'error') {
-          yield { kind: 'error', message: retry.message }
-          return
-        }
-        response = retry.response
-        if (response.ok) {
-          if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
-            const json = (await response.json()) as ChatCompletionResponse
-            yield* this.materializeNonStreaming(json, endpointFormat)
+      let retryBody = body
+      let stripStreamUsage = false
+      let stripReasoning = false
+      let finalErrorText = ''
+      while (endpointFormat === 'chat_completions') {
+        let text: string
+        if (stripStreamUsage || stripReasoning) {
+          const retry = await this.postChatCompletion(url, headers, retryBody, request.abortSignal, endpointFormat)
+          if (retry.kind === 'error') {
+            yield { kind: 'error', message: retry.message }
             return
           }
-          if (!response.body) {
-            yield { kind: 'error', message: 'model response had no body' }
-            return
-          }
-          yield* this.streamSse(response.body, request.abortSignal, endpointFormat)
-          return
+          response = retry.response
+          if (response.ok) break
+          text = await response.text()
+        } else {
+          text = await response.text()
         }
-        const retryText = await response.text()
-        const retryClassified = await this.classifyHttpError(response.status, retryText)
+        finalErrorText = text
+        if (
+          !stripStreamUsage &&
+          shouldRetryWithoutStreamUsage(response.status, text, retryBody)
+        ) {
+          stripStreamUsage = true
+          retryBody = this.buildRequestBody(request, stream, {
+            includeStreamUsage: false,
+            ...(stripReasoning ? { includeReasoning: false } : {})
+          })
+          continue
+        }
+        if (
+          !stripReasoning &&
+          shouldRetryWithoutReasoningFields(response.status, text, retryBody)
+        ) {
+          stripReasoning = true
+          retryBody = this.buildRequestBody(request, stream, {
+            ...(stripStreamUsage ? { includeStreamUsage: false } : {}),
+            includeReasoning: false
+          })
+          continue
+        }
+        const retryClassified = await this.classifyHttpError(response.status, text)
         yield {
           kind: 'error',
           message: retryClassified.message,
@@ -240,13 +258,18 @@ export class ModelCompatClient implements ModelClient {
         }
         return
       }
-      const classified = await this.classifyHttpError(response.status, text)
-      yield {
-        kind: 'error',
-        message: classified.message,
-        code: classified.code
+      if (!response.ok) {
+        if (!finalErrorText) {
+          finalErrorText = await response.text()
+        }
+        const classified = await this.classifyHttpError(response.status, finalErrorText)
+        yield {
+          kind: 'error',
+          message: classified.message,
+          code: classified.code
+        }
+        return
       }
-      return
     }
     if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
       const json = (await response.json()) as ChatCompletionResponse
@@ -332,12 +355,13 @@ export class ModelCompatClient implements ModelClient {
   private buildRequestBody(
     request: ModelRequest,
     stream: boolean,
-    options: { includeStreamUsage?: boolean } = {}
+    options: { includeStreamUsage?: boolean; includeReasoning?: boolean } = {}
   ): Record<string, unknown> {
     const requestModel = request.model?.trim()
     const model = requestModel || this.config.model
     const endpointFormat = this.endpointFormat()
-    const messages = this.collectMessages(request, model, endpointFormat)
+    const includeReasoning = options.includeReasoning !== false
+    const messages = this.collectMessages(request, model, endpointFormat, { includeReasoning })
     if (endpointFormat === 'responses') {
       return this.buildResponsesRequestBody(request, model, messages, stream)
     }
@@ -365,19 +389,17 @@ export class ModelCompatClient implements ModelClient {
       body.stream_options = { include_usage: true }
     }
     const thinkingDialect = thinkingDialectForProvider(this.config.baseUrl, model)
-    if (supportsReasoningEffortForProvider(this.config.baseUrl, model)) {
+    if (includeReasoning && supportsReasoningEffortForProvider(this.config.baseUrl, model)) {
       applyReasoningEffort(body, request.reasoningEffort, { thinkingDialect })
     }
     if (
+      includeReasoning &&
       thinkingDialect === 'deepseek' &&
       isDeepSeekHost(this.config.baseUrl) &&
       !Object.prototype.hasOwnProperty.call(body, 'thinking') &&
       isThinkingProducerModel(model)
     ) {
       body.thinking = { type: 'enabled' }
-    }
-    if (requiresDeepSeekContentThinking(this.config.baseUrl, model, body)) {
-      body.messages = messages.map(messageToDeepSeekThinkingContentBlocks)
     }
     const tools = normalizeToolSpecs(request.tools)
     if (tools.length > 0) {
@@ -471,7 +493,8 @@ export class ModelCompatClient implements ModelClient {
   private collectMessages(
     request: ModelRequest,
     model: string,
-    endpointFormat: ModelEndpointFormat
+    endpointFormat: ModelEndpointFormat,
+    options: { includeReasoning?: boolean } = {}
   ): ChatMessage[] {
     const out: ChatMessage[] = []
     if (request.systemPrompt) {
@@ -488,11 +511,14 @@ export class ModelCompatClient implements ModelClient {
       ? limitHistoryPreservingCompaction(request.history, windowSize)
       : request.history
     const repairedItems = repairModelHistoryItems([...request.prefix, ...history])
-    const thinkingMode = endpointFormat === 'messages'
-      ? supportsMessagesThinkingBlocks(this.config.baseUrl) &&
-        (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
-      : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
-        requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
+    const includeReasoning = options.includeReasoning !== false
+    const thinkingMode = includeReasoning && (
+      endpointFormat === 'messages'
+        ? supportsMessagesThinkingBlocks(this.config.baseUrl) &&
+          (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
+        : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
+          requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
+    )
     out.push(...this.itemsToMessages(
       repairedItems,
       thinkingMode
@@ -1620,11 +1646,11 @@ function isGlmModel(model: string | undefined): boolean {
 }
 
 function isGlmOpenAiCompatRequest(
-  baseUrl: string,
+  _baseUrl: string,
   endpointFormat: ModelEndpointFormat,
   model: string | undefined
 ): boolean {
-  return endpointFormat === 'chat_completions' && isBigModelProvider(baseUrl) && isGlmModel(model)
+  return endpointFormat === 'chat_completions' && isGlmModel(model)
 }
 
 function supportsAnthropicThinkingBlocks(baseUrl: string): boolean {
@@ -1839,6 +1865,20 @@ function shouldRetryWithoutStreamUsage(
   return /\b(stream_options|include_usage)\b/i.test(text)
 }
 
+function shouldRetryWithoutReasoningFields(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  const hasReasoningField =
+    Object.prototype.hasOwnProperty.call(body, 'reasoning_effort') ||
+    Object.prototype.hasOwnProperty.call(body, 'thinking')
+  if (!hasReasoningField) return false
+  return /\b(reasoning_effort|reasoning_content|thinking|reasoning)\b/i.test(text) ||
+    (/\b1214\b/.test(text) && /参数非法|invalid/i.test(text))
+}
+
 function isAzureOpenAiEndpoint(baseUrl: string): boolean {
   try {
     const url = new URL(baseUrl)
@@ -1860,23 +1900,6 @@ function thinkingDialectForProvider(baseUrl: string, model: string | undefined):
 function supportsReasoningEffortForProvider(baseUrl: string, model: string | undefined): boolean {
   if (isBigModelProvider(baseUrl)) return !isGlmModel(model) || isGlmCodingPlanModel(model)
   return true
-}
-
-function requiresDeepSeekContentThinking(
-  baseUrl: string,
-  model: string | undefined,
-  body: Record<string, unknown>
-): boolean {
-  return isDeepSeekHost(baseUrl) &&
-    isThinkingProducerModel(model) &&
-    isDeepSeekThinkingEnabled(body)
-}
-
-function isDeepSeekThinkingEnabled(body: Record<string, unknown>): boolean {
-  const thinking = body.thinking
-  if (!thinking || typeof thinking !== 'object' || Array.isArray(thinking)) return false
-  const type = (thinking as Record<string, unknown>).type
-  return type === 'enabled'
 }
 
 function isMiniMaxProvider(baseUrl: string, model: string | undefined): boolean {
@@ -1996,42 +2019,6 @@ function normalizeThinkingAssistantMessages(
     }
     return next
   })
-}
-
-function messageToDeepSeekThinkingContentBlocks(message: ChatMessage): ChatMessage {
-  if (message.role !== 'assistant') return message
-  const thinking = deepSeekThinkingPartFromMessage(message)
-  if (!thinking) return message
-  const parts = chatContentToDeepSeekContentParts(message.content)
-  const {
-    reasoning_content: _reasoningContent,
-    reasoning_signature: _reasoningSignature,
-    ...rest
-  } = message
-  return {
-    ...rest,
-    content: [thinking, ...parts]
-  }
-}
-
-function deepSeekThinkingPartFromMessage(message: ChatMessage): Extract<ChatMessageContentPart, { type: 'thinking' }> | null {
-  if (message.reasoning_signature?.startsWith(REDACTED_THINKING_SIGNATURE_PREFIX)) return null
-  const hasSignature = typeof message.reasoning_signature === 'string' && message.reasoning_signature.length > 0
-  const hasReasoningContent = typeof message.reasoning_content === 'string'
-  if (!hasSignature && !hasReasoningContent) return null
-  return {
-    type: 'thinking',
-    thinking: message.reasoning_content?.trim() ? message.reasoning_content : '',
-    ...(message.reasoning_signature ? { signature: message.reasoning_signature } : {})
-  }
-}
-
-function chatContentToDeepSeekContentParts(content: ChatMessage['content']): ChatMessageContentPart[] {
-  if (content === null || content === undefined) return []
-  if (typeof content === 'string') {
-    return content ? [{ type: 'text', text: content }] : []
-  }
-  return content.filter((part) => part.type !== 'thinking')
 }
 
 function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
