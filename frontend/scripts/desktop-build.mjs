@@ -319,41 +319,6 @@ export default function WorkspaceLayout({
 `,
   },
   {
-    // NOTE: This patch must stay in sync with the source
-    // app/workspace/workspace-content.tsx. The only difference from the source
-    // is the leading comment ("Desktop static export: no cookies() access").
-    // If you add/remove a component in the source version, mirror the change
-    // here — otherwise the desktop packaged build silently loses the change.
-    file: join(APP_DIR, "workspace", "workspace-content.tsx"),
-    content: `import { Toaster } from "sonner";
-
-import { QueryClientProvider } from "@/components/query-client-provider";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { CommandPalette } from "@/components/workspace/command-palette";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
-import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
-
-// Desktop static export: no cookies() access
-export function WorkspaceContent({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <QueryClientProvider>
-      <SidebarProvider className="h-screen" defaultOpen={true}>
-        <WorkspaceSidebar />
-        <SidebarInset className="min-w-0">
-          <WorkspaceHeader />
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
-      <CommandPalette />
-      <Toaster position="top-center" />
-    </QueryClientProvider>
-  );
-}
-`,
-  },
-  {
     // Desktop static export: convert the chat layout from "use client" to a
     // server component so it can export generateStaticParams. The providers
     // (SubtasksProvider, ArtifactsProvider, PromptInputProvider) are client

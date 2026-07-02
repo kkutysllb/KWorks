@@ -14,6 +14,10 @@ const codingProjectLayout = readFileSync(
   ),
   "utf-8",
 );
+const workspaceContentSource = readFileSync(
+  resolve(__dirname, "../../../src/app/workspace/workspace-content.tsx"),
+  "utf-8",
+);
 const desktopPathsSource = readFileSync(
   resolve(__dirname, "../../../../desktop/src/paths.ts"),
   "utf-8",
@@ -46,5 +50,21 @@ describe("desktop static build", () => {
     expect(desktopBuildScript).not.toContain("Creating temp file");
     expect(codingProjectLayout).toContain("generateStaticParams");
     expect(codingProjectLayout).toContain('projectId: "__init__"');
+  });
+
+  test("uses checked-in workspace content so settings provider cannot drift in desktop builds", () => {
+    expect(desktopBuildScript).not.toContain(
+      'file: join(APP_DIR, "workspace", "workspace-content.tsx")',
+    );
+    expect(workspaceContentSource).toContain(
+      'import { usePathname } from "next/navigation";',
+    );
+    expect(workspaceContentSource).toContain("SettingsLayoutProvider");
+    expect(workspaceContentSource).toContain("SettingsSidebar");
+    expect(workspaceContentSource).toContain(
+      'pathname === "/workspace/settings"',
+    );
+    expect(workspaceContentSource).toContain("<SettingsLayoutProvider syncHash>");
+    expect(workspaceContentSource).toContain("<SettingsSidebar />");
   });
 });
