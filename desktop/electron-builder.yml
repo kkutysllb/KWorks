@@ -2,6 +2,7 @@ appId: com.kworks.desktop
 productName: KWorks
 directories:
   output: release
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 files:
   - dist/**
   - package.json

@@ -17,6 +17,8 @@ const releaseWorkflowSource = readFileSync(
 
 test("packaged app build verifies the embedded Node QiongQi runtime", () => {
   assert.doesNotMatch(packageJson.scripts["build:app"], /build:gateway/);
+  assert.match(packageJson.scripts.build, /node scripts\/rename-preload\.mjs/);
+  assert.doesNotMatch(packageJson.scripts.build, /\bmv\s+-f\b/);
   assert.match(packageJson.scripts["build:app"], /pnpm run prepare:package-resources/);
   assert.match(packageJson.scripts["build:app"], /pnpm run verify:package-resources/);
   assert.match(packageJson.scripts["build:app:full"], /pnpm run build:app/);
@@ -92,6 +94,7 @@ test("packaged app ships the production QiongQi runtime per platform", () => {
     new URL("../electron-builder.yml", import.meta.url),
     "utf8",
   );
+  assert.match(builderConfig, /artifactName:\s*"\$\{productName\}-\$\{version\}-\$\{os\}-\$\{arch\}\.\$\{ext\}"/);
   assert.match(
     builderConfig,
     /mac:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\.tar\.gz[\s\S]*to: qiongqi-runtime\.tar\.gz/,
@@ -118,14 +121,29 @@ test("release workflow prepares packaged resources before electron-builder", () 
   assert.equal(verifyIndex < builderIndex, true);
 });
 
-test("release workflow does not publish a Windows build", () => {
-  assert.doesNotMatch(releaseWorkflowSource, /os: windows-2022/);
-  assert.doesNotMatch(releaseWorkflowSource, /platform: win/);
-  assert.doesNotMatch(releaseWorkflowSource, /artifact_suffix: win/);
-  assert.match(releaseWorkflowSource, /os: macos-14/);
+test("release workflow builds macOS, Windows, and Linux artifacts", () => {
+  assert.match(releaseWorkflowSource, /os: macos-15/);
+  assert.match(releaseWorkflowSource, /os: macos-15-intel/);
+  assert.match(releaseWorkflowSource, /os: windows-2022/);
+  assert.match(releaseWorkflowSource, /artifact_suffix: win/);
   assert.match(releaseWorkflowSource, /platform: mac/);
   assert.match(releaseWorkflowSource, /os: ubuntu-22\.04/);
   assert.match(releaseWorkflowSource, /platform: linux/);
+});
+
+test("release workflow publishes once after all platform builds are uploaded", () => {
+  assert.doesNotMatch(releaseWorkflowSource, /--publish always/);
+  assert.match(releaseWorkflowSource, /--publish never/);
+  assert.match(releaseWorkflowSource, /release:[\s\S]*needs: build/);
+  assert.match(releaseWorkflowSource, /actions\/download-artifact@v4/);
+  assert.match(releaseWorkflowSource, /softprops\/action-gh-release@v2/);
+  assert.match(releaseWorkflowSource, /files:\s+release-assets\/\*/);
+});
+
+test("release workflow uploads Windows installer artifacts and regenerates mac update metadata", () => {
+  assert.match(releaseWorkflowSource, /desktop\/release\/\*\.exe/);
+  assert.match(releaseWorkflowSource, /desktop\/release\/\*\.exe\.blockmap/);
+  assert.match(releaseWorkflowSource, /desktop\/scripts\/generate-mac-latest\.mjs release-assets/);
 });
 
 test("package resource verifier checks the macOS archive only when required", () => {

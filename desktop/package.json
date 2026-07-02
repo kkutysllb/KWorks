@@ -1,6 +1,6 @@
 {
   "name": "kworks-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "KWorks desktop — fully self-contained Electron shell wrapping the KWorks frontend and Node QiongQi runtime.",
   "homepage": "https://github.com/kkutysllb/kk_KWorks",
@@ -10,7 +10,7 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && mv -f dist/preload.js dist/preload.cjs",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/rename-preload.mjs",
     "dev": "node scripts/dev.mjs",
     "start": "electron .",
     "build:icons": "bash scripts/generate-icons.sh",

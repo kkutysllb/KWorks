@@ -1,13 +1,14 @@
-# KWorks Desktop — Release Pipeline (macOS / Linux)
+# KWorks Desktop — Release Pipeline (macOS / Windows / Linux)
 #
 # 触发方式：
-#   1. 推送 tag `v*`（如 v0.1.0）→ macOS/Linux 并行构建 → 发布到同一个 GitHub Release
-#   2. Actions 页面手动运行（workflow_dispatch）→ 构建产物上传到 Artifacts（不发布）
+#   1. 推送 semver tag `vX.Y.Z` → 各平台构建 artifacts → 单独 release job 统一发布
+#   2. Actions 页面手动运行（workflow_dispatch）→ 只构建并上传 Artifacts，不发布 Release
 #
 # 工作原理：
-#   matrix 让 2 个平台在各自的 runner 上并行运行（macos-14/ubuntu-22.04）。
-#   每个平台独立编译原生模块（node-pty + better-sqlite3），产出各自平台的安装包。
-#   两个平台的产物最终汇聚到同一个 GitHub Release（通过 tag 关联）。
+#   build matrix 在对应 OS/架构 runner 上编译原生模块并打包，全部使用
+#   `electron-builder --publish never`。发布阶段只在所有构建成功后运行一次，
+#   下载全部 artifacts、重建 latest-mac.yml，然后用 softprops/action-gh-release
+#   一次性创建/更新 GitHub Release。
 #
 # macOS 必需 Secrets（用 desktop/scripts/export-mac-secrets.mjs 生成）：
 #   MAC_CERTIFICATE                  — Developer ID .p12 的 base64
@@ -16,63 +17,87 @@
 #   APPLE_APP_SPECIFIC_PASSWORD      — appleid.apple.com 生成的应用专用密码
 #   APPLE_TEAM_ID                    — 开发者团队 ID（如 DHV5D72JNF）
 #
-# Linux 无需任何证书或额外配置。
-# GH_TOKEN 用 Actions 自动注入的 GITHUB_TOKEN。
+# Windows 当前构建未签名版本；Linux 无需证书。
 
 name: Release
 
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
 
-# 同一个 tag 的三平台构建组各自独立，互不取消
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+
 jobs:
-  release:
-    name: Build (${{ matrix.os }})
+  build:
+    name: Build (${{ matrix.display }})
     runs-on: ${{ matrix.os }}
-    # concurrency 必须在 job 级别：用到了 matrix.os 这个 job-level context。
-    # 若放在 workflow 顶层，workflow 文件会因访问不到 matrix context 而加载失败。
-    concurrency:
-      group: release-${{ github.ref }}-${{ matrix.os }}
-      cancel-in-progress: false
     strategy:
-      fail-fast: false # 一个平台失败不影响其他平台继续构建
+      fail-fast: false
       matrix:
         include:
-          # 所有平台固定具体镜像版本，不用 *-latest（避免 GitHub 升级镜像时意外破坏构建）
-          # macOS: macos-14 = Apple Silicon (M1)，可同时打 arm64 + x64
-          - os: macos-14
+          # macOS 分开跑架构：KWorks 的 QiongQi runtime 含原生模块，必须在目标架构 runner 上 rebuild。
+          - os: macos-15
             platform: mac
-            artifact_suffix: mac
-          # Linux: ubuntu-22.04 兼容性最好（AppImage 在低版本 glibc 上运行）
+            display: "macOS Apple Silicon"
+            artifact_suffix: mac-arm64
+            builder_args: "--mac --arm64"
+          - os: macos-15-intel
+            platform: mac
+            display: "macOS Intel"
+            artifact_suffix: mac-x64
+            builder_args: "--mac --x64"
+          - os: windows-2022
+            platform: win
+            display: "Windows x64"
+            artifact_suffix: win
+            builder_args: "--win nsis --x64"
           - os: ubuntu-22.04
             platform: linux
+            display: "Linux x64"
             artifact_suffix: linux
-
-    permissions:
-      contents: write # electron-builder 创建/更新 GitHub Release
+            builder_args: "--linux AppImage --x64"
 
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🟢 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: 📦 Setup pnpm
+      - name: Verify release tag matches desktop package version
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./desktop/package.json').version")"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match desktop/package.json version $PACKAGE_VERSION"
+            exit 1
+          fi
+
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: "10"
           run_install: false
 
-      # pnpm store 路径随平台不同，让 pnpm 自己决定，cache action 自动适配
-      - name: ♻️ Cache pnpm store
+      - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: |
@@ -83,150 +108,203 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      # ─────────────────────────────────────────────────────────────
-      # Linux：安装 AppImage 打包所需的系统库
-      # ubuntu-22.04 默认已有大部分，但为确保 AppImage 构建成功率显式补齐
-      # ─────────────────────────────────────────────────────────────
-      - name: 🐧 Install Linux build deps (AppImage)
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ELECTRON_CACHE }}
+            ${{ env.ELECTRON_BUILDER_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('desktop/pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      - name: Install Linux build deps (AppImage)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             libglib2.0-dev libnss3-dev libatk1.0-dev libatk-bridge2.0-dev \
-            libgtk-3-dev libgbm-dev libasound2-dev
-        continue-on-error: true # 某些包在新版 ubuntu 可能已被替代，失败不阻断
+            libgtk-3-dev libgbm-dev libasound2-dev libfuse2
+        continue-on-error: true
 
-      # ─────────────────────────────────────────────────────────────
-      # 构建前端（静态导出，三平台产物相同但各自构建以避免跨平台文件污染）
-      # ─────────────────────────────────────────────────────────────
-      - name: 🎨 Build frontend
+      - name: Ensure Python distutils
+        shell: bash
+        run: |
+          PYTHON_BIN=""
+          if command -v python3 >/dev/null 2>&1; then
+            PYTHON_BIN="python3"
+          elif command -v python >/dev/null 2>&1; then
+            PYTHON_BIN="python"
+          else
+            echo "::error::Python is required for native module builds"
+            exit 1
+          fi
+
+          if "$PYTHON_BIN" -c "import distutils.version" 2>/dev/null; then
+            echo "distutils available"
+          else
+            echo "distutils missing; installing setuptools"
+            "$PYTHON_BIN" -m pip install --user setuptools || "$PYTHON_BIN" -m pip install setuptools
+          fi
+
+      - name: Build frontend
         working-directory: frontend
         shell: bash
         run: |
           pnpm install --frozen-lockfile
           pnpm run build:desktop
 
-      - name: ✅ Verify frontend output
+      - name: Verify frontend output
         shell: bash
         run: |
-          test -f frontend/out/index.html || { echo "❌ frontend/out/index.html 缺失"; exit 1; }
-          test -d frontend/out/_next || { echo "❌ frontend/out/_next 缺失"; exit 1; }
-          echo "✓ 前端产物就绪"
+          test -f frontend/out/index.html || { echo "::error::frontend/out/index.html missing"; exit 1; }
+          test -d frontend/out/_next || { echo "::error::frontend/out/_next missing"; exit 1; }
 
-      # ─────────────────────────────────────────────────────────────
-      # 原生模块编译准备（必须在 qiongqi/desktop 的 pnpm install 之前完成）
-      # better-sqlite3 + node-pty 都是 C++ 原生模块，install 时触发 node-gyp rebuild。
-      # Python distutils 可用性在 Python 3.12+ 上需要显式兜底（node-gyp 9.x 依赖）。
-      # ─────────────────────────────────────────────────────────────
-      - name: 🐍 Ensure Python distutils
-        run: |
-          if python3 -c "import distutils.version" 2>/dev/null; then
-            echo "✓ distutils 可用"
-          else
-            echo "⚠️ distutils 缺失（Python 3.12+），安装 setuptools..."
-            pip3 install --user setuptools || pip3 install --break-system-packages setuptools
-          fi
-
-      # ─────────────────────────────────────────────────────────────
-      # 构建 qiongqi（含 better-sqlite3 C++ 原生模块，每平台各自编译）
-      # ─────────────────────────────────────────────────────────────
-      - name: ⚙️ Build qiongqi
+      - name: Build qiongqi
         working-directory: qiongqi
         shell: bash
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: ✅ Verify qiongqi output
+      - name: Verify qiongqi output
         shell: bash
         run: |
-          test -f qiongqi/packages/cli-layer/cli/dist/serve-entry.js || { echo "❌ serve-entry.js 缺失"; exit 1; }
-          echo "✓ qiongqi 产物就绪"
+          test -f qiongqi/packages/cli-layer/cli/dist/serve-entry.js || { echo "::error::serve-entry.js missing"; exit 1; }
 
-      # ─────────────────────────────────────────────────────────────
-      # 安装 desktop 依赖（node-pty 原生模块每平台编译）
-      # ─────────────────────────────────────────────────────────────
-      - name: 🔨 Install desktop deps
+      - name: Install desktop deps
         working-directory: desktop
         shell: bash
         run: pnpm install --frozen-lockfile
 
-      # ─────────────────────────────────────────────────────────────
-      # 检查 macOS 签名 Secrets 是否已配置
-      # 在 step 的 if 条件中无法直接判空 secrets.xxx，需通过 env 中转后输出标记。
-      # ─────────────────────────────────────────────────────────────
-      - name: 🔍 Check macOS signing secrets availability
+      - name: Check macOS signing secrets availability
         if: runner.os == 'macOS'
         id: mac_secrets
+        shell: bash
         env:
           MAC_CERT: ${{ secrets.MAC_CERTIFICATE }}
           MAC_PWD: ${{ secrets.MAC_CERTIFICATE_PWD }}
         run: |
           if [ -n "$MAC_CERT" ] && [ -n "$MAC_PWD" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "✓ macOS 签名 Secrets 已配置，将进行签名+公证"
+            echo "macOS signing secrets are available"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ macOS 签名 Secrets 未配置，将构建未签名版本"
-            echo "  配置方法见 desktop/scripts/export-mac-secrets.mjs"
+            echo "macOS signing secrets are missing; building unsigned macOS artifacts"
           fi
 
-      # ─────────────────────────────────────────────────────────────
-      # 仅 macOS 且 Secrets 已配置：导入 Apple Developer ID 签名证书
-      # ─────────────────────────────────────────────────────────────
-      - name: 🔑 Import Apple signing certificate (macOS only)
+      - name: Import Apple signing certificate
         if: runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.MAC_CERTIFICATE }}
           p12-password: ${{ secrets.MAC_CERTIFICATE_PWD }}
 
-      # ─────────────────────────────────────────────────────────────
-      # 打包 + 签名(mac) + 公证(mac) + 发布
-      # ─────────────────────────────────────────────────────────────
-      - name: 🚀 Build & publish (${{ matrix.platform }})
+      - name: Build package (${{ matrix.display }})
         working-directory: desktop
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: "true"
-          # electron-builder 签名大量 .app 内部文件时 Node.js 默认 2GB 堆不够，OOM
-          # 提升到 4GB 避免 macOS 签名阶段 "JavaScript heap out of memory"
           NODE_OPTIONS: --max-old-space-size=4096
-          # macOS: secrets 配置了才自动发现证书签名，否则跳过签名
-          # Linux: 永远 false
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
         run: |
-          # tag 触发 → 发布到 Release；手动触发 → 仅构建不上传
-          if [ "${{ github.event_name }}" = "push" ]; then
-            pnpm run build && pnpm run build:frontend && \
-              pnpm run prepare:package-resources && \
-              pnpm run verify:package-resources && \
-              npx electron-builder --${{ matrix.platform }} --publish always
-          else
-            pnpm run build && pnpm run build:frontend && \
-              pnpm run prepare:package-resources && \
-              pnpm run verify:package-resources && \
-              npx electron-builder --${{ matrix.platform }} --publish never
-            echo "💡 手动触发：产物仅上传到 Artifacts，未发布 Release"
-          fi
+          pnpm run build
+          pnpm run build:frontend
+          pnpm run prepare:package-resources
+          pnpm run verify:package-resources
+          npx electron-builder ${{ matrix.builder_args }} --publish never
 
-      # ─────────────────────────────────────────────────────────────
-      # 上传构建产物到 Actions（调试 + 草稿模式主力产出）
-      # ─────────────────────────────────────────────────────────────
-      - name: 📎 Upload build artifacts
-        if: always()
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: KWorks-${{ matrix.artifact_suffix }}-build
           path: |
+            desktop/release/KWorks-*
             desktop/release/*.dmg
             desktop/release/*.zip
             desktop/release/*.blockmap
+            desktop/release/*.exe
+            desktop/release/*.exe.blockmap
             desktop/release/*.AppImage
             desktop/release/latest*.yml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: raw-artifacts
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find raw-artifacts -type f \( \
+            -name 'KWorks-*' -o \
+            -name 'latest*.yml' \
+          \) -exec cp -v {} release-assets/ \;
+          rm -f release-assets/latest-mac.yml
+          node desktop/scripts/generate-mac-latest.mjs release-assets
+          echo "=== Release assets ==="
+          ls -lhS release-assets/
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          {
+            echo "## KWorks ${{ steps.meta.outputs.version }}"
+            echo ""
+            echo "### Downloads"
+            echo ""
+            echo "| Platform | Format | Architecture |"
+            echo "| --- | --- | --- |"
+            echo "| macOS Apple Silicon | .dmg / .zip | arm64 |"
+            echo "| macOS Intel | .dmg / .zip | x64 |"
+            echo "| Windows | .exe | x64 |"
+            echo "| Linux | .AppImage | x64 |"
+            echo ""
+            echo "### Build"
+            echo ""
+            echo "- Version: \`${{ steps.meta.outputs.version }}\`"
+            echo "- Commit: \`$(git rev-parse --short HEAD)\`"
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: KWorks ${{ steps.meta.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
