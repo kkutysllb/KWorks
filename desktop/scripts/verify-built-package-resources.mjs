@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -82,11 +82,6 @@ function verifyResourceDir(resourcesDir) {
   if (requirePath(archive, `${label} QiongQi runtime archive`)) {
     verifyRuntimeArchive(archive, label);
   }
-
-  const directRuntime = join(resourcesDir, "qiongqi");
-  if (existsSync(directRuntime)) {
-    verifyRuntimeDirectory(directRuntime, `${label} direct QiongQi runtime`);
-  }
 }
 
 function verifyRuntimeArchive(archive, label) {
@@ -104,21 +99,6 @@ function verifyRuntimeArchive(archive, label) {
   }
 
   verifyRuntimeListing(`${label} QiongQi runtime archive`, result.stdout ?? "");
-}
-
-function verifyRuntimeDirectory(runtimeDir, label) {
-  requirePath(join(runtimeDir, "dist", "serve-entry.js"), `${label} serve entry`);
-  requirePath(join(runtimeDir, "node_modules"), `${label} node_modules`);
-
-  for (const packageName of REQUIRED_RUNTIME_PACKAGES) {
-    const packageDir = join(runtimeDir, "node_modules", ...packageName.split("/"));
-    if (!requirePath(packageDir, `${label} package ${packageName}`)) continue;
-    if (lstatSync(packageDir).isSymbolicLink()) {
-      fail(`${label} package ${packageName} is materialized`, `Unexpected symlink: ${packageDir}`);
-    } else {
-      pass(`${label} package ${packageName} is materialized`);
-    }
-  }
 }
 
 function verifyRuntimeListing(label, listing) {

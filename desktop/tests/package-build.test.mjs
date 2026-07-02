@@ -113,14 +113,8 @@ test("packaged app ships the production QiongQi runtime per platform", () => {
     topLevelExtraResources,
     /from: build\/qiongqi-runtime\.tar\.gz[\s\S]*to: qiongqi-runtime\.tar\.gz/,
   );
-  assert.match(
-    builderConfig,
-    /win:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\/qiongqi[\s\S]*to: qiongqi/,
-  );
-  assert.match(
-    builderConfig,
-    /linux:[\s\S]*extraResources:[\s\S]*from: build\/qiongqi-runtime\/qiongqi[\s\S]*to: qiongqi/,
-  );
+  assert.doesNotMatch(builderConfig, /from: build\/qiongqi-runtime\/qiongqi/);
+  assert.doesNotMatch(builderConfig, /^\s*to: qiongqi\s*$/m);
 });
 
 test("release workflow prepares packaged resources before electron-builder", () => {
