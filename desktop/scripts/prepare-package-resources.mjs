@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
@@ -16,6 +17,7 @@ const RUNTIME_ARCHIVE = join(BUILD_DIR, "qiongqi-runtime.tar.gz");
 const RUNTIME_STAGING_DIR = join(BUILD_DIR, "qiongqi-runtime");
 const RUNTIME_STAGING_QIONGQI_DIR = join(RUNTIME_STAGING_DIR, "qiongqi");
 const PNPM = resolvePnpmCommand();
+const require = createRequire(import.meta.url);
 const PACKAGE_DIST_INDEXES = [
   "packages/foundation/contracts/dist/index.js",
   "packages/infrastructure/adapter-fs/dist/index.js",
@@ -144,6 +146,8 @@ requirePath(
   "QiongQi deployed node_modules",
 );
 
+await rebuildQiongqiRuntimeForElectron();
+
 if (!shouldPrepareQiongqiArchive()) {
   console.log(`[OK] Prepared QiongQi production runtime at ${RUNTIME_STAGING_QIONGQI_DIR}`);
   process.exit(0);
@@ -159,6 +163,25 @@ run(
 );
 
 console.log(`[OK] Created ${RUNTIME_ARCHIVE}`);
+
+async function rebuildQiongqiRuntimeForElectron() {
+  const { rebuild } = require("@electron/rebuild");
+  const { version: electronVersion } = require("electron/package.json");
+
+  console.log(
+    `[OK] Rebuilding QiongQi native runtime modules for Electron ${electronVersion}`,
+  );
+
+  await rebuild({
+    buildPath: RUNTIME_STAGING_QIONGQI_DIR,
+    electronVersion,
+    arch: process.arch,
+    force: true,
+    onlyModules: ["better-sqlite3"],
+    types: ["prod", "optional"],
+    mode: "sequential",
+  });
+}
 
 function signMacNativeBinaries(rootDir) {
   if (!shouldSignQiongqiArchive()) {

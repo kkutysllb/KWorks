@@ -60,6 +60,14 @@ test("QiongQi runtime is generated from production deploy output", () => {
   assert.doesNotMatch(prepareResourcesSource, /"-C",\s*\n\s*REPO_ROOT,\s*\n\s*"qiongqi"/);
 });
 
+test("QiongQi native runtime modules are rebuilt for Electron before packaging", () => {
+  assert.match(prepareResourcesSource, /@electron\/rebuild/);
+  assert.match(prepareResourcesSource, /rebuildQiongqiRuntimeForElectron/);
+  assert.match(prepareResourcesSource, /RUNTIME_STAGING_QIONGQI_DIR/);
+  assert.match(prepareResourcesSource, /electronVersion/);
+  assert.match(prepareResourcesSource, /buildPath:\s*RUNTIME_STAGING_QIONGQI_DIR/);
+});
+
 test("macOS QiongQi archive signs native runtime binaries before archiving", () => {
   assert.match(prepareResourcesSource, /codesign/);
   assert.match(prepareResourcesSource, /--options/);

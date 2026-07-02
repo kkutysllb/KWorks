@@ -403,6 +403,10 @@ export class BackendManager extends EventEmitter {
       ...(qiongqiLaunchConfig.model ? { QIONGQI_MODEL: qiongqiLaunchConfig.model } : {}),
     };
 
+    if (isPackaged()) {
+      env.ELECTRON_RUN_AS_NODE = "1";
+    }
+
     // Only expose the repo source root in development.
     if (!isPackaged()) {
       env.KWorks_PROJECT_ROOT = REPO_ROOT;

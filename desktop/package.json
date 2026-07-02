@@ -1,6 +1,6 @@
 {
   "name": "kworks-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "KWorks desktop — fully self-contained Electron shell wrapping the KWorks frontend and Node QiongQi runtime.",
   "homepage": "https://github.com/kkutysllb/kk_KWorks",
@@ -28,6 +28,7 @@
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.6.1",
     "@electron/notarize": "^2.5.0",
     "@types/node": "^20.14.10",
     "electron": "^33.2.0",

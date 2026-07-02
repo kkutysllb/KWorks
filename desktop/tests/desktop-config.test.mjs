@@ -57,6 +57,7 @@ test("desktop backend starts the Node QiongQi gateway instead of Python", () => 
   assert.match(backendSource, /packages", "cli-layer", "cli", "dist", "serve-entry\.js"/);
   assert.match(backendSource, /"dist", "serve-entry\.js"/);
   assert.match(backendSource, /process\.execPath/);
+  assert.match(backendSource, /ELECTRON_RUN_AS_NODE/);
   assert.match(backendSource, /"serve"/);
   assert.doesNotMatch(backendSource, /uvicorn/);
   assert.doesNotMatch(backendSource, /PYTHONUNBUFFERED/);
