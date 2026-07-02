@@ -47,12 +47,15 @@ test("desktop backend uses a generated QiongQi config instead of repo MCP config
 test("desktop backend injects the bundled qiongqi runtime path", () => {
   assert.match(backendSource, /getQiongqiRuntimeDir/);
   assert.match(backendSource, /ensurePackagedQiongqiRuntime/);
+  assert.match(backendSource, /resolveQiongqiServeEntry/);
   assert.match(backendSource, /archiveSha256/);
   assert.match(backendSource, /KWorks_QIONGQI_REPO_PATH/);
 });
 
 test("desktop backend starts the Node QiongQi gateway instead of Python", () => {
   assert.match(backendSource, /serve-entry\.js/);
+  assert.match(backendSource, /packages", "cli-layer", "cli", "dist", "serve-entry\.js"/);
+  assert.match(backendSource, /"dist", "serve-entry\.js"/);
   assert.match(backendSource, /process\.execPath/);
   assert.match(backendSource, /"serve"/);
   assert.doesNotMatch(backendSource, /uvicorn/);

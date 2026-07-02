@@ -25,6 +25,7 @@ build/
 !/desktop/build/
 !/desktop/build/**
 desktop/build/qiongqi-runtime.tar.gz
+desktop/build/qiongqi-runtime/
 develop-eggs/
 dist/
 downloads/

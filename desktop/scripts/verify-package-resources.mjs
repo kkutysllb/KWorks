@@ -2,6 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
@@ -15,6 +16,7 @@ const REPO_ROOT = resolve(DESKTOP_DIR, "..");
 const FRONTEND_OUT_DIR = join(REPO_ROOT, "frontend", "out");
 const QIONGQI_DIR = join(REPO_ROOT, "qiongqi");
 const SKILLS_DIR = join(REPO_ROOT, "skills");
+const QIONGQI_RUNTIME_ARCHIVE_RELATIVE = "build/qiongqi-runtime.tar.gz";
 const QIONGQI_RUNTIME_ARCHIVE = join(DESKTOP_DIR, "build", "qiongqi-runtime.tar.gz");
 
 const checks = [];
@@ -36,6 +38,56 @@ function requirePath(path, label) {
   return true;
 }
 
+function envFlag(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return undefined;
+  return !/^(0|false|no|off)$/i.test(raw);
+}
+
+function requiresQiongqiRuntimeArchive() {
+  return envFlag("KWORKS_REQUIRE_QIONGQI_ARCHIVE") ?? process.platform === "darwin";
+}
+
+function verifyQiongqiRuntimeArchive() {
+  const result = spawnSync("tar", ["-tzf", QIONGQI_RUNTIME_ARCHIVE_RELATIVE], {
+    cwd: DESKTOP_DIR,
+    encoding: "utf8",
+    maxBuffer: 50 * 1024 * 1024,
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    fail(
+      "resources/qiongqi-runtime.tar.gz contents",
+      result.stderr?.trim() || result.stdout?.trim() || "Unable to list archive",
+    );
+    return;
+  }
+
+  const listing = result.stdout ?? "";
+  if (!listing.includes("qiongqi/dist/serve-entry.js")) {
+    fail(
+      "resources/qiongqi-runtime.tar.gz deployed serve entry",
+      "Missing: qiongqi/dist/serve-entry.js",
+    );
+  } else {
+    pass("resources/qiongqi-runtime.tar.gz deployed serve entry");
+  }
+
+  const rejectedNativeToolPattern =
+    /@esbuild|esbuild\/bin\/esbuild|@rollup|rollup\.darwin|vitest|node-gyp/;
+  const rejected = listing
+    .split(/\r?\n/)
+    .filter((entry) => rejectedNativeToolPattern.test(entry));
+  if (rejected.length > 0) {
+    fail(
+      "resources/qiongqi-runtime.tar.gz excludes dev native build tools",
+      rejected.slice(0, 10).join("\n"),
+    );
+  } else {
+    pass("resources/qiongqi-runtime.tar.gz excludes dev native build tools");
+  }
+}
+
 requirePath(join(FRONTEND_OUT_DIR, "index.html"), "frontend/out index.html");
 requirePath(join(FRONTEND_OUT_DIR, "_next"), "frontend/out _next assets");
 requirePath(join(SKILLS_DIR, "public"), "resources/skills public source");
@@ -49,7 +101,13 @@ requirePath(
   "resources/qiongqi built serve entry",
 );
 requirePath(join(QIONGQI_DIR, "node_modules"), "resources/qiongqi node_modules");
-requirePath(QIONGQI_RUNTIME_ARCHIVE, "resources/qiongqi-runtime.tar.gz");
+if (requiresQiongqiRuntimeArchive()) {
+  if (requirePath(QIONGQI_RUNTIME_ARCHIVE, "resources/qiongqi-runtime.tar.gz")) {
+    verifyQiongqiRuntimeArchive();
+  }
+} else {
+  pass("resources/qiongqi-runtime.tar.gz optional on this platform");
+}
 
 const failed = checks.filter((check) => !check.ok);
 for (const check of checks) {

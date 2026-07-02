@@ -229,7 +229,7 @@ export class BackendManager extends EventEmitter {
     args: string[];
   } | null {
     const runtimeDir = getQiongqiRuntimeDir();
-    const entry = join(runtimeDir, "packages", "cli-layer", "cli", "dist", "serve-entry.js");
+    const entry = resolveQiongqiServeEntry(runtimeDir);
     if (!existsSync(entry)) return null;
 
     const qiongqiLaunchConfig = resolveQiongqiLaunchConfig({
@@ -305,9 +305,9 @@ export class BackendManager extends EventEmitter {
     if (!existsSync(archive)) return;
 
     const runtimeDir = getQiongqiRuntimeDir();
-    const entry = join(runtimeDir, "packages", "cli-layer", "cli", "dist", "serve-entry.js");
     const markerPath = join(runtimeDir, ".kworks-runtime-archive.json");
     const archiveSha256 = sha256File(archive);
+    const entry = resolveQiongqiServeEntry(runtimeDir);
     if (existsSync(entry) && readRuntimeArchiveMarker(markerPath) === archiveSha256) return;
 
     const cacheDir = getRuntimeCacheDir();
@@ -323,8 +323,11 @@ export class BackendManager extends EventEmitter {
       throw new Error(`Failed to extract bundled QiongQi runtime: ${detail}`);
     }
 
-    if (!existsSync(entry)) {
-      throw new Error(`Extracted QiongQi runtime is missing serve entry: ${entry}`);
+    const extractedEntry = resolveQiongqiServeEntry(runtimeDir);
+    if (!existsSync(extractedEntry)) {
+      throw new Error(
+        `Extracted QiongQi runtime is missing serve entry under ${runtimeDir}`,
+      );
     }
     writeFileSync(
       markerPath,
@@ -845,6 +848,18 @@ function oldestMtimeMs(dir: string): number {
 
 function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function resolveQiongqiServeEntry(runtimeDir: string): string {
+  return qiongqiServeEntryCandidates(runtimeDir).find((entry) => existsSync(entry)) ??
+    qiongqiServeEntryCandidates(runtimeDir)[0];
+}
+
+function qiongqiServeEntryCandidates(runtimeDir: string): string[] {
+  return [
+    join(runtimeDir, "packages", "cli-layer", "cli", "dist", "serve-entry.js"),
+    join(runtimeDir, "dist", "serve-entry.js"),
+  ];
 }
 
 function readRuntimeArchiveMarker(path: string): string | null {
