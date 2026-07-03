@@ -63,6 +63,7 @@ import { isTodoWriteToolName } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
 interface AgentPanelProps {
+  avoidRightFloatingPanels?: boolean;
   projectId: string;
   onThreadIdChange?: (threadId: string | undefined) => void;
   onTodosChange?: (todos: Todo[]) => void;
@@ -94,6 +95,7 @@ const MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM = 92;
  * page reloads within a session.
  */
 export function AgentPanel({
+  avoidRightFloatingPanels = false,
   projectId,
   onFocusFile,
   onThreadIdChange,
@@ -104,6 +106,7 @@ export function AgentPanel({
       <SubtasksProvider>
         <PromptInputProvider>
           <AgentPanelInner
+            avoidRightFloatingPanels={avoidRightFloatingPanels}
             projectId={projectId}
             onFocusFile={onFocusFile}
             onThreadIdChange={onThreadIdChange}
@@ -116,6 +119,7 @@ export function AgentPanel({
 }
 
 function AgentPanelInner({
+  avoidRightFloatingPanels = false,
   projectId,
   onThreadIdChange,
   onTodosChange,
@@ -514,7 +518,12 @@ function AgentPanelInner({
               }
             />
             {/* Input */}
-            <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5">
+            <div
+              className={cn(
+                "absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5",
+                avoidRightFloatingPanels && "xl:right-[22rem]",
+              )}
+            >
               <div className="relative flex w-full max-w-4xl min-w-0 flex-col items-center gap-2">
                 <CodingChangeSummaryCard
                   changes={changes}

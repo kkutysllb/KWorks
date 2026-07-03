@@ -57,16 +57,26 @@ test.describe("Coding workbench layout", () => {
 
     const environmentBox = await environmentCard.boundingBox();
     const todoBox = await todoPanel.boundingBox();
+    const floatingStackBox = await floatingStack.boundingBox();
     const inspectorBox = await inspector.boundingBox();
     const inputBox = await inputShell.boundingBox();
 
-    if (!environmentBox || !todoBox || !inspectorBox || !inputBox) {
+    if (
+      !environmentBox ||
+      !todoBox ||
+      !floatingStackBox ||
+      !inspectorBox ||
+      !inputBox
+    ) {
       throw new Error(
         "Expected coding workbench layout boxes to be measurable",
       );
     }
 
     expect(todoBox.y).toBeGreaterThan(environmentBox.y + environmentBox.height);
+    expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(
+      floatingStackBox.x - 1,
+    );
     expect(inputBox.x).toBeGreaterThanOrEqual(inspectorBox.x - 1);
     expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(
       inspectorBox.x + inspectorBox.width + 1,

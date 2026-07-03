@@ -712,6 +712,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                   )}
                 >
                   <AgentInspector
+                    avoidRightFloatingPanels={showFloatingPanels}
                     onFocusFile={focusWorkbenchFile}
                     projectRoot={project.path}
                     projectId={projectId}
@@ -1276,6 +1277,7 @@ function PanelResizeHandle({
 
 function AgentInspector({
   activeTab,
+  avoidRightFloatingPanels,
   onActiveTabChange,
   onFocusFile,
   onTodosChange,
@@ -1286,6 +1288,7 @@ function AgentInspector({
   selectedTaskId,
 }: {
   activeTab: "agent" | "events" | "session" | "workflow" | "skills";
+  avoidRightFloatingPanels?: boolean;
   onActiveTabChange: (
     tab: "agent" | "events" | "session" | "workflow" | "skills",
   ) => void;
@@ -1347,6 +1350,7 @@ function AgentInspector({
         <div className="relative mt-0 min-h-0 flex-1 overflow-hidden">
           <PersistentInspectorPanel active={activeTab === "agent"} keepMounted>
             <AgentPanel
+              avoidRightFloatingPanels={avoidRightFloatingPanels}
               projectId={projectId}
               onFocusFile={onFocusFile}
               onThreadIdChange={onThreadIdChange}
