@@ -251,8 +251,9 @@ jobs:
           exec node "$GITHUB_WORKSPACE/desktop/scripts/codesign-retry.mjs" "$@"
           SH
           chmod +x "$WRAPPER_DIR/codesign"
+          test -x "$WRAPPER_DIR/codesign"
+          test -f "$GITHUB_WORKSPACE/desktop/scripts/codesign-retry.mjs"
           echo "$WRAPPER_DIR" >> "$GITHUB_PATH"
-          "$WRAPPER_DIR/codesign" --help >/dev/null 2>&1
 
       - name: Build desktop shell
         working-directory: desktop

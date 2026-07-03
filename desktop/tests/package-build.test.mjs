@@ -117,6 +117,8 @@ test("release workflow retries transient macOS codesign timestamp failures", () 
   assert.match(releaseWorkflowSource, /name: Install macOS codesign retry wrapper/);
   assert.match(releaseWorkflowSource, /kworks-codesign-bin/);
   assert.match(releaseWorkflowSource, /\$GITHUB_PATH/);
+  assert.match(releaseWorkflowSource, /test -x "\$WRAPPER_DIR\/codesign"/);
+  assert.doesNotMatch(releaseWorkflowSource, /codesign"\s+--help/);
   assert.match(retryScript, /\/usr\/bin\/codesign/);
   assert.match(retryScript, /A timestamp was expected but was not found/);
   assert.match(retryScript, /timestamp authority/i);
