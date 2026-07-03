@@ -240,6 +240,20 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTIFICATE }}
           p12-password: ${{ secrets.MAC_CERTIFICATE_PWD }}
 
+      - name: Install macOS codesign retry wrapper
+        if: runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true'
+        shell: bash
+        run: |
+          WRAPPER_DIR="${RUNNER_TEMP:-/tmp}/kworks-codesign-bin"
+          mkdir -p "$WRAPPER_DIR"
+          cat > "$WRAPPER_DIR/codesign" <<'SH'
+          #!/bin/sh
+          exec node "$GITHUB_WORKSPACE/desktop/scripts/codesign-retry.mjs" "$@"
+          SH
+          chmod +x "$WRAPPER_DIR/codesign"
+          echo "$WRAPPER_DIR" >> "$GITHUB_PATH"
+          "$WRAPPER_DIR/codesign" --help >/dev/null 2>&1
+
       - name: Build desktop shell
         working-directory: desktop
         shell: bash
@@ -278,7 +292,7 @@ jobs:
           DEBUG: ${{ runner.os == 'Windows' && 'electron-builder,electron-builder:*' || '' }}
           NODE_OPTIONS: --max-old-space-size=4096
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac_secrets.outputs.available == 'true' }}
-        run: npx --yes electron-builder@26.8.1 ${{ matrix.builder_args }} --publish never
+        run: pnpm exec electron-builder ${{ matrix.builder_args }} --publish never
 
       - name: Verify packaged Electron resources
         working-directory: desktop

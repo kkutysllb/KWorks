@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
@@ -85,7 +85,8 @@ function verifyResourceDir(resourcesDir) {
 }
 
 function verifyRuntimeArchive(archive, label) {
-  const result = spawnSync("tar", ["-tzf", archive], {
+  const result = spawnSync("tar", ["-tzf", basename(archive)], {
+    cwd: dirname(archive),
     encoding: "utf8",
     maxBuffer: 50 * 1024 * 1024,
     windowsHide: true,

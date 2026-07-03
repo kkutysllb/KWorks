@@ -1,11 +1,29 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const verifierUrl = new URL("../scripts/verify-package-resources.mjs", import.meta.url);
+const builtVerifierPath = fileURLToPath(
+  new URL("../scripts/verify-built-package-resources.mjs", import.meta.url),
+);
+const codesignRetryPath = fileURLToPath(
+  new URL("../scripts/codesign-retry.mjs", import.meta.url),
+);
 const prepareResourcesSource = readFileSync(
   new URL("../scripts/prepare-package-resources.mjs", import.meta.url),
   "utf8",
@@ -91,6 +109,20 @@ test("macOS QiongQi archive signs native runtime binaries before archiving", () 
   assert.match(prepareResourcesSource, /findMacNativeBinaries/);
 });
 
+test("release workflow retries transient macOS codesign timestamp failures", () => {
+  const retryScript = readFileSync(
+    new URL("../scripts/codesign-retry.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(releaseWorkflowSource, /name: Install macOS codesign retry wrapper/);
+  assert.match(releaseWorkflowSource, /kworks-codesign-bin/);
+  assert.match(releaseWorkflowSource, /\$GITHUB_PATH/);
+  assert.match(retryScript, /\/usr\/bin\/codesign/);
+  assert.match(retryScript, /A timestamp was expected but was not found/);
+  assert.match(retryScript, /timestamp authority/i);
+  assert.match(retryScript, /maxAttempts\s*=\s*3/);
+});
+
 test("packaged app ships small tray icons separately from the app icon", () => {
   const builderConfig = readFileSync(
     new URL("../electron-builder.yml", import.meta.url),
@@ -120,7 +152,7 @@ test("packaged app ships the production QiongQi runtime per platform", () => {
 test("release workflow prepares packaged resources before electron-builder", () => {
   const prepareIndex = releaseWorkflowSource.indexOf("pnpm run prepare:package-resources");
   const verifyIndex = releaseWorkflowSource.indexOf("pnpm run verify:package-resources");
-  const builderIndex = releaseWorkflowSource.indexOf("electron-builder@26.8.1");
+  const builderIndex = releaseWorkflowSource.indexOf("pnpm exec electron-builder");
 
   assert.notEqual(prepareIndex, -1);
   assert.notEqual(verifyIndex, -1);
@@ -163,7 +195,8 @@ test("release workflow keeps Windows electron-builder packaging observable", () 
   assert.match(releaseWorkflowSource, /DEBUG:\s+\$\{\{ runner\.os == 'Windows'/);
   assert.match(releaseWorkflowSource, /electron-builder,electron-builder:\*/);
   assert.match(releaseWorkflowSource, /timeout-minutes:\s+45/);
-  assert.match(releaseWorkflowSource, /electron-builder@26\.8\.1/);
+  assert.match(releaseWorkflowSource, /pnpm exec electron-builder/);
+  assert.doesNotMatch(releaseWorkflowSource, /electron-builder@26\.8\.1/);
 });
 
 test("release workflow avoids mutating managed macOS Python for distutils", () => {
@@ -240,4 +273,128 @@ test("release workflow verifies the final unpacked resources after electron-buil
   assert.equal(buildIndex < verifyBuiltIndex, true);
   assert.equal(verifyBuiltIndex < uploadIndex, true);
   assert.match(releaseWorkflowSource, /pnpm run verify:built-package-resources/);
+});
+
+test("built package verifier lists runtime archive from the resources directory", () => {
+  const tmpRoot = mkdtempSync(join(tmpdir(), "kworks-built-package-verify-"));
+  try {
+    const resourcesDir = join(tmpRoot, "Resources");
+    mkdirSync(join(resourcesDir, "frontend-out"), { recursive: true });
+    mkdirSync(join(resourcesDir, "skills"), { recursive: true });
+    writeFileSync(join(resourcesDir, "frontend-out", "index.html"), "<!doctype html>");
+    writeFileSync(join(resourcesDir, "qiongqi-runtime.tar.gz"), "");
+
+    const fakeBinDir = join(tmpRoot, "bin");
+    mkdirSync(fakeBinDir, { recursive: true });
+    const fakeTar = join(fakeBinDir, "tar");
+    writeFileSync(
+      fakeTar,
+      `#!/bin/sh
+if [ "$1" != "-tzf" ] || [ "$2" != "qiongqi-runtime.tar.gz" ]; then
+  echo "unexpected tar arguments: $*" >&2
+  exit 64
+fi
+case "$PWD" in
+  *Resources) ;;
+  *)
+    echo "unexpected tar cwd: $PWD" >&2
+    exit 65
+    ;;
+esac
+printf '%s\\n' \\
+  qiongqi/dist/serve-entry.js \\
+  qiongqi/node_modules/@qiongqi/http/package.json \\
+  qiongqi/node_modules/@qiongqi/contracts/package.json \\
+  qiongqi/node_modules/@qiongqi/preset-coding/package.json
+`,
+    );
+    chmodSync(fakeTar, 0o755);
+
+    const result = spawnSync(process.execPath, [builtVerifierPath], {
+      env: {
+        ...process.env,
+        KWORKS_PACKAGED_RESOURCES_DIR: resourcesDir,
+        PATH: `${fakeBinDir}${delimiter}${process.env.PATH ?? ""}`,
+      },
+      encoding: "utf8",
+      windowsHide: true,
+    });
+
+    assert.equal(
+      result.status,
+      0,
+      `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("codesign retry wrapper retries timestamp failures and preserves hard failures", () => {
+  const tmpRoot = mkdtempSync(join(tmpdir(), "kworks-codesign-retry-"));
+  try {
+    const attemptsFile = join(tmpRoot, "attempts");
+    const retryingCodesign = join(tmpRoot, "retrying-codesign");
+    writeFileSync(
+      retryingCodesign,
+      `#!/bin/sh
+attempts=0
+if [ -f "$KWORKS_CODESIGN_ATTEMPTS_FILE" ]; then
+  attempts="$(cat "$KWORKS_CODESIGN_ATTEMPTS_FILE")"
+fi
+attempts=$((attempts + 1))
+printf '%s' "$attempts" > "$KWORKS_CODESIGN_ATTEMPTS_FILE"
+if [ "$attempts" -eq 1 ]; then
+  echo "A timestamp was expected but was not found." >&2
+  exit 1
+fi
+echo "codesign ok"
+`,
+    );
+    chmodSync(retryingCodesign, 0o755);
+
+    const retryResult = spawnSync(process.execPath, [codesignRetryPath, "--sign", "id"], {
+      env: {
+        ...process.env,
+        KWORKS_REAL_CODESIGN: retryingCodesign,
+        KWORKS_CODESIGN_ATTEMPTS_FILE: attemptsFile,
+        KWORKS_CODESIGN_RETRY_DELAY_MS: "0",
+      },
+      encoding: "utf8",
+      windowsHide: true,
+    });
+
+    assert.equal(
+      retryResult.status,
+      0,
+      `stdout:\n${retryResult.stdout}\nstderr:\n${retryResult.stderr}`,
+    );
+    assert.equal(readFileSync(attemptsFile, "utf8"), "2");
+    assert.match(retryResult.stderr, /retrying 2\/3/);
+
+    const hardFailCodesign = join(tmpRoot, "hard-fail-codesign");
+    writeFileSync(
+      hardFailCodesign,
+      `#!/bin/sh
+echo "certificate is invalid" >&2
+exit 3
+`,
+    );
+    chmodSync(hardFailCodesign, 0o755);
+
+    const hardFailResult = spawnSync(process.execPath, [codesignRetryPath, "--sign", "id"], {
+      env: {
+        ...process.env,
+        KWORKS_REAL_CODESIGN: hardFailCodesign,
+        KWORKS_CODESIGN_RETRY_DELAY_MS: "0",
+      },
+      encoding: "utf8",
+      windowsHide: true,
+    });
+
+    assert.equal(hardFailResult.status, 3);
+    assert.doesNotMatch(hardFailResult.stderr, /retrying/);
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
 });
