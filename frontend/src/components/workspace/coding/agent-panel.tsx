@@ -505,48 +505,50 @@ function AgentPanelInner({
 
           {/* Messages */}
           <main className="relative flex min-h-0 min-w-0 grow flex-col overflow-hidden">
-            <MessageList
-              className="size-full min-w-0"
-              threadId={uiThreadId}
-              thread={thread}
-              paddingBottom={messageListPaddingBottom}
-              hasMoreHistory={hasMoreHistory}
-              loadMoreHistory={loadMoreHistory}
-              isHistoryLoading={isHistoryLoading}
-              onOpenFileChange={
-                onFocusFile ? handleOpenMessageFileChange : undefined
-              }
-            />
-            {/* Input */}
             <div
               className={cn(
-                "absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5",
-                avoidRightFloatingPanels && "xl:right-[22rem]",
+                "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+                avoidRightFloatingPanels && "xl:mr-[22rem]",
               )}
             >
-              <div className="relative flex w-full max-w-4xl min-w-0 flex-col items-center gap-2">
-                <CodingChangeSummaryCard
-                  changes={changes}
-                  projectId={projectId}
-                  onFocusFile={onFocusFile}
-                />
-                <div
-                  className="w-full min-w-0"
-                  data-testid="coding-agent-input-shell"
-                >
-                  <InputBox
-                    className="bg-background/5 min-h-32 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-20 [&_[data-slot=input-group]]:min-h-32"
-                    threadId={uiThreadId}
-                    autoFocus={false}
-                    status={status}
-                    context={settings.context}
-                    onContextChange={(context) =>
-                      setSettings("context", context)
-                    }
-                    onFollowupsVisibilityChange={setShowFollowups}
-                    onSubmit={handleSubmit}
-                    onStop={handleStop}
+              <MessageList
+                className="size-full min-w-0"
+                threadId={uiThreadId}
+                thread={thread}
+                paddingBottom={messageListPaddingBottom}
+                hasMoreHistory={hasMoreHistory}
+                loadMoreHistory={loadMoreHistory}
+                isHistoryLoading={isHistoryLoading}
+                onOpenFileChange={
+                  onFocusFile ? handleOpenMessageFileChange : undefined
+                }
+              />
+              {/* Input */}
+              <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5">
+                <div className="relative flex w-full max-w-4xl min-w-0 flex-col items-center gap-2">
+                  <CodingChangeSummaryCard
+                    changes={changes}
+                    projectId={projectId}
+                    onFocusFile={onFocusFile}
                   />
+                  <div
+                    className="w-full min-w-0"
+                    data-testid="coding-agent-input-shell"
+                  >
+                    <InputBox
+                      className="bg-background/5 min-h-32 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-20 [&_[data-slot=input-group]]:min-h-32"
+                      threadId={uiThreadId}
+                      autoFocus={false}
+                      status={status}
+                      context={settings.context}
+                      onContextChange={(context) =>
+                        setSettings("context", context)
+                      }
+                      onFollowupsVisibilityChange={setShowFollowups}
+                      onSubmit={handleSubmit}
+                      onStop={handleStop}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

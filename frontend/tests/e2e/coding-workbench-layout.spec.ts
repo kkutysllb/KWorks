@@ -50,6 +50,7 @@ test.describe("Coding workbench layout", () => {
     const floatingStack = page.getByTestId("coding-floating-panel-stack");
     const todoPanel = page.locator(".todo-floating-panel");
     const inspector = page.getByTestId("coding-agent-inspector");
+    const messageContent = page.getByTestId("message-list-content");
     const inputShell = page.getByTestId("coding-agent-input-shell");
 
     await expect(environmentCard).toBeVisible();
@@ -59,6 +60,7 @@ test.describe("Coding workbench layout", () => {
     const todoBox = await todoPanel.boundingBox();
     const floatingStackBox = await floatingStack.boundingBox();
     const inspectorBox = await inspector.boundingBox();
+    const messageContentBox = await messageContent.boundingBox();
     const inputBox = await inputShell.boundingBox();
 
     if (
@@ -66,6 +68,7 @@ test.describe("Coding workbench layout", () => {
       !todoBox ||
       !floatingStackBox ||
       !inspectorBox ||
+      !messageContentBox ||
       !inputBox
     ) {
       throw new Error(
@@ -74,6 +77,9 @@ test.describe("Coding workbench layout", () => {
     }
 
     expect(todoBox.y).toBeGreaterThan(environmentBox.y + environmentBox.height);
+    expect(messageContentBox.x + messageContentBox.width).toBeLessThanOrEqual(
+      floatingStackBox.x - 1,
+    );
     expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(
       floatingStackBox.x - 1,
     );
