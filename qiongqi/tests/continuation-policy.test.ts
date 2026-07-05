@@ -46,6 +46,32 @@ describe('ContinuationPolicy', () => {
     expect(items.some((item) => item.kind === 'assistant_text' && item.text === 'done')).toBe(true)
   })
 
+  it('retries a length-truncated no-tool model step before completing the turn', async () => {
+    let calls = 0
+    const h = makeHarness({
+      provider: 'length-runner',
+      model: 'length-runner',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        calls += 1
+        if (calls === 1) {
+          yield { kind: 'assistant_text_delta', text: 'Now let me write the full paper as a Markdown document.' }
+          yield { kind: 'completed', stopReason: 'length' }
+          return
+        }
+        yield { kind: 'assistant_text_delta', text: '# Full paper\n\nCompleted body.' }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    })
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(2)
+    expect(items.some((item) => item.kind === 'assistant_text' && item.text.includes('Full paper'))).toBe(true)
+  })
+
   it('continues an active goal after no-tool model turns until update_goal completes it', async () => {
     let h: ReturnType<typeof makeHarness>
     const goalTools = [

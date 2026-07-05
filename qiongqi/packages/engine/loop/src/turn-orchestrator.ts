@@ -49,6 +49,7 @@ import { ToolCallCoordinator } from './tool-call-coordinator.js'
 import { ModelStepRunner } from './model-step-runner.js'
 import { PromptBuilder } from './prompt-builder.js'
 import { decideContinuation } from './continuation-policy.js'
+import { defaultLoopEvaluator } from './loop-evaluator.js'
 
 export type TurnOrchestratorOptions = {
   threadStore: ThreadStore
@@ -311,13 +312,21 @@ export class TurnOrchestrator {
     turnId: string,
     signal: AbortSignal
   ): Promise<'completed' | 'failed' | 'aborted'> {
-    for (let step = 0; ; step += 1) {
+    const retryCounts = new Map<number, number>()
+    for (let step = 0; ;) {
       if (signal.aborted) return 'aborted'
       await this.drainSteering(threadId, turnId, signal)
-      const stepResult = await this.runStep(threadId, turnId, signal, step)
+      const retryCount = retryCounts.get(step) ?? 0
+      const stepResult = await this.runStep(threadId, turnId, signal, step, retryCount)
+      if (stepResult === 'retry') {
+        retryCounts.set(step, retryCount + 1)
+        continue
+      }
       if (stepResult === 'stop') return 'completed'
       if (stepResult === 'failed') return 'failed'
       if (stepResult === 'aborted') return 'aborted'
+      retryCounts.delete(step)
+      step += 1
     }
   }
 
@@ -325,13 +334,15 @@ export class TurnOrchestrator {
     threadId: string,
     turnId: string,
     signal: AbortSignal,
-    stepIndex: number
-  ): Promise<'continue' | 'stop' | 'failed' | 'aborted'> {
+    stepIndex: number,
+    retryCount: number
+  ): Promise<'continue' | 'stop' | 'failed' | 'aborted' | 'retry'> {
     return runOrchestratorStep({
       threadId,
       turnId,
       signal,
       stepIndex,
+      retryCount,
       promptBuilder: this.promptBuilder,
       modelStepRunner: this.modelStepRunner,
       coordinator: this.coordinator,
@@ -363,14 +374,15 @@ export async function runOrchestratorStep(input: {
   turnId: string
   signal: AbortSignal
   stepIndex: number
+  retryCount?: number
   promptBuilder: PromptBuilder
   modelStepRunner: ModelStepRunner
   coordinator: ToolCallCoordinator
   events: RuntimeEventRecorder
   turns: TurnService
   ids: IdGenerator
-}): Promise<'continue' | 'stop' | 'failed' | 'aborted'> {
-  const { threadId, turnId, signal, stepIndex, promptBuilder, modelStepRunner, coordinator, events, turns, ids } = input
+}): Promise<'continue' | 'stop' | 'failed' | 'aborted' | 'retry'> {
+  const { threadId, turnId, signal, stepIndex, retryCount = 0, promptBuilder, modelStepRunner, coordinator, events, turns, ids } = input
   const built = await promptBuilder.build({ threadId, turnId, signal, stepIndex })
   if (built.kind === 'aborted') return 'aborted'
   if (built.kind === 'stop') return 'stop'
@@ -395,6 +407,13 @@ export async function runOrchestratorStep(input: {
     threadId,
     turnId
   })
+  const evaluation = defaultLoopEvaluator({
+    decision,
+    stepResult,
+    ctx,
+    retryCount
+  })
+  if (evaluation.verdict === 'retry') return 'retry'
 
   switch (decision.action) {
     case 'stop':
