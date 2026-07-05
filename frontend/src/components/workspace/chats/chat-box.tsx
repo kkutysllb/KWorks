@@ -11,6 +11,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { env } from "@/env";
+import { qiongqiClient } from "@/core/threads/qiongqi-client";
 import { cn } from "@/lib/utils";
 
 import {
@@ -50,40 +51,57 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   } = useArtifacts();
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
+
+  // Track the previous loading state so we can refresh artifacts right after a
+  // turn finishes (loading: true → false), not only on thread switch / mount.
+  const prevLoadingRef = useRef<boolean | undefined>(undefined);
+
   useEffect(() => {
     if (threadIdRef.current !== threadId) {
       threadIdRef.current = threadId;
       deselect();
+      prevLoadingRef.current = undefined;
+    }
+    prevLoadingRef.current = thread.isLoading;
+
+    // Fetch the real result-file list from the backend (GET /v1/threads/:id/
+    // artifacts enumerates the thread's outputs/ directory). Done on thread
+    // switch, initial mount, and whenever a turn finishes (isLoading flips to
+    // false, which re-runs this effect).
+    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true") {
+      let cancelled = false;
+      qiongqiClient
+        .listThreadArtifacts(threadId)
+        .then((virtualPaths) => {
+          if (!cancelled) setArtifacts(virtualPaths);
+        })
+        .catch(() => {
+          // Best-effort: leave the previous list on failure.
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    // Update artifacts from the current thread
+    // Static-website (mock) path keeps the legacy thread.values fallback.
     setArtifacts(thread.values.artifacts ?? []);
-
-    // DO NOT automatically deselect the artifact when switching threads, because the artifacts auto discovering is not work now.
-    // if (
-    //   selectedArtifact &&
-    //   !thread.values.artifacts?.includes(selectedArtifact)
-    // ) {
-    //   deselect();
-    // }
 
     if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
-      autoSelectFirstArtifact
+      autoSelectFirstArtifact &&
+      thread?.values?.artifacts?.length > 0
     ) {
-      if (thread?.values?.artifacts?.length > 0) {
-        setAutoSelectFirstArtifact(false);
-        selectArtifact(thread.values.artifacts[0]!);
-      }
+      setAutoSelectFirstArtifact(false);
+      selectArtifact(thread.values.artifacts[0]!);
     }
   }, [
     threadId,
+    thread.isLoading,
+    thread.values.artifacts,
     autoSelectFirstArtifact,
     deselect,
     selectArtifact,
-    selectedArtifact,
     setArtifacts,
-    thread.values.artifacts,
   ]);
 
   const artifactPanelOpen = useMemo(() => {

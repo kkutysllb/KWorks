@@ -2390,7 +2390,9 @@ describe('DeepseekCompatModelClient', () => {
     expect(assistantToolMessage?.reasoning_content).toBe(
       'I need to inspect the current changes before writing the commit message.'
     )
-    expect(assistantToolMessage?.content).toBe('')
+    // Tool-call-only assistant messages have their empty content coerced to a
+    // single space for chat_completions (strict providers reject empty content).
+    expect(assistantToolMessage?.content).toBe(' ')
     expect((assistantToolMessage?.tool_calls as Array<{ id?: string }> | undefined)?.map((call) => call.id))
       .toEqual(['call_a', 'call_b'])
     expect(messages.filter((message) => message.role === 'tool').map((message) => message.tool_call_id))
@@ -2463,7 +2465,7 @@ describe('DeepseekCompatModelClient', () => {
 
     expect(assistantTextMessage?.reasoning_content).toBe(' ')
     expect(assistantToolMessage?.reasoning_content).toBe(' ')
-    expect(assistantToolMessage?.content).toBe('')
+    expect(assistantToolMessage?.content).toBe(' ')
   })
 
   it('treats fixed DeepSeek v4 models as thinking producers without content-block thinking in chat completions', async () => {
@@ -3078,7 +3080,7 @@ describe('DeepseekCompatModelClient', () => {
     ])
   })
 
-  it('serializes undefined tool outputs as empty string content', async () => {
+  it('coerces empty tool outputs to a single space on chat_completions endpoints', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {
       id: 'r1',
@@ -3130,9 +3132,15 @@ describe('DeepseekCompatModelClient', () => {
       // drain
     }
 
-    const toolMessage = sentBodies[0]?.messages?.find((message) => message.role === 'tool')
+    const messages = sentBodies[0]?.messages ?? []
+    const assistantMessage = messages.find((message) => message.role === 'assistant' && Array.isArray(message.tool_calls))
+    const toolMessage = messages.find((message) => message.role === 'tool')
 
-    expect(toolMessage?.content).toBe('')
+    // Strict providers (e.g. MiniMax error 2013 "chat content is empty") reject
+    // empty content, so both the tool-call-only assistant message and the empty
+    // tool result are coerced to a single space rather than ''.
+    expect(assistantMessage?.content).toBe(' ')
+    expect(toolMessage?.content).toBe(' ')
   })
 
   it('sends compaction summaries as mutable system messages', async () => {

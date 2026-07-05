@@ -271,6 +271,27 @@ export const qiongqiClient = {
     );
   },
 
+  async steerTurn(
+    threadId: string,
+    turnId: string,
+    text: string,
+  ): Promise<{ ok: boolean }> {
+    return request(encodePath`/v1/threads/${threadId}/turns/${turnId}/steer`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  },
+
+  async listThreadArtifacts(
+    threadId: string,
+  ): Promise<string[]> {
+    const body = await request<{
+      threadId: string;
+      artifacts: Array<{ name: string; virtualPath: string }>;
+    }>(encodePath`/v1/threads/${threadId}/artifacts`);
+    return body.artifacts.map((entry) => entry.virtualPath);
+  },
+
   async decideApproval(
     approvalId: string,
     decision: "allow" | "deny",

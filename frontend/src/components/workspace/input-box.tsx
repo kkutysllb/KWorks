@@ -39,6 +39,7 @@ import {
   PromptInputTextarea,
   PromptInputTools,
   usePromptInputAttachments,
+  usePromptInputController,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import {
@@ -75,6 +76,7 @@ import {
 } from "../ai-elements/model-selector";
 
 import { ArtifactResultStrip } from "./artifacts/artifact-result-strip";
+import { PendingQueueStrip } from "./input/pending-queue-strip";
 import { useThread } from "./messages/context";
 import {
   getWorkspaceRootDisplayName,
@@ -225,6 +227,9 @@ export function InputBox({
   onContextChange,
   onSubmit,
   onStop,
+  pendingQueue,
+  onSteerPending,
+  onRemovePending,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
   status?: ChatStatus;
@@ -240,6 +245,9 @@ export function InputBox({
     context: InputBoxSubmitContext,
   ) => void;
   onStop?: () => void;
+  pendingQueue?: Array<{ id: string; text: string; createdAt: number }>;
+  onSteerPending?: (id: string) => void;
+  onRemovePending?: (id: string) => void;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -259,6 +267,14 @@ export function InputBox({
     workModes,
     context.workModeId ?? initialWorkModeId ?? defaultModeId,
   );
+
+  // While streaming, the submit button becomes a Stop button only when the
+  // composer is empty. With text present it stays a Send button (the message
+  // is queued by the stream hook and does NOT interrupt the running turn).
+  const promptController = usePromptInputController();
+  const hasComposerText = promptController.textInput.value.trim().length > 0;
+  const submitStatus =
+    status === "streaming" && !hasComposerText ? "streaming" : status;
 
   useEffect(() => {
     if (models.length === 0) {
@@ -456,11 +472,19 @@ export function InputBox({
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
-      if (status === "streaming") {
+      // While a turn is streaming:
+      //  - with text in the composer → send (the stream hook queues it and
+      //    does NOT interrupt the running task; the queue auto-drains on
+      //    turn finish, or the user can "steer" it immediately).
+      //  - with an empty composer → act as the Stop button.
+      if (status === "streaming" && !message.text.trim()) {
         onStop?.();
         return;
       }
-      if (!message.text) {
+      if (!message.text.trim()) {
+        if (status === "streaming") {
+          onStop?.();
+        }
         return;
       }
       if (!modelReady) {
@@ -532,6 +556,13 @@ export function InputBox({
         </div>
       )}
       <ArtifactResultStrip status={status} threadId={threadId} />
+      {pendingQueue && pendingQueue.length > 0 && onSteerPending && onRemovePending && (
+        <PendingQueueStrip
+          entries={pendingQueue}
+          onSteer={onSteerPending}
+          onRemove={onRemovePending}
+        />
+      )}
       <PromptInput
         className={cn(
           "bg-background/85 rounded-2xl backdrop-blur-sm transition-all duration-300 ease-out *:data-[slot='input-group']:overflow-visible *:data-[slot='input-group']:rounded-2xl",
@@ -648,7 +679,7 @@ export function InputBox({
               // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
               disabled={disabled || !modelReady}
               variant="outline"
-              status={status}
+              status={submitStatus}
             />
           </PromptInputTools>
         </PromptInputFooter>

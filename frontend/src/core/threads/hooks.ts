@@ -56,6 +56,15 @@ type SendMessageOptions = {
   additionalKwargs?: Record<string, unknown>;
 };
 
+/** A message buffered while a turn is streaming, waiting to be sent. */
+type PendingSendEntry = {
+  id: string;
+  message: PromptInputMessage;
+  extraContext?: Record<string, unknown>;
+  options?: SendMessageOptions;
+  createdAt: number;
+};
+
 type ThreadSubmitContext = LocalSettings["context"] &
   Record<string, unknown> & {
     model_name?: string;
@@ -519,12 +528,53 @@ export function useThreadStream({
     if (!isActivatingPendingSubmit) {
       sendInFlightRef.current = false;
       setOptimisticMessages([]);
+      // Pending messages belong to the previous thread; drop them on switch.
+      setPendingQueue([]);
     }
   }, [threadId]);
 
   // Cache stop function in a ref so stopThread doesn't need thread in deps.
   const threadStopRef = useRef((thread as StoppableThread<typeof thread>).stop);
   threadStopRef.current = (thread as StoppableThread<typeof thread>).stop;
+
+  // ── Pending send queue (feature: don't interrupt a running turn) ────────
+  // When the user sends while a turn is streaming, the message is buffered
+  // here instead of aborting the current task. On turn completion the first
+  // queued entry is auto-sent; the user can also "steer" (inject into the
+  // running turn) an entry immediately via the queue UI.
+  const [pendingQueue, setPendingQueue] = useState<PendingSendEntry[]>([]);
+
+  const enqueuePending = useCallback((entry: PendingSendEntry) => {
+    setPendingQueue((queue) => [...queue, entry]);
+  }, []);
+
+  const removePending = useCallback((id: string) => {
+    setPendingQueue((queue) => queue.filter((entry) => entry.id !== id));
+  }, []);
+
+  const clearPending = useCallback(() => {
+    setPendingQueue([]);
+  }, []);
+
+  // Steer: inject a queued message into the currently-running turn without
+  // aborting it. The backend SteeringQueue buffers the text and the loop drains
+  // it at the next safe boundary, so the model sees the new requirement mid-task.
+  const steerPending = useCallback(
+    async (id: string) => {
+      const entry = pendingQueue.find((item) => item.id === id);
+      if (!entry) return;
+      const targetThreadId = threadIdRef.current ?? onStreamThreadId;
+      const activeTurnId = thread.getActiveTurnId?.();
+      if (!targetThreadId || !activeTurnId) return;
+      try {
+        await qiongqiClient.steerTurn(targetThreadId, activeTurnId, entry.message.text);
+        removePending(id);
+      } catch {
+        // leave the entry queued if the steer call fails
+      }
+    },
+    [pendingQueue, onStreamThreadId, removePending, thread],
+  );
 
   const stopThread = useCallback(async () => {
     const currentThreadId =
@@ -566,9 +616,25 @@ export function useThreadStream({
       if (sendInFlightRef.current) {
         return;
       }
-      sendInFlightRef.current = true;
 
       const text = message.text.trim();
+      // ── Don't interrupt a running turn ────────────────────────────────
+      // If a turn is streaming, buffer the message into the pending queue
+      // instead of aborting the current task. The queue auto-drains when the
+      // turn finishes (see the drain effect below). The user can also "steer"
+      // (inject into the running turn) a queued entry from the queue UI.
+      if (text && thread.isLoading) {
+        enqueuePending({
+          id: `pending-${Date.now()}`,
+          message: { ...message, text },
+          extraContext,
+          options,
+          createdAt: Date.now(),
+        });
+        return;
+      }
+
+      sendInFlightRef.current = true;
       pendingSubmitThreadIdRef.current = requestedThreadId ?? null;
 
       // Capture current count before showing optimistic messages
@@ -779,7 +845,7 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, t.uploads.uploadingFiles, context, queryClient, threadId],
+    [thread, t.uploads.uploadingFiles, context, queryClient, threadId, enqueuePending],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,
@@ -869,6 +935,29 @@ export function useThreadStream({
     thread.error,
   ]);
 
+  // ── Auto-drain the pending queue when a turn finishes ────────────────
+  // When isLoading flips true → false and there's a buffered message, replay
+  // the first entry as a real send. Uses a ref guard so we only fire on the
+  // actual transition, not on every re-render while idle.
+  const prevLoadingForDrainRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    const wasLoading = prevLoadingForDrainRef.current === true;
+    prevLoadingForDrainRef.current = displayIsLoading;
+    if (wasLoading && !displayIsLoading && pendingQueue.length > 0 && !sendInFlightRef.current) {
+      const next = pendingQueue[0];
+      if (next) {
+        setPendingQueue(pendingQueue.slice(1));
+        // Fire-and-forget; sendMessage guards re-entry itself.
+        void sendMessage(
+          threadIdRef.current ?? onStreamThreadId ?? undefined,
+          next.message,
+          next.extraContext,
+          next.options,
+        );
+      }
+    }
+  }, [displayIsLoading, pendingQueue, onStreamThreadId, sendMessage]);
+
   // Merge history, live stream, and optimistic messages for display
   // History messages may overlap with thread.messages; thread.messages take precedence
   const mergedThread = {
@@ -891,6 +980,13 @@ export function useThreadStream({
     // session/event/roi APIs) don't have to rely solely on the onStart
     // callback chain.
     streamThreadId: onStreamThreadId ?? undefined,
+    // Pending-send queue: messages buffered while a turn is streaming, so a
+    // new send doesn't interrupt the running task. Auto-drains on turn finish.
+    pendingQueue,
+    enqueuePending,
+    removePending,
+    steerPending,
+    clearPending,
   } as const;
 }
 

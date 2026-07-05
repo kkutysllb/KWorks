@@ -122,6 +122,9 @@ export default function ChatPage() {
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    pendingQueue,
+    steerPending,
+    removePending,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: chatContext,
@@ -265,6 +268,13 @@ export default function ChatPage() {
                     }
                     onSubmit={handleSubmit}
                     onStop={handleStop}
+                    pendingQueue={pendingQueue.map((entry) => ({
+                      id: entry.id,
+                      text: entry.message.text,
+                      createdAt: entry.createdAt,
+                    }))}
+                    onSteerPending={steerPending}
+                    onRemovePending={removePending}
                   />
                 ) : (
                   <div

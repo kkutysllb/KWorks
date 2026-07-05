@@ -71,6 +71,8 @@ export interface QiongqiStreamResult<
     context?: Record<string, unknown>,
   ) => Promise<string>;
   clear: () => void;
+  /** Returns the id of the currently-running turn, if any. */
+  getActiveTurnId: () => string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -1164,5 +1166,9 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     joinStream,
     ensureThread,
     clear,
+    // Returns the id of the currently-running turn, if any. Used by the
+    // steering path to target POST /turns/:turnId/steer without aborting.
+    getActiveTurnId: () =>
+      mirrorRef.current.getActiveTurnId() ?? currentTurnIdRef.current ?? undefined,
   };
 }

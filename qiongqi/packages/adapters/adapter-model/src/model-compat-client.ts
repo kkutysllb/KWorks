@@ -533,10 +533,16 @@ export class ModelCompatClient implements ModelClient {
     if (request.attachmentTextFallbacks?.length) {
       attachTextFallbacksToLatestUserMessage(out, request.attachmentTextFallbacks)
     }
-    const normalized = normalizeThinkingAssistantMessages(healToolMessagePairs(out), thinkingMode)
+    const healed = normalizeThinkingAssistantMessages(healToolMessagePairs(out), thinkingMode)
+    // chat_completions is the only path that sends messages verbatim; strict
+    // providers (MiniMax error 2013) reject empty content. The messages and
+    // responses paths re-parse content into blocks and already drop empty ones.
+    const sanitized = endpointFormat === 'chat_completions'
+      ? sanitizeEmptyMessageContent(healed)
+      : healed
     return isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model)
-      ? normalizeGlmMessages(normalized)
-      : normalized
+      ? normalizeGlmMessages(sanitized)
+      : sanitized
   }
 
   private itemsToMessages(
@@ -1985,6 +1991,31 @@ function isThinkingProducerModel(model: string | undefined): boolean {
 
 function reasoningContentOrSpace(text: string): string {
   return text.trim() ? text : ' '
+}
+
+/**
+ * Some strict OpenAI-compatible providers (notably MiniMax, error 2013
+ * "chat content is empty") reject any message whose `content` is an empty
+ * string. The chat_completions path legitimately produces empty content in
+ * two cases:
+ *   - an assistant message that only carries tool_calls (no preamble text)
+ *   - a tool-result message whose output was empty
+ *
+ * Both are valid OpenAI chat-completions shapes, but to stay compatible with
+ * strict providers we coerce empty `content` to a single space (matching the
+ * existing `reasoningContentOrSpace` convention). Messages with non-empty
+ * content and messages without a `content` field are left untouched.
+ */
+function sanitizeEmptyMessageContent(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => {
+    if (message.content !== '') return message
+    // Only assistant/tool messages can legitimately have empty content here;
+    // user/system messages should never be empty (their producers guard that).
+    if (message.role === 'assistant' || message.role === 'tool') {
+      return { ...message, content: ' ' }
+    }
+    return message
+  })
 }
 
 function toolResultContent(output: unknown): string {
