@@ -6,7 +6,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   },
   context: {
     model_name: undefined,
-    taskMode: "agent",
+    taskMode: "auto",
     workModeId: undefined,
     executionProfile: undefined,
     collaborationPolicy: "single",
@@ -35,7 +35,7 @@ export interface LocalSettings {
     | "reasoning_effort"
   > & {
     model_name?: string | undefined;
-    taskMode?: "agent" | "plan";
+    taskMode?: "auto" | "agent" | "plan";
     executionProfile?: "fast" | "balanced" | "deep";
     collaborationPolicy?: "single" | "auto";
     reasoning_effort?: "minimal" | "low" | "medium" | "high";

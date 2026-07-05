@@ -183,7 +183,7 @@ describe("workspace workbench layout", () => {
     );
 
     expect(skillsHooks).toContain("useWorkModes");
-    expect(inputBox).toContain('type TaskMode = "agent" | "plan"');
+    expect(inputBox).toContain('type TaskMode = "auto" | "agent" | "plan"');
     expect(inputBox).toContain(
       'type ExecutionProfile = "fast" | "balanced" | "deep"',
     );
@@ -199,8 +199,9 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("新技能将自动绑定到当前工作模式");
     expect(inputBox).toContain("selectedWorkModeLabel");
     expect(inputBox).toContain("InputBoxSubmitContext");
+    expect(inputBox).toContain("onSubmit?.(");
     expect(inputBox).toContain(
-      "onSubmit?.(message, contextForWorkMode(context, workModeId, supportThinking))",
+      "contextForWorkMode(context, workModeId, supportThinking)",
     );
     expect(inputBox).not.toContain("{workMode.name || workMode.id}");
     expect(inputBox).toContain("workModeId");
@@ -220,7 +221,7 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("协作策略");
     expect(inputBox).not.toContain("多代理协作");
     expect(hooks).toContain(
-      'is_plan_mode: baseSubmitContext.taskMode === "plan"',
+      "is_plan_mode: isPlanningTaskMode(baseSubmitContext.taskMode)",
     );
     expect(hooks).toContain(
       'subagent_enabled: baseSubmitContext.collaborationPolicy === "auto"',

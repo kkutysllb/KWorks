@@ -59,7 +59,7 @@ type SendMessageOptions = {
 type ThreadSubmitContext = LocalSettings["context"] &
   Record<string, unknown> & {
     model_name?: string;
-    taskMode?: "agent" | "plan";
+    taskMode?: "auto" | "agent" | "plan";
     executionProfile?: "fast" | "balanced" | "deep";
     collaborationPolicy?: "single" | "auto";
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
@@ -76,6 +76,12 @@ type DisplayThreadState = {
 type StoppableThread<T> = T & {
   stop?: (...args: never[]) => unknown;
 };
+
+function isPlanningTaskMode(
+  taskMode: ThreadSubmitContext["taskMode"],
+): boolean {
+  return taskMode === "plan" || taskMode === "auto";
+}
 
 function mergeMessages(
   historyMessages: Message[],
@@ -611,7 +617,7 @@ export function useThreadStream({
         const buildSubmitContext = (targetThreadId: string | undefined) => ({
           ...baseSubmitContext,
           thinking_enabled: baseSubmitContext.executionProfile !== "fast",
-          is_plan_mode: baseSubmitContext.taskMode === "plan",
+          is_plan_mode: isPlanningTaskMode(baseSubmitContext.taskMode),
           subagent_enabled: baseSubmitContext.collaborationPolicy === "auto",
           reasoning_effort:
             baseSubmitContext.reasoning_effort ??

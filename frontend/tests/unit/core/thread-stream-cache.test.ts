@@ -207,6 +207,27 @@ function PlanSubmitHarness({ threadId }: { threadId: string }) {
   );
 }
 
+function AutoSubmitHarness({ threadId }: { threadId: string }) {
+  const { sendMessage } = useThreadStream({
+    threadId,
+    context: {
+      mode: undefined,
+      taskMode: "auto",
+    },
+    isMock: false,
+  });
+  return React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        void sendMessage(threadId, { text: "plan then execute", files: [] });
+      },
+    },
+    "submit",
+  );
+}
+
 function SubmitAndMessagesHarness({ threadId }: { threadId: string }) {
   const { thread, sendMessage } = useThreadStream({
     threadId,
@@ -308,7 +329,11 @@ function SubmitContextOverrideHarness({ threadId }: { threadId: string }) {
   );
 }
 
-function NewThreadSubmitHarness({ initialThreadId }: { initialThreadId: string }) {
+function NewThreadSubmitHarness({
+  initialThreadId,
+}: {
+  initialThreadId: string;
+}) {
   const [threadId, setThreadId] = React.useState(initialThreadId);
   const [isNewThread, setIsNewThread] = React.useState(true);
   const { thread, sendMessage } = useThreadStream({
@@ -534,7 +559,9 @@ describe("useThreadStream cache bridge", () => {
     root = createRoot(container);
 
     act(() => {
-      root!.render(React.createElement(SubmitHarness, { threadId: "thread-a" }));
+      root!.render(
+        React.createElement(SubmitHarness, { threadId: "thread-a" }),
+      );
     });
 
     const button = container.querySelector("button");
@@ -557,7 +584,35 @@ describe("useThreadStream cache bridge", () => {
     root = createRoot(container);
 
     await act(async () => {
-      root!.render(React.createElement(PlanSubmitHarness, { threadId: "thread-a" }));
+      root!.render(
+        React.createElement(PlanSubmitHarness, { threadId: "thread-a" }),
+      );
+    });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const submitOptions = submitMock.mock.calls[0]?.[1] as
+      | { context?: { is_plan_mode?: boolean } }
+      | undefined;
+    expect(submitOptions?.context?.is_plan_mode).toBe(true);
+  });
+
+  test("submits auto task mode as an initial planning turn", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        React.createElement(AutoSubmitHarness, { threadId: "thread-a" }),
+      );
     });
 
     const button = container.querySelector("button");
@@ -709,7 +764,7 @@ describe("useThreadStream cache bridge", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect((container.textContent?.match(/你能做什么/g) ?? [])).toHaveLength(1);
+    expect(container.textContent?.match(/你能做什么/g) ?? []).toHaveLength(1);
 
     streamState.messages = [
       {
@@ -732,7 +787,7 @@ describe("useThreadStream cache bridge", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect((container.textContent?.match(/你能做什么/g) ?? [])).toHaveLength(1);
+    expect(container.textContent?.match(/你能做什么/g) ?? []).toHaveLength(1);
     expect(container.textContent).toContain("我可以帮你写代码。");
   });
 
@@ -778,7 +833,7 @@ describe("useThreadStream cache bridge", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect((container.textContent?.match(/你能做什么/g) ?? [])).toHaveLength(1);
+    expect(container.textContent?.match(/你能做什么/g) ?? []).toHaveLength(1);
     expect(container.textContent).toContain("我可以帮你写代码。");
   });
 
@@ -817,7 +872,7 @@ describe("useThreadStream cache bridge", () => {
     });
 
     expect(
-      (container.textContent?.match(/Code review具体能做些什么/g) ?? []),
+      container.textContent?.match(/Code review具体能做些什么/g) ?? [],
     ).toHaveLength(1);
     expect(container.textContent).not.toContain("计|计算");
     expect(container.textContent).toContain("计算");

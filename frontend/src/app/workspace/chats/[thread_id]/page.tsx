@@ -29,13 +29,19 @@ import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
-import {
-  isCreatePlanCompletionEvent,
-  isCreatePlanToolEnd,
-} from "@/core/threads/plan-mode";
+import { getCreatePlanCompletionKey } from "@/core/threads/plan-mode";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
+
+const AUTO_PLAN_CONTINUE_PROMPT = "继续按照刚刚保存的计划执行任务。";
+
+type SendThreadMessage = (
+  requestedThreadId: string | undefined,
+  message: PromptInputMessage,
+  extraContext?: Record<string, unknown>,
+  options?: { additionalKwargs?: Record<string, unknown> },
+) => Promise<void>;
 
 export default function ChatPage() {
   const { t } = useI18n();
@@ -50,11 +56,18 @@ export default function ChatPage() {
     string | null
   >(null);
   const mountedRef = useRef(false);
+  const activeThreadIdRef = useRef(threadId);
+  const autoExecutedPlanKeysRef = useRef(new Set<string>());
+  const sendMessageRef = useRef<SendThreadMessage | null>(null);
   useSpecificChatMode();
 
   useEffect(() => {
     mountedRef.current = true;
   }, []);
+
+  useEffect(() => {
+    activeThreadIdRef.current = threadId;
+  }, [threadId]);
 
   useEffect(() => {
     if (isNewThread && searchParams.get("mode") === "coding") {
@@ -114,13 +127,30 @@ export default function ChatPage() {
 
   const { showNotification } = useNotification();
 
-  const exitPlanModeAfterPlanSaved = useCallback(() => {
-    if ((settings.context.taskMode ?? "agent") !== "plan") return;
-    setSettings("context", {
-      ...settings.context,
-      taskMode: "agent",
-    });
-  }, [setSettings, settings.context]);
+  const taskMode = settings.context.taskMode ?? "auto";
+  const continueAfterAutoPlanSaved = useCallback(
+    (event: unknown) => {
+      if (taskMode !== "auto") return;
+      const planKey = getCreatePlanCompletionKey(event);
+      if (!planKey) return;
+      const activeThreadId = activeThreadIdRef.current;
+      const executionKey = `${activeThreadId ?? "pending"}:${planKey}`;
+      if (autoExecutedPlanKeysRef.current.has(executionKey)) return;
+      const send = sendMessageRef.current;
+      if (!send) return;
+
+      autoExecutedPlanKeysRef.current.add(executionKey);
+      void send(
+        activeThreadId,
+        { text: AUTO_PLAN_CONTINUE_PROMPT, files: [] },
+        { taskMode: "agent" },
+        { additionalKwargs: { hide_from_ui: true } },
+      ).catch(() => {
+        autoExecutedPlanKeysRef.current.delete(executionKey);
+      });
+    },
+    [taskMode],
+  );
 
   const {
     thread,
@@ -134,10 +164,12 @@ export default function ChatPage() {
     context: chatContext,
     isMock,
     onSend: (_threadId) => {
+      activeThreadIdRef.current = _threadId;
       setThreadId(_threadId);
       setIsNewThread(false);
     },
     onStart: (createdThreadId) => {
+      activeThreadIdRef.current = createdThreadId;
       setThreadId(createdThreadId);
       setIsNewThread(false);
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
@@ -145,14 +177,10 @@ export default function ChatPage() {
       history.replaceState(null, "", nextPath);
     },
     onToolEnd: (event) => {
-      if (isCreatePlanToolEnd(event)) {
-        exitPlanModeAfterPlanSaved();
-      }
+      continueAfterAutoPlanSaved(event);
     },
     onQiongqiEvent: (event) => {
-      if (isCreatePlanCompletionEvent(event)) {
-        exitPlanModeAfterPlanSaved();
-      }
+      continueAfterAutoPlanSaved(event);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
@@ -171,6 +199,7 @@ export default function ChatPage() {
       }
     },
   });
+  sendMessageRef.current = sendMessage;
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
@@ -190,117 +219,115 @@ export default function ChatPage() {
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
       <ChatBox threadId={threadId}>
-          <div className="relative flex size-full min-h-0 justify-between">
-            <header
-              className={cn(
-                "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
-                isNewThread
-                  ? "bg-background/0 backdrop-blur-none"
-                  : "bg-background/80 shadow-xs backdrop-blur",
-              )}
-            >
-              <div className="flex w-full items-center text-sm font-medium">
-                <ThreadTitle threadId={threadId} thread={thread} />
-              </div>
-              <div className="flex items-center gap-2">
-                <BackendStatusIndicator />
-                <RefreshButton />
-                <ExportTrigger threadId={threadId} />
-                <ArtifactTrigger />
-              </div>
-            </header>
-            <main className="flex min-h-0 max-w-full grow flex-col">
-              <div className="pointer-events-none absolute top-14 right-4 left-4 z-40 flex justify-end sm:right-6 sm:left-auto">
-                <TodoList
-                  className="pointer-events-auto"
-                  todos={thread.values.todos}
-                  onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
-                  variant="floating"
-                />
-              </div>
-              <div className="flex size-full justify-center transition-transform duration-200 ease-out">
-                <MessageList
-                  className={cn(
-                    "size-full transition-transform duration-200 ease-out",
-                    !isNewThread && "pt-10",
-                    todoPanelContentOffsetClass,
-                  )}
-                  threadId={threadId}
-                  thread={thread}
-                  paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
-                  hasMoreHistory={hasMoreHistory}
-                  loadMoreHistory={loadMoreHistory}
-                  isHistoryLoading={isHistoryLoading}
-                />
-              </div>
-              <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
-                <div
-                  className={cn(
-                    "relative w-full transition-transform duration-200 ease-out",
-                    isNewThread && "-translate-y-[calc(50vh-128px)]",
-                    isNewThread
-                      ? "max-w-[min(52rem,calc(100vw-2rem))]"
-                      : "max-w-[min(68rem,calc(100vw-2rem))]",
-                    todoPanelContentOffsetClass,
-                  )}
-                >
-                  {isNewThread && (
-                    <div
-                      className={cn(
-                        "mx-auto mb-9 w-full max-w-(--container-width-sm)",
-                      )}
-                    >
-                      <Welcome
-                        collaborationPolicy={
-                          chatContext.collaborationPolicy ?? "single"
-                        }
-                      />
-                    </div>
-                  )}
-                  {mountedRef.current ? (
-                    <InputBox
-                      className="bg-background/5 w-full"
-                      isNewThread={isNewThread}
-                      initialWorkModeId={
-                        searchParams.get("workModeId") ?? "task"
+        <div className="relative flex size-full min-h-0 justify-between">
+          <header
+            className={cn(
+              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
+              isNewThread
+                ? "bg-background/0 backdrop-blur-none"
+                : "bg-background/80 shadow-xs backdrop-blur",
+            )}
+          >
+            <div className="flex w-full items-center text-sm font-medium">
+              <ThreadTitle threadId={threadId} thread={thread} />
+            </div>
+            <div className="flex items-center gap-2">
+              <BackendStatusIndicator />
+              <RefreshButton />
+              <ExportTrigger threadId={threadId} />
+              <ArtifactTrigger />
+            </div>
+          </header>
+          <main className="flex min-h-0 max-w-full grow flex-col">
+            <div className="pointer-events-none absolute top-14 right-4 left-4 z-40 flex justify-end sm:right-6 sm:left-auto">
+              <TodoList
+                className="pointer-events-auto"
+                todos={thread.values.todos}
+                onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
+                variant="floating"
+              />
+            </div>
+            <div className="flex size-full justify-center transition-transform duration-200 ease-out">
+              <MessageList
+                className={cn(
+                  "size-full transition-transform duration-200 ease-out",
+                  !isNewThread && "pt-10",
+                  todoPanelContentOffsetClass,
+                )}
+                threadId={threadId}
+                thread={thread}
+                paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
+                hasMoreHistory={hasMoreHistory}
+                loadMoreHistory={loadMoreHistory}
+                isHistoryLoading={isHistoryLoading}
+              />
+            </div>
+            <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
+              <div
+                className={cn(
+                  "relative w-full transition-transform duration-200 ease-out",
+                  isNewThread && "-translate-y-[calc(50vh-128px)]",
+                  isNewThread
+                    ? "max-w-[min(52rem,calc(100vw-2rem))]"
+                    : "max-w-[min(68rem,calc(100vw-2rem))]",
+                  todoPanelContentOffsetClass,
+                )}
+              >
+                {isNewThread && (
+                  <div
+                    className={cn(
+                      "mx-auto mb-9 w-full max-w-(--container-width-sm)",
+                    )}
+                  >
+                    <Welcome
+                      collaborationPolicy={
+                        chatContext.collaborationPolicy ?? "single"
                       }
-                      threadId={threadId}
-                      autoFocus={isNewThread}
-                      status={
-                        thread.error
-                          ? "error"
-                          : thread.isLoading
-                            ? "streaming"
-                            : "ready"
-                      }
-                      context={chatContext}
-                      disabled={
-                        env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
-                        isUploading
-                      }
-                      onContextChange={(context) =>
-                        setSettings("context", context)
-                      }
-                      onSubmit={handleSubmit}
-                      onStop={handleStop}
                     />
-                  ) : (
-                    <div
-                      aria-hidden="true"
-                      className={cn(
-                        "bg-background/5 h-32 w-full -translate-y-4 rounded-2xl",
-                      )}
-                    />
-                  )}
-                  {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
-                    <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                      {t.common.notAvailableInDemoMode}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
+                {mountedRef.current ? (
+                  <InputBox
+                    className="bg-background/5 w-full"
+                    isNewThread={isNewThread}
+                    initialWorkModeId={searchParams.get("workModeId") ?? "task"}
+                    threadId={threadId}
+                    autoFocus={isNewThread}
+                    status={
+                      thread.error
+                        ? "error"
+                        : thread.isLoading
+                          ? "streaming"
+                          : "ready"
+                    }
+                    context={chatContext}
+                    disabled={
+                      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
+                      isUploading
+                    }
+                    onContextChange={(context) =>
+                      setSettings("context", context)
+                    }
+                    onSubmit={handleSubmit}
+                    onStop={handleStop}
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className={cn(
+                      "bg-background/5 h-32 w-full -translate-y-4 rounded-2xl",
+                    )}
+                  />
+                )}
+                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
+                  <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
+                    {t.common.notAvailableInDemoMode}
+                  </div>
+                )}
               </div>
-            </main>
-          </div>
+            </div>
+          </main>
+        </div>
       </ChatBox>
     </ThreadContext.Provider>
   );
