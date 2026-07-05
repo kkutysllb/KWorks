@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -273,6 +274,9 @@ export function HistoryTaskList() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{t.common.rename}</DialogTitle>
+            <DialogDescription className="sr-only">
+              为当前项目或任务输入新的名称。
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Input

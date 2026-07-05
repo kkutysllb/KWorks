@@ -209,6 +209,9 @@ export function UpdateChecker() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>正在检查更新…</DialogTitle>
+            <DialogDescription>
+              KWorks 正在检查是否有可用的新版本。
+            </DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
