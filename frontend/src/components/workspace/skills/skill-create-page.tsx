@@ -821,7 +821,7 @@ function PackageImportPanel({
           上传 zip 会在服务端安全解压；原始压缩包不会作为技能脚本保留。
         </span>
         <input
-          accept=".zip,.md,.json,.py,.sh,.js,.ts,.mjs,.cjs,.txt"
+          accept=".zip,.skill,.md,.json,.py,.sh,.js,.ts,.mjs,.cjs,.txt"
           className="sr-only"
           multiple
           type="file"
