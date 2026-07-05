@@ -193,7 +193,8 @@ export class SkillPluginHost {
       available,
       input.workModeId,
       this.config.roots,
-      Math.min(DEFAULT_CATALOG_BUDGET_BYTES, this.options.instructionBudgetBytes)
+      Math.min(DEFAULT_CATALOG_BUDGET_BYTES, this.options.instructionBudgetBytes),
+      effectiveSkillIds ?? []
     )
     const remainingBudget = Math.max(0, this.options.instructionBudgetBytes - (catalog?.bytes ?? 0))
     const injection = buildInjection(active, remainingBudget)
@@ -412,14 +413,19 @@ function buildAvailableSkillsInstruction(
   available: readonly LoadedSkillPlugin[],
   workModeId: string | undefined,
   roots: readonly string[],
-  budgetBytes: number
+  budgetBytes: number,
+  effectiveSkillIds: readonly string[] = []
 ): { text: string; bytes: number } | undefined {
-  if (available.length === 0 || budgetBytes <= 0) return undefined
+  if (budgetBytes <= 0) return undefined
+  const loadedIds = new Set(available.map((skill) => skill.id))
+  const unloadedConfiguredIds = uniqueStrings(effectiveSkillIds)
+    .filter((id) => !loadedIds.has(id))
   const lines = [
     `Available Skills${workModeId ? ` for work mode "${workModeId}"` : ''}:`,
     'These are installed skill instruction packages available in the current work mode. Skills are not direct tool calls; use this list to understand what specialized workflows you can apply, and do not say no skills are installed merely because they are not listed as tools.',
     roots.length ? `Configured skill roots: ${roots.map((root) => resolve(root)).join(', ')}` : 'Configured skill roots: none',
     'When the user asks about installed, newly created, available skills, or what skills you can call or use, answer from this runtime skill catalog and the configured skill roots before discussing built-in tools. Do not search the current project workspace to discover installed skills.',
+    'Do not list built-in tools as skills. Built-in tools are execution capabilities; skills are instruction packages from the runtime skill catalog.',
     ''
   ]
   let bytes = Buffer.byteLength(lines.join('\n'), 'utf8')
@@ -436,13 +442,26 @@ function buildAvailableSkillsInstruction(
     bytes += lineBytes
     included += 1
   }
-  if (included === 0) return undefined
+  if (included === 0 && unloadedConfiguredIds.length === 0) return undefined
+  if (unloadedConfiguredIds.length > 0) {
+    const configuredLine = `Configured skill IDs without loaded instruction packages: ${unloadedConfiguredIds.join(', ')}.`
+    const guidanceLine = 'If asked what skills are available, mention these IDs separately as configured for the work mode but not currently loaded as executable skill instruction packages.'
+    const extraBytes = Buffer.byteLength(`${configuredLine}\n${guidanceLine}\n`, 'utf8')
+    if (bytes + extraBytes <= budgetBytes) {
+      lines.push(configuredLine, guidanceLine)
+      bytes += extraBytes
+    }
+  }
   if (included < available.length) {
     const omitted = `- ${available.length - included} additional skills omitted by context budget.`
     lines.push(omitted)
     bytes += Buffer.byteLength(`${omitted}\n`, 'utf8')
   }
   return { text: lines.join('\n'), bytes }
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim()))]
 }
 
 function emptyResolution(): SkillTurnResolution {

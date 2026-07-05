@@ -179,6 +179,38 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain('what skills you can call or use')
   })
 
+  it('explains configured work mode skill IDs even when their instruction packages are not loaded', async () => {
+    const host = await SkillPluginHost.create(cfg({
+      roots: [root],
+      workModes: {
+        defaultModeId: 'empty-mode',
+        modes: {
+          'empty-mode': {
+            id: 'empty-mode',
+            name: 'Empty Mode',
+            builtin: false,
+            editable: true,
+            defaultSkillIds: ['missing-skill']
+          }
+        }
+      },
+      lockedSkillIds: []
+    }), {})
+
+    const res = host.resolveTurn({
+      prompt: '有哪些技能可以调用？',
+      workspace: '',
+      workModeId: 'empty-mode'
+    })
+
+    const joined = res.instructions.join('\n')
+    expect(res.activeSkillIds).toEqual([])
+    expect(joined).toContain('Available Skills for work mode "empty-mode"')
+    expect(joined).toContain('Configured skill IDs without loaded instruction packages')
+    expect(joined).toContain('missing-skill')
+    expect(joined).toContain('Do not list built-in tools as skills')
+  })
+
   it('tells the model to discover installed skills from configured skill roots, not the workspace', async () => {
     const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
 
