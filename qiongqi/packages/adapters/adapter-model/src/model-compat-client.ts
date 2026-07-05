@@ -152,7 +152,7 @@ type StreamReadResult =
   | { kind: 'aborted' }
   | { kind: 'error'; message: string }
 
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 120_000
 const DEFAULT_MESSAGES_MAX_TOKENS = 4096
 const REDACTED_THINKING_SIGNATURE_PREFIX = 'redacted:'
 

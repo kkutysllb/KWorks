@@ -60,6 +60,7 @@ import {
   type TokenEconomyConfig
 } from './token-economy.js'
 import { applyRequestHistoryHygiene } from './request-history-hygiene.js'
+import { applyModelRequestInputBudget } from './model-request-budget.js'
 import { estimateModelRequestInputTokens } from './model-request-estimator.js'
 import {
   recentAutoRouterContext,
@@ -100,6 +101,10 @@ import {
 
 type ThreadRecord = Awaited<ReturnType<ThreadStore['get']>>
 type TurnRecord = Awaited<ReturnType<TurnService['getTurn']>>
+
+const TOOL_OUTPUT_MAX_INLINE_BYTES = 64 * 1024
+const TOOL_OUTPUT_PREVIEW_HEAD_BYTES = 4 * 1024
+const TOOL_OUTPUT_PREVIEW_TAIL_BYTES = 4 * 1024
 
 export type BuildContext = {
   request: ModelRequest
@@ -316,6 +321,16 @@ export class PromptBuilder {
       activeSkillIds: skillResolution.activeSkillIds,
       memoryPolicy: { enabled: Boolean(this.deps.memoryStore) },
       delegationPolicy: { enabled: false },
+      ...(this.deps.runtimeDataDir
+        ? {
+            outputBudget: {
+              outputDir: join(this.deps.runtimeDataDir, 'threads', threadId, 'tool-output'),
+              maxInlineBytes: TOOL_OUTPUT_MAX_INLINE_BYTES,
+              previewHeadBytes: TOOL_OUTPUT_PREVIEW_HEAD_BYTES,
+              previewTailBytes: TOOL_OUTPUT_PREVIEW_TAIL_BYTES
+            }
+          }
+        : {}),
       ...(allowedToolNames ? { allowedToolNames } : {}),
       approvalPolicy,
       abortSignal: signal,
@@ -423,10 +438,13 @@ export class PromptBuilder {
       ? estimateModelRequestInputTokens(baseRequest)
       : 0
     const economyRequest = applyTokenEconomyToRequest(baseRequest, tokenEconomy)
-    const request: ModelRequest = {
+    const hygienicRequest: ModelRequest = {
       ...economyRequest,
       history: applyRequestHistoryHygiene(economyRequest.history, tokenEconomy.historyHygiene)
     }
+    const request = applyModelRequestInputBudget(hygienicRequest, {
+      maxInputTokens: this.deps.compactor.hardCap(model)
+    })
     if (tokenEconomy.enabled) {
       await recordTokenEconomySavings(this.deps.usage, this.deps.events, {
         threadId,

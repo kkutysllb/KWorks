@@ -1,9 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, test } from "vitest";
 
 import {
   getNextApiKeyInputState,
   toApiKeyRequestValue,
 } from "@/components/workspace/models/model-dialog";
+
+const repoRoot = resolve(__dirname, "../../..");
 
 describe("ModelDialog API key input behavior", () => {
   test("keeps the pasted value when editing starts from a hidden API key field", () => {
@@ -36,5 +41,20 @@ describe("ModelDialog API key input behavior", () => {
         showApiKey: true,
       }),
     ).toBe("sk-new-secret");
+  });
+
+  test("keeps context window tokens on the normal model profile request path", () => {
+    const dialog = readFileSync(
+      resolve(repoRoot, "src/components/workspace/models/model-dialog.tsx"),
+      "utf8",
+    );
+    const types = readFileSync(
+      resolve(repoRoot, "src/core/models/types.ts"),
+      "utf8",
+    );
+
+    expect(dialog).toContain("contextWindowTokens");
+    expect(dialog).toContain("context_window_tokens");
+    expect(types).toContain("context_window_tokens?: number | null");
   });
 });

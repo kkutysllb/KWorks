@@ -8,6 +8,7 @@ export interface Model {
   api_key?: string | null;
   base_url?: string | null;
   max_tokens?: number | null;
+  context_window_tokens?: number | null;
   temperature?: number | null;
   request_timeout?: number | null;
   supports_thinking?: boolean;
@@ -27,6 +28,7 @@ export interface ModelRequest {
   api_key?: string | null;
   base_url?: string | null;
   max_tokens?: number | null;
+  context_window_tokens?: number | null;
   temperature?: number | null;
   request_timeout?: number | null;
   description?: string | null;

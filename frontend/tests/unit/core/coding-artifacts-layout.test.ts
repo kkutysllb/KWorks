@@ -111,6 +111,29 @@ describe("coding artifacts layout", () => {
     expect(chatBox).toContain("setArtifacts(thread.values.artifacts ?? []);");
   });
 
+  test("input box surfaces result files above the composer with preview and download actions", () => {
+    const inputBox = readFileSync(
+      resolve(repoRoot, "src/components/workspace/input-box.tsx"),
+      "utf8",
+    );
+    const resultStrip = readFileSync(
+      resolve(
+        repoRoot,
+        "src/components/workspace/artifacts/artifact-result-strip.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(inputBox).toContain("<ArtifactResultStrip");
+    expect(inputBox.indexOf("<ArtifactResultStrip")).toBeLessThan(
+      inputBox.indexOf("<PromptInput"),
+    );
+    expect(resultStrip).toContain("useArtifacts");
+    expect(resultStrip).toContain("select(filepath)");
+    expect(resultStrip).toContain("setOpen(true)");
+    expect(resultStrip).toContain("downloadArtifactUrl");
+  });
+
   test("coding agent panel does not create a nested artifacts provider", () => {
     const agentPanel = readFileSync(
       resolve(repoRoot, "src/components/workspace/coding/agent-panel.tsx"),

@@ -13,6 +13,7 @@ export class UserScopedModelClient implements ModelClient {
     threadService: ThreadService
     userDataStore: KWorksUserDataStore
     fetchImpl?: typeof fetch
+    streamIdleTimeoutMs?: number
   }) {
     this.model = input.fallback.model
   }
@@ -31,6 +32,7 @@ export class UserScopedModelClient implements ModelClient {
     apiKey: string
     endpointFormat?: NonNullable<NonNullable<ModelConfig['profiles']>[string]>['endpointFormat']
     model: string
+    streamIdleTimeoutMs?: number
   } | null> {
     const thread = await this.input.threadService.get(request.threadId)
     const userId = thread?.ownerUserId
@@ -44,7 +46,8 @@ export class UserScopedModelClient implements ModelClient {
       baseUrl: profile.baseUrl,
       apiKey: profile.apiKey ?? '',
       endpointFormat: profile.endpointFormat,
-      model: profile.providerModel ?? match.name
+      model: profile.providerModel ?? match.name,
+      ...(this.input.streamIdleTimeoutMs !== undefined ? { streamIdleTimeoutMs: this.input.streamIdleTimeoutMs } : {})
     }
   }
 }

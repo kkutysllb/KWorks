@@ -110,6 +110,7 @@ export function ModelDialog({
   const [originalApiKey, setOriginalApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
+  const [contextWindowTokens, setContextWindowTokens] = useState("");
   const [temperature, setTemperature] = useState("");
   const [requestTimeout, setRequestTimeout] = useState("");
   const [description, setDescription] = useState("");
@@ -135,6 +136,11 @@ export function ModelDialog({
         setOriginalApiKey(model.api_key ?? "");
         setBaseUrl(model.base_url ?? "");
         setMaxTokens(model.max_tokens != null ? String(model.max_tokens) : "");
+        setContextWindowTokens(
+          model.context_window_tokens != null
+            ? String(model.context_window_tokens)
+            : "",
+        );
         setTemperature(
           model.temperature != null ? String(model.temperature) : "",
         );
@@ -169,6 +175,7 @@ export function ModelDialog({
         setOriginalApiKey("");
         setBaseUrl("");
         setMaxTokens("");
+        setContextWindowTokens("");
         setTemperature("");
         setRequestTimeout("");
         setDescription("");
@@ -228,6 +235,9 @@ export function ModelDialog({
         }),
         base_url: baseUrl.trim() || null,
         max_tokens: maxTokens ? Number(maxTokens) : null,
+        context_window_tokens: contextWindowTokens
+          ? Number(contextWindowTokens)
+          : null,
         temperature: temperature ? Number(temperature) : null,
         request_timeout: requestTimeout ? Number(requestTimeout) : null,
         description: description.trim() || null,
@@ -418,7 +428,7 @@ export function ModelDialog({
               参数配置
             </p>
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="grid gap-2">
                   <label htmlFor="md-maxtokens" className={labelCls}>
                     {t.models.maxTokens}
@@ -429,6 +439,20 @@ export function ModelDialog({
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(e.target.value)}
                     placeholder="4096"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="md-context-window" className={labelCls}>
+                    上下文窗口
+                  </label>
+                  <Input
+                    id="md-context-window"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={contextWindowTokens}
+                    onChange={(e) => setContextWindowTokens(e.target.value)}
+                    placeholder="128000"
                   />
                 </div>
                 <div className="grid gap-2">

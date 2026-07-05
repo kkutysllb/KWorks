@@ -95,4 +95,66 @@ describe('HTTP artifacts routes', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('# Stock Scout')
   })
+
+  it('reads and downloads files under the thread workspace by absolute path', async () => {
+    const h = buildHarness()
+    const workspaceDir = join(dir, 'workspace-project')
+    const reportPath = join(workspaceDir, 'reports', 'summary.md')
+    await mkdir(join(workspaceDir, 'reports'), { recursive: true })
+    await writeFile(reportPath, '# Workspace Report', 'utf8')
+    await h.threadService.create(
+      { workspace: workspaceDir, model: 'deepseek-chat', mode: 'agent' },
+      { id: 'thr_workspace' }
+    )
+
+    const readUrl = new URL('http://localhost/v1/threads/thr_workspace/artifacts/content')
+    readUrl.searchParams.set('path', reportPath)
+    const read = await dispatchRequest(
+      h.router,
+      new Request(readUrl, {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(read.status).toBe(200)
+    expect(read.headers.get('content-disposition')).toBe('inline; filename="summary.md"')
+    expect(await read.text()).toBe('# Workspace Report')
+
+    const downloadUrl = new URL('http://localhost/v1/threads/thr_workspace/artifacts/content')
+    downloadUrl.searchParams.set('path', reportPath)
+    downloadUrl.searchParams.set('download', 'true')
+    const download = await dispatchRequest(
+      h.router,
+      new Request(downloadUrl, {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(download.status).toBe(200)
+    expect(download.headers.get('content-disposition')).toBe('attachment; filename="summary.md"')
+    expect(await download.text()).toBe('# Workspace Report')
+  })
+
+  it('rejects absolute artifact paths outside the thread workspace', async () => {
+    const h = buildHarness()
+    const workspaceDir = join(dir, 'workspace-project')
+    const outsidePath = join(dir, 'outside.md')
+    await mkdir(workspaceDir, { recursive: true })
+    await writeFile(outsidePath, 'secret', 'utf8')
+    await h.threadService.create(
+      { workspace: workspaceDir, model: 'deepseek-chat', mode: 'agent' },
+      { id: 'thr_workspace_escape' }
+    )
+
+    const url = new URL('http://localhost/v1/threads/thr_workspace_escape/artifacts/content')
+    url.searchParams.set('path', outsidePath)
+    const response = await dispatchRequest(
+      h.router,
+      new Request(url, {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(403)
+  })
 })

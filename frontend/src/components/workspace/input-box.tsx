@@ -74,6 +74,7 @@ import {
   ModelSelectorTrigger,
 } from "../ai-elements/model-selector";
 
+import { ArtifactResultStrip } from "./artifacts/artifact-result-strip";
 import { useThread } from "./messages/context";
 import {
   getWorkspaceRootDisplayName,
@@ -530,6 +531,7 @@ export function InputBox({
           </span>
         </div>
       )}
+      <ArtifactResultStrip status={status} threadId={threadId} />
       <PromptInput
         className={cn(
           "bg-background/85 rounded-2xl backdrop-blur-sm transition-all duration-300 ease-out *:data-[slot='input-group']:overflow-visible *:data-[slot='input-group']:rounded-2xl",

@@ -118,6 +118,53 @@ describe('UserScopedModelClient', () => {
 
     expect(calls).toEqual([])
   })
+
+  it('passes the runtime stream idle timeout into user-scoped profile clients', async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(new ReadableStream<Uint8Array>({
+        start() {
+          // Keep the provider stream open without chunks so the adapter timeout is observable.
+        }
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const store = makeStore({
+      userA: {
+        profiles: {
+          minimax: {
+            providerModel: 'MiniMax-M3',
+            baseUrl: 'https://api.minimax.example/v1',
+            apiKey: 'key-minimax',
+            endpointFormat: 'chat_completions'
+          }
+        }
+      }
+    })
+    const controller = new AbortController()
+    const client = new UserScopedModelClient({
+      fallback: fallbackClient(),
+      threadService: {
+        get: async (threadId: string) => ({
+          id: threadId,
+          ownerUserId: 'userA'
+        })
+      } as unknown as ThreadService,
+      userDataStore: store,
+      fetchImpl,
+      streamIdleTimeoutMs: 5
+    })
+
+    const result = await Promise.race([
+      collectUntilError(client.stream({ ...request('thread-a', 'minimax'), abortSignal: controller.signal })),
+      new Promise<'timed-out'>((resolve) => setTimeout(() => resolve('timed-out'), 50))
+    ])
+    controller.abort()
+
+    expect(result).not.toBe('timed-out')
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'error', code: 'stream_idle_timeout' })
+      ])
+    )
+  })
 })
 
 function fallbackClient(chunks: ModelStreamChunk[] = [{ kind: 'error', message: 'fallback should not be used' }]): ModelClient {
@@ -161,4 +208,13 @@ async function drain(iterable: AsyncIterable<unknown>): Promise<void> {
   for await (const _ of iterable) {
     // drain
   }
+}
+
+async function collectUntilError(iterable: AsyncIterable<ModelStreamChunk>): Promise<ModelStreamChunk[]> {
+  const chunks: ModelStreamChunk[] = []
+  for await (const chunk of iterable) {
+    chunks.push(chunk)
+    if (chunk.kind === 'error') break
+  }
+  return chunks
 }

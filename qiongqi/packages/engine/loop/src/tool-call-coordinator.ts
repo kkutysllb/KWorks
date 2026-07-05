@@ -23,6 +23,7 @@ import type { TurnService } from '@qiongqi/services'
 import type { IdGenerator } from '@qiongqi/ports'
 import type { ModelCapabilityMetadata } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
+import { join } from 'node:path'
 import {
   makeToolResultItem,
   makeUserInputItem
@@ -36,6 +37,10 @@ import {
   MAX_PARALLEL_TOOL_CALLS
 } from './loop-helpers.js'
 
+const TOOL_OUTPUT_MAX_INLINE_BYTES = 64 * 1024
+const TOOL_OUTPUT_PREVIEW_HEAD_BYTES = 4 * 1024
+const TOOL_OUTPUT_PREVIEW_TAIL_BYTES = 4 * 1024
+
 export type ToolCallCoordinatorDeps = {
   toolHost: ToolHost
   approvalGate: ApprovalGate
@@ -46,6 +51,7 @@ export type ToolCallCoordinatorDeps = {
   ids: IdGenerator
   nowIso: () => string
   memoryStoreEnabled: boolean
+  runtimeDataDir?: string
   toolStorm?: ToolStormBreakerOptions & { enabled?: boolean }
   onPlanWritten?: (input: {
     threadId: string
@@ -205,6 +211,16 @@ export class ToolCallCoordinator {
       activeSkillIds: input.activeSkillIds,
       memoryPolicy: { enabled: this.deps.memoryStoreEnabled },
       delegationPolicy: { enabled: false },
+      ...(this.deps.runtimeDataDir
+        ? {
+            outputBudget: {
+              outputDir: join(this.deps.runtimeDataDir, 'threads', input.threadId, 'tool-output'),
+              maxInlineBytes: TOOL_OUTPUT_MAX_INLINE_BYTES,
+              previewHeadBytes: TOOL_OUTPUT_PREVIEW_HEAD_BYTES,
+              previewTailBytes: TOOL_OUTPUT_PREVIEW_TAIL_BYTES
+            }
+          }
+        : {}),
       ...(input.allowedToolNames ? { allowedToolNames: input.allowedToolNames } : {}),
       approvalPolicy: input.approvalPolicy,
       abortSignal: input.signal,

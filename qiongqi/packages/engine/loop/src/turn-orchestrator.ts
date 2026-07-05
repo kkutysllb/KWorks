@@ -145,6 +145,7 @@ export class TurnOrchestrator {
       ids: opts.ids,
       nowIso: opts.nowIso,
       memoryStoreEnabled: Boolean(opts.memoryStore),
+      ...(opts.runtimeDataDir ? { runtimeDataDir: opts.runtimeDataDir } : {}),
       ...(opts.toolStorm ? { toolStorm: opts.toolStorm } : {}),
       ...(opts.onPlanWritten ? { onPlanWritten: opts.onPlanWritten } : {})
     })

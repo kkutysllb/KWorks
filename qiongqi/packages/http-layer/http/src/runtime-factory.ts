@@ -1011,7 +1011,10 @@ async function assembleRuntime(input: {
   const scopedModelClient = new UserScopedModelClient({
     fallback: model.client,
     threadService: core.threadService,
-    userDataStore: core.kworksUserDataStore
+    userDataStore: core.kworksUserDataStore,
+    ...(options.runtime?.modelStreamIdleTimeoutMs !== undefined
+      ? { streamIdleTimeoutMs: options.runtime.modelStreamIdleTimeoutMs }
+      : {})
   })
   const reviewService = new ReviewService({
     threadStore: core.threadStore,

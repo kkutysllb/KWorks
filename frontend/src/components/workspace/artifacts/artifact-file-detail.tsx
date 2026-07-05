@@ -20,6 +20,7 @@ import {
   ArtifactHeader,
   ArtifactTitle,
 } from "@/components/ai-elements/artifact";
+import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui/select";
 import {
   SelectContent,
@@ -92,7 +93,11 @@ export function ArtifactFileDetail({
   const isSupportPreview = useMemo(() => {
     return language === "html" || language === "markdown";
   }, [language]);
-  const { content } = useArtifactContent({
+  const {
+    content,
+    isLoading: isContentLoading,
+    error: contentError,
+  } = useArtifactContent({
     threadId,
     filepath: filepathFromProps,
     enabled: isCodeFile && !isWriteFile,
@@ -105,6 +110,15 @@ export function ArtifactFileDetail({
     useAuthenticatedArtifactObjectUrl(artifactUrl);
 
   const displayContent = content ?? "";
+  const isFetchedCodeArtifact = isCodeFile && !isWriteFile;
+  const contentState =
+    isFetchedCodeArtifact && isContentLoading
+      ? "loading"
+      : isFetchedCodeArtifact && contentError
+        ? "error"
+        : isFetchedCodeArtifact && displayContent.length === 0
+          ? "empty"
+          : "ready";
 
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [isInstalling, setIsInstalling] = useState(false);
@@ -241,6 +255,7 @@ export function ArtifactFileDetail({
               <ArtifactAction
                 icon={DownloadIcon}
                 label={t.common.download}
+                className="text-foreground"
                 tooltip={t.common.download}
                 onClick={() => {
                   void downloadArtifactUrl(
@@ -265,26 +280,112 @@ export function ArtifactFileDetail({
         </div>
       </ArtifactHeader>
       <ArtifactContent className="p-0">
-        {isSupportPreview &&
-          viewMode === "preview" &&
-          (language === "markdown" || language === "html") && (
-            <ArtifactFilePreview
-              content={displayContent}
-              language={language ?? "text"}
-            />
-          )}
-        {isCodeFile && viewMode === "code" && (
-          <CodeEditor
-            className="size-full resize-none rounded-none border-none"
-            value={displayContent ?? ""}
-            readonly
+        {contentState !== "ready" ? (
+          <ArtifactContentState
+            state={contentState}
+            error={contentError}
+            filename={getFileName(filepath)}
+            onDownload={
+              !isWriteFile
+                ? () =>
+                    void downloadArtifactUrl(
+                      urlOfArtifact({
+                        filepath,
+                        threadId,
+                        download: true,
+                        isMock,
+                      }),
+                      getFileName(filepath),
+                    )
+                : undefined
+            }
+            onOpen={
+              artifactUrl
+                ? () => void openArtifactUrl(artifactUrl, getFileName(filepath))
+                : undefined
+            }
           />
-        )}
-        {!isCodeFile && (
-          <iframe className="size-full" src={authenticatedArtifactUrl} />
+        ) : (
+          <>
+            {isSupportPreview &&
+              viewMode === "preview" &&
+              (language === "markdown" || language === "html") && (
+                <ArtifactFilePreview
+                  content={displayContent}
+                  language={language ?? "text"}
+                />
+              )}
+            {isCodeFile && viewMode === "code" && (
+              <CodeEditor
+                className="size-full resize-none rounded-none border-none"
+                value={displayContent ?? ""}
+                readonly
+              />
+            )}
+            {!isCodeFile && (
+              <iframe className="size-full" src={authenticatedArtifactUrl} />
+            )}
+          </>
         )}
       </ArtifactContent>
     </Artifact>
+  );
+}
+
+function ArtifactContentState({
+  error,
+  filename,
+  onDownload,
+  onOpen,
+  state,
+}: {
+  error?: Error | null;
+  filename: string;
+  onDownload?: () => void;
+  onOpen?: () => void;
+  state: "loading" | "error" | "empty";
+}) {
+  const message =
+    state === "loading"
+      ? "正在加载结果文件..."
+      : state === "empty"
+        ? "文件内容为空"
+        : "文件内容加载失败";
+  const detail =
+    state === "error"
+      ? error?.message || "请确认文件仍在当前任务工作区内。"
+      : filename;
+
+  return (
+    <div className="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="bg-muted/60 flex h-12 w-12 items-center justify-center rounded-lg">
+        {state === "loading" ? (
+          <LoaderIcon className="h-5 w-5 animate-spin" />
+        ) : (
+          <Code2Icon className="h-5 w-5" />
+        )}
+      </div>
+      <div className="space-y-1">
+        <p className="text-foreground text-sm font-medium">{message}</p>
+        <p className="max-w-md text-xs [overflow-wrap:anywhere]">{detail}</p>
+      </div>
+      {state === "error" && (onOpen || onDownload) && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {onOpen && (
+            <Button size="sm" variant="outline" onClick={onOpen}>
+              <SquareArrowOutUpRightIcon className="size-4" />
+              打开
+            </Button>
+          )}
+          {onDownload && (
+            <Button size="sm" variant="outline" onClick={onDownload}>
+              <DownloadIcon className="size-4" />
+              下载
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
