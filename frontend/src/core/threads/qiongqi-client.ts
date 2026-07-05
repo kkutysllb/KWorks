@@ -81,7 +81,6 @@ export interface StartTurnPayload {
   workModeId?: string;
   reasoningEffort?: "off" | "low" | "medium" | "high" | "max";
   approvalPolicy?: "on-request" | "untrusted" | "never" | "auto" | "suggest";
-  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   attachmentIds?: string[];
 }
 

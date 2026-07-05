@@ -24,7 +24,8 @@ describe("QiongQi input controls", () => {
     expect(source).toContain("QiongQiRoiStrip");
     expect(source).toContain("workspaceRoot");
     expect(source).toContain("approvalPolicy");
-    expect(source).toContain("sandboxMode");
+    expect(source).not.toContain("sandboxMode");
+    expect(source).not.toContain("沙箱范围");
   });
 
   test("ROI summary derives stable display metrics from token usage", () => {

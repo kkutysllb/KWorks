@@ -72,7 +72,6 @@ const DEFAULT_CONFIG: QiongqiConfig = {
     dataDir: "~/.kworks-workspace-web/users/runtime",
     endpointFormat: "openai_compatible",
     approvalPolicy: "auto",
-    sandboxMode: "workspace-write",
     tokenEconomyMode: false,
     tokenEconomy: {
       enabled: false,

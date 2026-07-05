@@ -125,7 +125,10 @@ export function parseServeOptions(
     },
     models: loadedConfig?.config.models,
     contextCompaction: loadedConfig?.config.contextCompaction,
-    runtime: loadedConfig?.config.runtime,
+    runtime: {
+      ...(DEFAULT_SERVE_OPTIONS.runtime ?? {}),
+      ...(loadedConfig?.config.runtime ?? {})
+    },
     observability: observabilityFromConfigOrEnv(configServe, env),
     capabilities: capabilitiesFromConfigOrEnv(loadedConfig?.config.capabilities, env),
     preset:
@@ -147,6 +150,40 @@ export function validateServeOptions(input: unknown): ServeOptions {
 
 export function qiongqiRuntimeListeningMessage(host: string, port: number): string {
   return `qiongqi runtime listening on http://${host}:${port}`
+}
+
+export function qiongqiRuntimeStartupInfo({
+  host,
+  port,
+  info
+}: {
+  host: string
+  port: number
+  info: {
+    configPath?: string
+    dataDir: string
+    model?: string
+    approvalPolicy?: string
+    insecure?: boolean
+    startedAt: string
+    pid?: number
+    [key: string]: unknown
+  }
+}): Record<string, unknown> {
+  return {
+    service: 'qiongqi',
+    mode: 'serve',
+    host,
+    port,
+    configPath: info.configPath,
+    dataDir: info.dataDir,
+    defaultModel: info.model,
+    approvalPolicy: info.approvalPolicy,
+    insecure: info.insecure,
+    startedAt: info.startedAt,
+    pid: info.pid,
+    message: qiongqiRuntimeListeningMessage(host, port)
+  }
 }
 
 /** Human-readable usage string, used by the CLI when no args are given. */

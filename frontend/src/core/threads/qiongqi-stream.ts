@@ -485,20 +485,6 @@ function qiongqiApprovalPolicyFromContext(
   return undefined;
 }
 
-function qiongqiSandboxModeFromContext(
-  context: Record<string, unknown>,
-): "read-only" | "workspace-write" | "danger-full-access" | undefined {
-  const value = context.sandboxMode;
-  if (
-    value === "read-only" ||
-    value === "workspace-write" ||
-    value === "danger-full-access"
-  ) {
-    return value;
-  }
-  return undefined;
-}
-
 function attachmentIdsFromAdditionalKwargs(
   additionalKwargs: Record<string, unknown>,
 ): string[] {
@@ -1098,7 +1084,6 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         workModeId: turnWorkModeId,
         reasoningEffort: qiongqiReasoningEffortFromContext(context),
         approvalPolicy: qiongqiApprovalPolicyFromContext(context),
-        sandboxMode: qiongqiSandboxModeFromContext(context),
         ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
         ...(additionalKwargs.hide_from_ui === true ? { displayText: "" } : {}),
       });

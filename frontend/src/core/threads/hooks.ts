@@ -614,19 +614,23 @@ export function useThreadStream({
           ...context,
           ...extraContext,
         };
+        const submitContext = { ...baseSubmitContext } as ThreadSubmitContext & {
+          sandboxMode?: unknown;
+        };
+        delete submitContext.sandboxMode;
         const buildSubmitContext = (targetThreadId: string | undefined) => ({
-          ...baseSubmitContext,
-          thinking_enabled: baseSubmitContext.executionProfile !== "fast",
-          is_plan_mode: isPlanningTaskMode(baseSubmitContext.taskMode),
-          subagent_enabled: baseSubmitContext.collaborationPolicy === "auto",
+          ...submitContext,
+          thinking_enabled: submitContext.executionProfile !== "fast",
+          is_plan_mode: isPlanningTaskMode(submitContext.taskMode),
+          subagent_enabled: submitContext.collaborationPolicy === "auto",
           reasoning_effort:
-            baseSubmitContext.reasoning_effort ??
-            (baseSubmitContext.executionProfile === "deep"
+            submitContext.reasoning_effort ??
+            (submitContext.executionProfile === "deep"
               ? "high"
-              : baseSubmitContext.executionProfile === "balanced"
+              : submitContext.executionProfile === "balanced"
                 ? "medium"
                 : undefined),
-          workModeId: baseSubmitContext.workModeId,
+          workModeId: submitContext.workModeId,
           thread_id: targetThreadId,
         });
         let activeThreadId = requestedThreadId;

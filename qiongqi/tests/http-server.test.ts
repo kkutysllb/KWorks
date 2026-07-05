@@ -214,6 +214,27 @@ describe('HTTP server', () => {
     })
   })
 
+  it('does not implicitly activate the first configured user model profile', async () => {
+    const h = buildHarness()
+    const session = await h.runtime.authService?.initialize({
+      email: 'manual-models@example.com',
+      password: 'password123'
+    })
+    await h.runtime.kworksUserDataStore?.saveModelProfile(session!.user.id, 'deepseek-pro', {
+      providerModel: 'deepseek-chat',
+      baseUrl: 'https://api.deepseek.example/v1'
+    })
+
+    const response = await dispatchRequest(h.router, new Request('http://localhost/api/models', {
+      headers: { authorization: `Bearer ${session?.accessToken}` }
+    }))
+
+    expect(response.status).toBe(200)
+    const body = await readJson(response) as { models: Array<{ name: string; active?: boolean }> }
+    expect(body.models).toHaveLength(1)
+    expect(body.models[0]).toMatchObject({ name: 'deepseek-pro', active: false })
+  })
+
   it('does not enable legacy KWorks token usage indicators from the models endpoint', async () => {
     const h = buildHarness()
 
@@ -464,12 +485,12 @@ describe('HTTP server', () => {
 
     const readInitial = await dispatchRequest(h.router, new Request('http://localhost/api/config'))
     expect(readInitial.status).toBe(200)
-    await expect(readJson(readInitial)).resolves.toMatchObject({
+    const initialBody = await readJson(readInitial) as { config?: { serve?: Record<string, unknown> } }
+    expect(initialBody).toMatchObject({
       config: {
         serve: {
           model: 'deepseek-chat',
-          approvalPolicy: 'on-request',
-          sandboxMode: 'workspace-write'
+          approvalPolicy: 'on-request'
         },
         models: {
           profiles: {
@@ -486,6 +507,7 @@ describe('HTTP server', () => {
         }
       }
     })
+    expect(initialBody.config?.serve).not.toHaveProperty('sandboxMode')
 
     const save = await dispatchRequest(
       h.router,
@@ -507,7 +529,8 @@ describe('HTTP server', () => {
       })
     )
     expect(save.status).toBe(200)
-    await expect(readJson(save)).resolves.toMatchObject({
+    const saveBody = await readJson(save) as { data?: Record<string, unknown> }
+    expect(saveBody).toMatchObject({
       section: 'serve',
       data: {
         model: 'new-model',
@@ -516,10 +539,33 @@ describe('HTTP server', () => {
         storage: { backend: 'file' }
       }
     })
+    expect(saveBody.data).not.toHaveProperty('sandboxMode')
 
     const stored = await h.runtime.configStore?.read()
     expect(stored?.serve?.model).toBe('new-model')
     expect(stored?.serve?.apiKey).toBe('sk-config-secret')
+  })
+
+  it('does not expose sandbox as a KWorks config section', async () => {
+    const h = buildHarness()
+
+    const read = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/config/sandbox', {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+    expect(read.status).toBe(404)
+
+    const save = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/config/sandbox', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ data: 'danger-full-access' })
+      })
+    )
+    expect(save.status).toBe(404)
   })
 
   it('preserves existing secrets when saving a redacted full config payload', async () => {

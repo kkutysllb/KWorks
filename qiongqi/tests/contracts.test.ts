@@ -313,6 +313,7 @@ describe('cli', () => {
     expect(parsed.port).toBe(8787)
     expect(parsed.tokenEconomyMode).toBe(true)
     expect(parsed.tokenEconomy?.enabled).toBe(true)
+    expect(parsed.runtime?.modelStreamIdleTimeoutMs).toBe(120_000)
     expect(parsed.insecure).toBe(true)
   })
 

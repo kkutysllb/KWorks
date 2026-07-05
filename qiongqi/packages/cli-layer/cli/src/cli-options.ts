@@ -13,6 +13,7 @@ import {
   DEFAULT_STORAGE_CONFIG,
   ModelConfigSchema,
   ObservabilityConfigSchema,
+  type RuntimeTuningConfig,
   RuntimeTuningConfigSchema,
   StorageConfigSchema,
   TokenEconomyConfigSchema
@@ -29,6 +30,9 @@ import {
 
 export const DEFAULT_SERVE_PORT = 8899
 export const DEFAULT_SERVE_MODEL = DEFAULT_QIONGQI_MODEL
+export const DEFAULT_SERVE_RUNTIME_TUNING: RuntimeTuningConfig = {
+  modelStreamIdleTimeoutMs: 120_000
+}
 
 /**
  * Built-in agent presets available via `--preset`.
@@ -78,7 +82,7 @@ export const ServeOptionsSchema = z.object({
   storage: StorageConfigSchema.default(DEFAULT_STORAGE_CONFIG),
   models: ModelConfigSchema.optional(),
   contextCompaction: ContextCompactionConfigSchema.optional(),
-  runtime: RuntimeTuningConfigSchema.optional(),
+  runtime: RuntimeTuningConfigSchema.default(DEFAULT_SERVE_RUNTIME_TUNING),
   observability: ObservabilityConfigSchema.optional(),
   capabilities: QiongqiCapabilitiesConfig.default(DEFAULT_QIONGQI_CAPABILITIES_CONFIG),
   /**
@@ -107,6 +111,7 @@ export const DEFAULT_SERVE_OPTIONS: Omit<ServeOptions, 'baseUrl' | 'apiKey'> = {
   tokenEconomyMode: false,
   insecure: false,
   storage: DEFAULT_STORAGE_CONFIG,
+  runtime: DEFAULT_SERVE_RUNTIME_TUNING,
   capabilities: DEFAULT_QIONGQI_CAPABILITIES_CONFIG,
   preset: 'coding'
 }

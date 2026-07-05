@@ -220,13 +220,14 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("if (isSelectedWorkspaceRoot(value))");
     expect(inputBox).toContain("协作策略");
     expect(inputBox).not.toContain("多代理协作");
+    expect(hooks).toContain("delete submitContext.sandboxMode");
     expect(hooks).toContain(
-      "is_plan_mode: isPlanningTaskMode(baseSubmitContext.taskMode)",
+      "is_plan_mode: isPlanningTaskMode(submitContext.taskMode)",
     );
     expect(hooks).toContain(
-      'subagent_enabled: baseSubmitContext.collaborationPolicy === "auto"',
+      'subagent_enabled: submitContext.collaborationPolicy === "auto"',
     );
-    expect(hooks).toContain("workModeId: baseSubmitContext.workModeId");
+    expect(hooks).toContain("workModeId: submitContext.workModeId");
     expect(hooks).toContain("...context,\n          ...extraContext");
     expect(hooks).not.toContain(
       'context.mode === "pro" || context.mode === "ultra"',

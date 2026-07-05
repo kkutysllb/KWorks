@@ -123,6 +123,7 @@ export const ContextCompactionConfigSchema = z
 
 export const RuntimeTuningConfigSchema = z
   .object({
+    modelStreamIdleTimeoutMs: PositiveInt.optional(),
     toolStorm: z
       .object({
         enabled: z.boolean().optional(),

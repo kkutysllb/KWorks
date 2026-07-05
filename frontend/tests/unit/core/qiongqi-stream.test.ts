@@ -549,9 +549,9 @@ describe("useQiongqiStream /v1 contract", () => {
       mode: "plan",
       reasoningEffort: "off",
       approvalPolicy: "on-request",
-      sandboxMode: "danger-full-access",
       attachmentIds: ["att_123"],
     });
+    expect(payload).not.toHaveProperty("sandboxMode");
     expect(payload).not.toHaveProperty("context");
     expect(payload).not.toHaveProperty("attachments");
   });

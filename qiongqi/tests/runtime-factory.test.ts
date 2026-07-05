@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,8 +6,9 @@ import { InMemorySessionStore } from '@qiongqi/adapter-storage'
 import { InMemoryThreadStore } from '@qiongqi/adapter-storage'
 import { createThreadRecord } from '@qiongqi/domain'
 import { UsageService } from '@qiongqi/services'
-import { createAgent, seedUsageCarryover } from '@qiongqi/http'
+import { createAgent, createModelAdapter, seedUsageCarryover } from '@qiongqi/http'
 import { DEFAULT_QIONGQI_CAPABILITIES_CONFIG, type UsageSnapshot } from '@qiongqi/contracts'
+import type { ModelRequest, ModelStreamChunk } from '@qiongqi/ports'
 
 function usage(overrides: Partial<UsageSnapshot>): UsageSnapshot {
   const promptTokens = overrides.promptTokens ?? 10
@@ -27,6 +28,75 @@ function usage(overrides: Partial<UsageSnapshot>): UsageSnapshot {
     ...(overrides.costUsd !== undefined ? { costUsd: overrides.costUsd } : {})
   }
 }
+
+function modelRequest(model: string, abortSignal: AbortSignal): ModelRequest {
+  return {
+    threadId: 'thr_timeout',
+    turnId: 'turn_timeout',
+    model,
+    systemPrompt: 'Be brief.',
+    prefix: [],
+    history: [],
+    tools: [],
+    abortSignal
+  }
+}
+
+async function collectUntilError(stream: AsyncIterable<ModelStreamChunk>): Promise<ModelStreamChunk[]> {
+  const chunks: ModelStreamChunk[] = []
+  for await (const chunk of stream) {
+    chunks.push(chunk)
+    if (chunk.kind === 'error') break
+  }
+  return chunks
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('runtime model adapter tuning', () => {
+  it('passes runtime modelStreamIdleTimeoutMs into routed model profiles', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(new ReadableStream<Uint8Array>({
+        start() {
+          // Intentionally leave the stream open without chunks.
+        }
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    ))
+    const controller = new AbortController()
+    const adapter = createModelAdapter({
+      baseUrl: 'https://fallback.example/v1',
+      apiKey: 'fallback-key',
+      endpointFormat: 'chat_completions',
+      model: 'fallback-model',
+      models: {
+        profiles: {
+          'zhipu-glm': {
+            providerModel: 'glm-5.2',
+            baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+            apiKey: 'zhipu-key',
+            endpointFormat: 'chat_completions'
+          }
+        }
+      },
+      runtime: { modelStreamIdleTimeoutMs: 5 }
+    })
+
+    const result = await Promise.race([
+      collectUntilError(adapter.client.stream(modelRequest('zhipu-glm', controller.signal))),
+      new Promise<'timed-out'>((resolve) => setTimeout(() => resolve('timed-out'), 50))
+    ])
+    controller.abort()
+
+    expect(result).not.toBe('timed-out')
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'error', code: 'stream_idle_timeout' })
+      ])
+    )
+  })
+})
 
 describe('runtime factory usage carryover', () => {
   it('seeds runtime usage from the latest persisted cumulative usage event per thread', async () => {

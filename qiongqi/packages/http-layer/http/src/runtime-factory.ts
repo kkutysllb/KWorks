@@ -404,29 +404,39 @@ export interface ModelAdapter {
 export function createModelAdapter(
   options: Pick<
     QiongqiServeRuntimeOptions,
-    'baseUrl' | 'apiKey' | 'endpointFormat' | 'model' | 'contextCompaction' | 'models'
+    'baseUrl' | 'apiKey' | 'endpointFormat' | 'model' | 'contextCompaction' | 'models' | 'runtime'
   >,
   configStore?: QiongqiConfigStore
 ): ModelAdapter {
+  const streamIdleTimeoutMs = options.runtime?.modelStreamIdleTimeoutMs
   const fallback = {
     baseUrl: options.baseUrl,
     apiKey: options.apiKey,
     endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
-    model: options.model
+    model: options.model,
+    ...(streamIdleTimeoutMs !== undefined ? { streamIdleTimeoutMs } : {})
   }
-  const routes = modelProviderRoutesFromConfig(options.models)
+  const routes = modelProviderRoutesFromConfig(options.models, streamIdleTimeoutMs)
   const client = configStore
     ? new DynamicRoutedModelCompatClient({
         fallback: () => {
           const config = runtimeConfigSnapshot(configStore)
+          const configStreamIdleTimeoutMs = config.runtime?.modelStreamIdleTimeoutMs ?? streamIdleTimeoutMs
           return {
             baseUrl: config.serve?.baseUrl ?? options.baseUrl,
             apiKey: config.serve?.apiKey ?? options.apiKey,
             endpointFormat: config.serve?.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
-            model: config.serve?.model ?? options.model
+            model: config.serve?.model ?? options.model,
+            ...(configStreamIdleTimeoutMs !== undefined ? { streamIdleTimeoutMs: configStreamIdleTimeoutMs } : {})
           }
         },
-        routes: () => modelProviderRoutesFromConfig(runtimeConfigSnapshot(configStore).models)
+        routes: () => {
+          const config = runtimeConfigSnapshot(configStore)
+          return modelProviderRoutesFromConfig(
+            config.models,
+            config.runtime?.modelStreamIdleTimeoutMs ?? streamIdleTimeoutMs
+          )
+        }
       })
     : routes.length > 0
       ? new RoutedModelCompatClient({ fallback, routes })
@@ -476,7 +486,10 @@ function skillEnabledMapFromCompatSetting(value: unknown): Record<string, boolea
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-function modelProviderRoutesFromConfig(models: ModelConfig | undefined): RoutedModelConfig[] {
+function modelProviderRoutesFromConfig(
+  models: ModelConfig | undefined,
+  streamIdleTimeoutMs?: number
+): RoutedModelConfig[] {
   const profiles = models?.profiles
   if (!profiles) return []
   const routes: RoutedModelConfig[] = []
@@ -491,7 +504,8 @@ function modelProviderRoutesFromConfig(models: ModelConfig | undefined): RoutedM
       apiKey: typeof profile.apiKey === 'string' ? profile.apiKey : '',
       endpointFormat: normalizeModelEndpointFormat(profile.endpointFormat),
       model: providerModel,
-      aliases: [modelId, ...(Array.isArray(profile.aliases) ? profile.aliases : [])]
+      aliases: [modelId, ...(Array.isArray(profile.aliases) ? profile.aliases : [])],
+      ...(streamIdleTimeoutMs !== undefined ? { streamIdleTimeoutMs } : {})
     })
   }
   return routes

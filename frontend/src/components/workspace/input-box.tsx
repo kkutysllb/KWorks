@@ -97,7 +97,6 @@ type QiongQiContext = Omit<
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
   workspaceRoot?: string;
   approvalPolicy?: "auto" | "manual" | "never";
-  sandboxMode?: "workspace-write" | "danger-full-access" | "read-only";
 };
 
 export type InputBoxSubmitContext = QiongQiContext;
@@ -199,10 +198,6 @@ function contextForWorkMode(
         ? getResolvedExecutionProfile("deep", supportThinking)
         : (context.executionProfile ??
           getResolvedExecutionProfile(undefined, supportThinking)),
-    sandboxMode:
-      workModeId === "coding"
-        ? (context.sandboxMode ?? "workspace-write")
-        : context.sandboxMode,
   };
 }
 
@@ -458,16 +453,6 @@ export function InputBox({
     [context, onContextChange],
   );
 
-  const handleSandboxModeSelect = useCallback(
-    (sandboxMode: QiongQiContext["sandboxMode"]) => {
-      onContextChange?.({
-        ...context,
-        sandboxMode,
-      });
-    },
-    [context, onContextChange],
-  );
-
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (status === "streaming") {
@@ -592,7 +577,6 @@ export function InputBox({
               supportThinking={supportThinking}
               onExecutionProfileSelect={handleExecutionProfileSelect}
               onApprovalPolicySelect={handleApprovalPolicySelect}
-              onSandboxModeSelect={handleSandboxModeSelect}
             />
             <QiongQiTaskModeMenu
               taskMode={context.taskMode ?? "auto"}
@@ -698,13 +682,11 @@ function QiongQiExecutionModeMenu({
   supportThinking,
   onExecutionProfileSelect,
   onApprovalPolicySelect,
-  onSandboxModeSelect,
 }: {
   context: QiongQiContext;
   supportThinking: boolean;
   onExecutionProfileSelect: (profile: ExecutionProfile) => void;
   onApprovalPolicySelect: (policy: QiongQiContext["approvalPolicy"]) => void;
-  onSandboxModeSelect: (mode: QiongQiContext["sandboxMode"]) => void;
 }) {
   const profile = getResolvedExecutionProfile(
     context.executionProfile,
@@ -767,35 +749,6 @@ function QiongQiExecutionModeMenu({
           >
             关键操作确认
             {context.approvalPolicy === "manual" && (
-              <CheckIcon className="ml-auto size-4" />
-            )}
-          </PromptInputActionMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-muted-foreground text-xs">
-            沙箱范围
-          </DropdownMenuLabel>
-          <PromptInputActionMenuItem
-            onSelect={() => onSandboxModeSelect("workspace-write")}
-          >
-            工作区可写
-            {(context.sandboxMode ?? "workspace-write") ===
-              "workspace-write" && <CheckIcon className="ml-auto size-4" />}
-          </PromptInputActionMenuItem>
-          <PromptInputActionMenuItem
-            onSelect={() => onSandboxModeSelect("danger-full-access")}
-          >
-            完整本地权限
-            {context.sandboxMode === "danger-full-access" && (
-              <CheckIcon className="ml-auto size-4" />
-            )}
-          </PromptInputActionMenuItem>
-          <PromptInputActionMenuItem
-            onSelect={() => onSandboxModeSelect("read-only")}
-          >
-            只读观察
-            {context.sandboxMode === "read-only" && (
               <CheckIcon className="ml-auto size-4" />
             )}
           </PromptInputActionMenuItem>

@@ -663,7 +663,6 @@ describe("useThreadStream cache bridge", () => {
       collaborationPolicy: "auto",
       workspaceRoot: "/Users/libing/project",
       approvalPolicy: "manual",
-      sandboxMode: "danger-full-access",
       model_name: "minimax-m2",
       thinking_enabled: true,
       is_plan_mode: true,
@@ -671,6 +670,7 @@ describe("useThreadStream cache bridge", () => {
       reasoning_effort: "high",
       thread_id: "thread-a",
     });
+    expect(submitOptions?.context).not.toHaveProperty("sandboxMode");
     expect(submitOptions?.context).not.toHaveProperty("orchestration_mode");
   });
 

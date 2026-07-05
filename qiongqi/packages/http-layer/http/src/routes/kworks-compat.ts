@@ -460,6 +460,9 @@ export async function kworksConfig(runtime: ServerRuntime, actor?: AuthActor): P
 }
 
 export async function kworksConfigSection(runtime: ServerRuntime, section: string, actor?: AuthActor): Promise<JsonResponse> {
+  if (isUnsupportedKWorksConfigSection(section)) {
+    return jsonResponse({ detail: `${section} is not a KWorks configurable runtime section` }, 404)
+  }
   const config = await readEffectiveRuntimeConfig(runtime, actor)
   return jsonResponse({ section, data: redactValueForResponse(sectionValue(config, section)) })
 }
@@ -484,6 +487,9 @@ export async function kworksSaveConfig(runtime: ServerRuntime, request: Request,
 }
 
 export async function kworksSaveConfigSection(runtime: ServerRuntime, section: string, request: Request, actor?: AuthActor): Promise<JsonResponse | Response> {
+  if (isUnsupportedKWorksConfigSection(section)) {
+    return jsonResponse({ detail: `${section} is not a KWorks configurable runtime section` }, 404)
+  }
   if (isBuiltInAttachmentsSection(section)) {
     return jsonResponse({ detail: 'attachments are a built-in product capability and are not user-configurable' }, 403)
   }
@@ -2269,12 +2275,19 @@ async function readEffectiveRuntimeConfig(runtime: ServerRuntime, actor?: AuthAc
   }
   const activeModel = userModels.activeModel && userModels.profiles[userModels.activeModel]
     ? userModels.activeModel
-    : Object.keys(userModels.profiles)[0]
+    : undefined
   const activeProfile = activeModel ? userModels.profiles[activeModel] : undefined
+  const {
+    model: _model,
+    baseUrl: _baseUrl,
+    apiKey: _apiKey,
+    endpointFormat: _endpointFormat,
+    ...serveWithoutModelRoute
+  } = config.serve ?? {}
   return {
     ...config,
     serve: {
-      ...(config.serve ?? {}),
+      ...(activeModel ? (config.serve ?? {}) : serveWithoutModelRoute),
       ...(activeModel ? { model: activeModel } : {}),
       ...(activeProfile?.baseUrl ? { baseUrl: activeProfile.baseUrl } : {}),
       ...(activeProfile?.apiKey !== undefined ? { apiKey: activeProfile.apiKey } : {}),
@@ -2498,7 +2511,8 @@ function normalizeConfigForWrite(value: unknown): unknown {
   const out: Record<string, unknown> = { ...config }
 
   if (isObject(out.serve)) {
-    out.serve = omitEmptyOptionalStrings(out.serve, [
+    const { sandboxMode: _sandboxMode, ...serveWithoutSandbox } = out.serve
+    out.serve = omitEmptyOptionalStrings(serveWithoutSandbox, [
       'model',
       'baseUrl',
       'apiKey',
@@ -2657,7 +2671,6 @@ function sectionValue(config: QiongqiConfig, section: string): unknown {
     case 'observability':
     case 'run_events': return config.serve?.observability ?? {}
     case 'token_economy': return config.serve?.tokenEconomy ?? {}
-    case 'sandbox': return config.serve?.sandboxMode ?? 'workspace-write'
     case 'uploads':
     case 'attachments': return config.capabilities?.attachments ?? {}
     case 'mcp':
@@ -2683,7 +2696,6 @@ function withSectionValue(config: QiongqiConfig, section: string, data: unknown)
     case 'observability':
     case 'run_events': return { ...config, serve: { ...(config.serve ?? {}), observability: isObject(data) ? data : {} } }
     case 'token_economy': return { ...config, serve: { ...(config.serve ?? {}), tokenEconomy: isObject(data) ? data : {} } }
-    case 'sandbox': return { ...config, serve: { ...(config.serve ?? {}), sandboxMode: typeof data === 'string' ? data : config.serve?.sandboxMode } }
     case 'uploads':
     case 'attachments': return { ...config, capabilities: { ...(config.capabilities ?? {}), attachments: isObject(data) ? data : {} } }
     case 'mcp':
@@ -2712,6 +2724,10 @@ function isBuiltInAttachmentsSection(section: string): boolean {
   return section === 'attachments' || section === 'uploads'
 }
 
+function isUnsupportedKWorksConfigSection(section: string): boolean {
+  return section === 'sandbox'
+}
+
 function redactConfigForResponse(config: QiongqiConfig): QiongqiConfig {
   return redactValueForResponse(config) as QiongqiConfig
 }
@@ -2721,7 +2737,9 @@ function redactValueForResponse(value: unknown): unknown {
   if (!isObject(value)) return value
   const out: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
-    if (key === 'apiKey' || key === 'api_key' || key.toLowerCase().includes('token')) {
+    if (key === 'sandboxMode') {
+      continue
+    } else if (key === 'apiKey' || key === 'api_key' || key.toLowerCase().includes('token')) {
       out[key] = typeof item === 'string' && item.length > 0 ? '********' : item
     } else {
       out[key] = redactValueForResponse(item)
