@@ -482,6 +482,7 @@ function ToolCallDetail({
       <CodeBlock
         className="mx-0 cursor-pointer border-none px-0"
         showLineNumbers={false}
+        wrapLines
         language={detail.language}
         code={detail.value}
       />

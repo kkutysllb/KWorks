@@ -1,8 +1,13 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, test } from "vitest";
 
 import { zhCN } from "@/core/i18n";
 import { describeToolCallDisplay } from "@/core/tools/tool-call-display";
 import { explainToolCall } from "@/core/tools/utils";
+
+const repoRoot = resolve(__dirname, "../../..");
 
 describe("message group tool call display", () => {
   test("shows the command for bash calls without a description", () => {
@@ -96,5 +101,16 @@ describe("message group tool call display", () => {
         value: "frontend/tests",
       },
     });
+  });
+
+  test("wraps command code in tool call details so long shell commands are fully visible", () => {
+    const messageGroup = readFileSync(
+      resolve(repoRoot, "src/components/workspace/messages/message-group.tsx"),
+      "utf8",
+    );
+
+    expect(messageGroup).toMatch(
+      /<CodeBlock[\s\S]*className="mx-0 cursor-pointer border-none px-0"[\s\S]*showLineNumbers=\{false\}[\s\S]*wrapLines/,
+    );
   });
 });
