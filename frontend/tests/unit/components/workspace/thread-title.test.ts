@@ -56,17 +56,18 @@ vi.mock("@/components/workspace/flip-display", () => ({
 function streamWithValues(
   values: Partial<AgentThreadState>,
 ): BaseStream<AgentThreadState> {
+  const resolvedValues = {
+    title: "",
+    messages: [],
+    artifacts: [],
+    ...values,
+  };
   return {
-    values: {
-      title: "",
-      messages: [],
-      artifacts: [],
-      ...values,
-    },
+    values: resolvedValues,
     error: null,
     isLoading: false,
     isThreadLoading: false,
-    messages: [],
+    messages: resolvedValues.messages,
     stop: vi.fn(async () => undefined),
     submit: vi.fn(async () => undefined),
   };
@@ -126,6 +127,34 @@ describe("ThreadTitle", () => {
 
     expect(container.textContent).toBe(
       "[股票量化] 当前工作模式下你有哪些技能",
+    );
+  });
+
+  test("derives the visible title from the first user message when the stream title is a placeholder", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        React.createElement(ThreadTitle, {
+          threadId: "thread-task",
+          thread: streamWithValues({
+            title: "New Chat",
+            workModeId: "task",
+            messages: [
+              {
+                type: "human",
+                content: "你当前在什么工作模式下，有哪些技能可以调用",
+              },
+            ],
+          }),
+        }),
+      );
+    });
+
+    expect(container.textContent).toBe(
+      "[日常办公] 你当前在什么工作模式下，有哪些技能可以调用",
     );
   });
 });
