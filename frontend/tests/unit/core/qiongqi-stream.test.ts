@@ -106,8 +106,16 @@ function assistantTextDelta({
 }
 
 function completedAssistantText(text: string): RuntimeEvent {
+  return completedAssistantTextItem("item_text_turn-a", text, 3);
+}
+
+function completedAssistantTextItem(
+  itemId: string,
+  text: string,
+  seq: number,
+): RuntimeEvent {
   const item: TurnItem = {
-    id: "item_text_turn-a",
+    id: itemId,
     turnId: "turn-a",
     threadId: "thread-a",
     role: "assistant",
@@ -118,12 +126,36 @@ function completedAssistantText(text: string): RuntimeEvent {
   };
   return {
     kind: "item_created",
-    seq: 3,
+    seq,
     timestamp: "2026-01-01T00:00:00Z",
     threadId: "thread-a",
     turnId: "turn-a",
     itemId: item.id,
     item,
+  };
+}
+
+function controlledSseResponse() {
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      controller = ctrl;
+    },
+  });
+  const response = new Response(stream, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+  return {
+    response,
+    emit(event: RuntimeEvent) {
+      controller?.enqueue(
+        encoder.encode(
+          `id: ${event.seq}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`,
+        ),
+      );
+    },
   };
 }
 
@@ -214,6 +246,15 @@ function StreamValuesHarness() {
   });
 }
 
+function StreamMessageCountHarness() {
+  const stream = useQiongqiStream<HarnessState>({
+    threadId: "thread-a",
+  });
+  return React.createElement("output", {
+    "data-count": String(stream.messages.length),
+  });
+}
+
 function ExistingThreadWorkModeSubmitHarness() {
   const stream = useQiongqiStream<WorkModeHarnessState>({
     threadId: "thread-a",
@@ -293,6 +334,7 @@ describe("useQiongqiStream /v1 contract", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (root) {
       act(() => {
         root?.unmount();
@@ -324,6 +366,45 @@ describe("useQiongqiStream /v1 contract", () => {
         (init as RequestInit | undefined)?.method === "GET",
     )?.[1] as RequestInit | undefined;
     expect(new Headers(sseInit?.headers).get("Last-Event-ID")).toBe("42");
+  });
+
+  test("coalesces multiple SSE item events into the next frame before syncing UI state", async () => {
+    vi.useFakeTimers();
+    const sse = controlledSseResponse();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeThread({ latestSeq: 0 })))
+      .mockResolvedValueOnce(sse.response);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(React.createElement(StreamMessageCountHarness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const output = container.querySelector("output");
+    expect(output?.getAttribute("data-count")).toBe("0");
+
+    await act(async () => {
+      sse.emit(completedAssistantTextItem("item_text_1", "one", 1));
+      sse.emit(completedAssistantTextItem("item_text_2", "two", 2));
+      sse.emit(completedAssistantTextItem("item_text_3", "three", 3));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(output?.getAttribute("data-count")).toBe("0");
+
+    await act(async () => {
+      vi.advanceTimersByTime(16);
+      await Promise.resolve();
+    });
+
+    expect(output?.getAttribute("data-count")).toBe("3");
+    vi.useRealTimers();
   });
 
   test("exposes fetched thread work mode in stream values", async () => {

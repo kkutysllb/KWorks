@@ -102,6 +102,7 @@ import { cn } from "@/lib/utils";
 import { AgentPanel } from "./agent-panel";
 import { CodeViewer } from "./code-viewer";
 import { CodingDiffPanel } from "./coding-diff-panel";
+import { CodingErrorBoundary } from "./coding-error-boundary";
 import { CodingResultsPanel } from "./coding-results-panel";
 import { CodingTaskChangesPanel } from "./coding-task-changes-panel";
 import { FileExplorer } from "./file-explorer";
@@ -661,11 +662,17 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                       path={project.path}
                     />
                   )}
-                  <TodoList
-                    className="pointer-events-auto max-w-full"
-                    todos={agentTodos}
-                    variant="floating"
-                  />
+                  <CodingErrorBoundary
+                    className="pointer-events-auto min-h-28 rounded-xl border"
+                    label="任务步骤"
+                    resetKey={`${codingThreadId}:${agentTodos.length}`}
+                  >
+                    <TodoList
+                      className="pointer-events-auto max-w-full"
+                      todos={agentTodos}
+                      variant="floating"
+                    />
+                  </CodingErrorBoundary>
                 </CodingFloatingPanelStack>
               )}
               {showFileExplorer ? (
@@ -711,18 +718,23 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                     "flex h-full min-h-0 min-w-0 flex-col overflow-hidden",
                   )}
                 >
-                  <AgentInspector
-                    avoidRightFloatingPanels={showFloatingPanels}
-                    onFocusFile={focusWorkbenchFile}
-                    projectRoot={project.path}
-                    projectId={projectId}
-                    threadId={codingThreadId}
-                    selectedTaskId={selectedTaskId}
-                    onThreadIdChange={setAgentThreadId}
-                    onTodosChange={setAgentTodos}
-                    activeTab={activeInspectorTab}
-                    onActiveTabChange={setActiveInspectorTab}
-                  />
+                  <CodingErrorBoundary
+                    label="消息区域"
+                    resetKey={codingThreadId}
+                  >
+                    <AgentInspector
+                      avoidRightFloatingPanels={showFloatingPanels}
+                      onFocusFile={focusWorkbenchFile}
+                      projectRoot={project.path}
+                      projectId={projectId}
+                      threadId={codingThreadId}
+                      selectedTaskId={selectedTaskId}
+                      onThreadIdChange={setAgentThreadId}
+                      onTodosChange={setAgentTodos}
+                      activeTab={activeInspectorTab}
+                      onActiveTabChange={setActiveInspectorTab}
+                    />
+                  </CodingErrorBoundary>
                 </div>
               </section>
               {/* Right: Code / Diff / Results / Review */}
@@ -751,40 +763,45 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                         </PanelToggleButton>
                       </div>
                       <div className="min-h-0 flex-1 overflow-hidden">
-                        {workbenchView === "code" && (
-                          <CodeViewer
-                            projectId={projectId}
-                            filePath={selectedFile}
-                          />
-                        )}
-                        {workbenchView === "diff" && showWorkbenchPane && (
-                          <CodingDiffPanel
-                            projectId={projectId}
-                            selectedFilePath={selectedFile}
-                            focusLine={focusedLine}
-                          />
-                        )}
-                        {workbenchView === "task-changes" &&
-                          showWorkbenchPane && (
-                            <CodingTaskChangesPanel
-                              threadId={codingThreadId}
+                        <CodingErrorBoundary
+                          label={workbenchPanelTitle(workbenchView)}
+                          resetKey={`${workbenchView}:${codingThreadId}:${selectedFile ?? ""}`}
+                        >
+                          {workbenchView === "code" && (
+                            <CodeViewer
+                              projectId={projectId}
+                              filePath={selectedFile}
+                            />
+                          )}
+                          {workbenchView === "diff" && showWorkbenchPane && (
+                            <CodingDiffPanel
+                              projectId={projectId}
                               selectedFilePath={selectedFile}
-                              highlightedTaskId={selectedTaskId}
-                              onSelectTask={setSelectedTaskId}
+                              focusLine={focusedLine}
+                            />
+                          )}
+                          {workbenchView === "task-changes" &&
+                            showWorkbenchPane && (
+                              <CodingTaskChangesPanel
+                                threadId={codingThreadId}
+                                selectedFilePath={selectedFile}
+                                highlightedTaskId={selectedTaskId}
+                                onSelectTask={setSelectedTaskId}
+                                onFocusFile={focusWorkbenchFile}
+                              />
+                            )}
+                          {workbenchView === "results" && showWorkbenchPane && (
+                            <CodingResultsPanel threadId={resultsThreadId} />
+                          )}
+                          {workbenchView === "review" && showWorkbenchPane && (
+                            <ReviewPanel
+                              projectId={projectId}
+                              projectRoot={project.path}
+                              threadId={codingThreadId}
                               onFocusFile={focusWorkbenchFile}
                             />
                           )}
-                        {workbenchView === "results" && showWorkbenchPane && (
-                          <CodingResultsPanel threadId={resultsThreadId} />
-                        )}
-                        {workbenchView === "review" && showWorkbenchPane && (
-                          <ReviewPanel
-                            projectId={projectId}
-                            projectRoot={project.path}
-                            threadId={codingThreadId}
-                            onFocusFile={focusWorkbenchFile}
-                          />
-                        )}
+                        </CodingErrorBoundary>
                       </div>
                     </div>
                   </aside>

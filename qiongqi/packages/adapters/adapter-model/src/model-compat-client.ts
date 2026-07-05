@@ -2077,7 +2077,11 @@ function reasoningSignatureFromItems(
 
 function isPreToolCallBridgeItem(item: TurnItem, turnId: string): boolean {
   if (item.turnId !== turnId) return false
-  return item.kind === 'assistant_reasoning' || item.kind === 'assistant_text'
+  return item.kind === 'assistant_reasoning' ||
+    item.kind === 'assistant_text' ||
+    item.kind === 'approval' ||
+    item.kind === 'user_input' ||
+    item.kind === 'error'
 }
 
 function isBridgeItemBeforeToolCall(items: TurnItem[], index: number): boolean {
@@ -2089,8 +2093,7 @@ function isBridgeItemBeforeToolCall(items: TurnItem[], index: number): boolean {
   while (cursor < items.length) {
     const next = items[cursor]
     if (!next) return false
-    if (next.kind === 'assistant_reasoning' || next.kind === 'assistant_text') {
-      if (next.turnId !== item.turnId) return false
+    if (isPreToolCallBridgeItem(next, item.turnId)) {
       cursor += 1
       continue
     }

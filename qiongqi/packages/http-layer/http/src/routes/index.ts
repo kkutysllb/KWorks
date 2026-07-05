@@ -378,10 +378,13 @@ export function buildRouter(runtime: ServerRuntime): Router {
   })
   router.add('GET', '/api/memory', () => kworksMemory())
   router.add('POST', '/api/memory', () => kworksMemory())
+  router.add('DELETE', '/api/memory', () => kworksMemory())
   router.add('GET', '/api/memory/export', () => kworksMemory())
   router.add('POST', '/api/memory/import', () => kworksMemory())
   router.add('GET', '/api/memory/facts', () => kworksMemory())
   router.add('POST', '/api/memory/facts', () => kworksMemory())
+  router.add('PATCH', '/api/memory/facts/:factId', () => kworksMemory())
+  router.add('DELETE', '/api/memory/facts/:factId', () => kworksMemory())
   router.add('GET', '/api/agents', () => kworksEmptyList('agents'))
   router.add('GET', '/api/crons', async (request) => {
     const actor = await authenticateOrInternal(request, runtime)
@@ -410,6 +413,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
   })
   router.add('GET', '/api/channels/config', () => kworksChannelsConfig())
   router.add('PUT', '/api/channels/config', () => kworksChannelsConfig())
+  router.add('POST', '/api/channels/:name/restart', () => jsonResponse({
+    success: true,
+    message: 'Channel restart is not required for the QiongQi runtime'
+  }))
   router.add('GET', '/api/projects', async (request) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
@@ -570,6 +577,11 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (denied) return denied
     return kworksGetThreadHistory(runtime, ctx.params.id)
   })
+  router.add('POST', '/api/threads/:id/suggestions', async (request, ctx) => {
+    const denied = await denyUnlessThreadOwner(request, runtime, ctx.params.id)
+    if (denied) return denied
+    return jsonResponse({ suggestions: [] })
+  })
   router.add('POST', '/api/threads/:id/uploads', async (request, ctx) => {
     const denied = await denyUnlessThreadOwner(request, runtime, ctx.params.id)
     if (denied) return denied
@@ -629,6 +641,24 @@ export function buildRouter(runtime: ServerRuntime): Router {
     const denied = await denyUnlessThreadOwner(request, runtime, ctx.params.id)
     if (denied) return denied
     return kworksGetRun(ctx.params.id, ctx.params.runId)
+  })
+  router.add('PUT', '/api/threads/:id/runs/:runId/feedback', async (request, ctx) => {
+    const denied = await denyUnlessThreadOwner(request, runtime, ctx.params.id)
+    if (denied) return denied
+    const body = await request.json().catch(() => ({})) as {
+      rating?: unknown
+      comment?: unknown
+    }
+    return jsonResponse({
+      feedback_id: `${ctx.params.id}:${ctx.params.runId}`,
+      rating: typeof body.rating === 'number' ? body.rating : 0,
+      comment: typeof body.comment === 'string' ? body.comment : null
+    })
+  })
+  router.add('DELETE', '/api/threads/:id/runs/:runId/feedback', async (request, ctx) => {
+    const denied = await denyUnlessThreadOwner(request, runtime, ctx.params.id)
+    if (denied) return denied
+    return jsonResponse({ success: true })
   })
   router.add('POST', '/api/threads/:id/runs/stream', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
@@ -883,8 +913,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
     return resolveUserInput({
       inputId: ctx.params.id,
       request,
-      gate: runtime.userInputGate,
-      events: runtime.events
+      gate: runtime.userInputGate
     })
   })
   router.add('POST', '/v1/user-input/:id', async (request, ctx) => {
@@ -892,8 +921,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
     return resolveUserInput({
       inputId: ctx.params.id,
       request,
-      gate: runtime.userInputGate,
-      events: runtime.events
+      gate: runtime.userInputGate
     })
   })
   router.add('POST', '/v1/sessions/:id/resume-thread', async (request, ctx) => {

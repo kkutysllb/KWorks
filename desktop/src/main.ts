@@ -157,10 +157,40 @@ function createAppWindow(options: AppWindowOptions = {}): BrowserWindow {
   // Capture renderer console output into renderer.log for debugging.
   // This is critical for tracing the desktop auth/login flow which runs
   // entirely in the renderer process.
-  win.webContents.on("console-message", (_e, level, message, line, sourceId) => {
-    const levelStr = ["LOG", "WARN", "ERROR"][level] ?? "LOG";
-    const shortSrc = sourceId ? sourceId.split("/").pop() ?? sourceId : "";
-    appendRendererLog(levelStr, message, `${shortSrc}:${line}`);
+  win.webContents.on(
+    "console-message",
+    (_e, level, message, line, sourceId) => {
+      const levelStr = ["LOG", "WARN", "ERROR"][level] ?? "LOG";
+      const shortSrc = sourceId ? (sourceId.split("/").pop() ?? sourceId) : "";
+      appendRendererLog(levelStr, message, `${shortSrc}:${line}`);
+    },
+  );
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    const message =
+      `renderer process gone window=${win.id} reason=${details.reason}` +
+      ` exitCode=${details.exitCode}`;
+    log.error(message);
+    appendRendererLog("ERROR", message, "main");
+  });
+
+  win.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (errorCode === -3) return; // ERR_ABORTED during intentional navigation.
+      const message =
+        `renderer did-fail-load window=${win.id}` +
+        ` mainFrame=${isMainFrame} code=${errorCode}` +
+        ` description=${errorDescription} url=${validatedURL}`;
+      log.error(message);
+      appendRendererLog("ERROR", message, "main");
+    },
+  );
+
+  win.on("unresponsive", () => {
+    const message = `renderer window unresponsive window=${win.id}`;
+    log.warn(message);
+    appendRendererLog("WARN", message, "main");
   });
 
   // Hide to tray instead of closing (mirrors old Tauri behaviour).
@@ -212,7 +242,9 @@ function createAppWindow(options: AppWindowOptions = {}): BrowserWindow {
 async function loadContent(win: BrowserWindow, path = "/"): Promise<void> {
   const isDev = !app.isPackaged && process.env.KWORKS_DEV_SERVER === "1";
   if (isDev) {
-    const base = DEV_SERVER_URL.endsWith("/") ? DEV_SERVER_URL.slice(0, -1) : DEV_SERVER_URL;
+    const base = DEV_SERVER_URL.endsWith("/")
+      ? DEV_SERVER_URL.slice(0, -1)
+      : DEV_SERVER_URL;
     await win.loadURL(`${base}${path}`);
     if (process.env.KWORKS_OPEN_DEVTOOLS === "1") {
       win.webContents.openDevTools({ mode: "detach" });
@@ -225,8 +257,11 @@ async function loadContent(win: BrowserWindow, path = "/"): Promise<void> {
 function getMostRecentWindow(): BrowserWindow | null {
   const focused = BrowserWindow.getFocusedWindow();
   if (focused && !focused.isDestroyed()) return focused;
-  if (lastActiveWindow && !lastActiveWindow.isDestroyed()) return lastActiveWindow;
-  const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed());
+  if (lastActiveWindow && !lastActiveWindow.isDestroyed())
+    return lastActiveWindow;
+  const windows = BrowserWindow.getAllWindows().filter(
+    (win) => !win.isDestroyed(),
+  );
   return windows.at(-1) ?? null;
 }
 
@@ -286,11 +321,34 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ".eot": "application/vnd.ms-fontobject",
 };
 
+const PACKAGED_HTML_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: http: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*",
+  "worker-src 'self' blob:",
+  "frame-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join("; ");
+
 function contentTypeForPath(relativePath: string): string {
   return (
     MIME_BY_EXTENSION[extname(relativePath).toLowerCase()] ??
     "application/octet-stream"
   );
+}
+
+function frontendResponseHeaders(relativePath: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": contentTypeForPath(relativePath),
+  };
+  if (extname(relativePath).toLowerCase() === ".html") {
+    headers["Content-Security-Policy"] = PACKAGED_HTML_CSP;
+  }
+  return headers;
 }
 
 function registerFrontendProtocol(): void {
@@ -310,7 +368,7 @@ function registerFrontendProtocol(): void {
       const body = await readFile(filePath);
       return new Response(body, {
         status: 200,
-        headers: { "Content-Type": contentTypeForPath(relativePath) },
+        headers: frontendResponseHeaders(relativePath),
       });
     } catch {
       // File missing (e.g. an unknown dynamic route or a stale chunk URL).
@@ -318,10 +376,12 @@ function registerFrontendProtocol(): void {
       // — mirroring the behaviour of the old registerFileProtocol path,
       // which also served index.html for unknown routes.
       try {
-        const indexBody = await readFile(join(getFrontendDistDir(), "index.html"));
+        const indexBody = await readFile(
+          join(getFrontendDistDir(), "index.html"),
+        );
         return new Response(indexBody, {
           status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" },
+          headers: frontendResponseHeaders("index.html"),
         });
       } catch {
         return new Response("Not Found", { status: 404 });
@@ -337,7 +397,9 @@ function registerFrontendProtocol(): void {
  * widen the `role` field to `string`, which `MenuItemConstructorOptions`
  * rejects (it expects a union of known roles).
  */
-function item(opts: Electron.MenuItemConstructorOptions): Electron.MenuItemConstructorOptions {
+function item(
+  opts: Electron.MenuItemConstructorOptions,
+): Electron.MenuItemConstructorOptions {
   return opts;
 }
 
@@ -457,7 +519,8 @@ function buildAppMenu(): Menu {
         item({ type: "separator" }),
         item({
           label: "KWorks 文档",
-          click: () => void shell.openExternal("https://github.com/kkutysllb/kk_KWorks"),
+          click: () =>
+            void shell.openExternal("https://github.com/kkutysllb/kk_KWorks"),
         }),
         item({ type: "separator" }),
         item({
@@ -477,10 +540,9 @@ function buildAppMenu(): Menu {
 
 function buildTrayMenu(status: BackendStatus): Menu {
   const backendManaged = isBackendAutolaunchEnabled();
-  const statusLabel =
-    !backendManaged
-      ? "后端状态：开发脚本管理"
-      : status.status === "running"
+  const statusLabel = !backendManaged
+    ? "后端状态：开发脚本管理"
+    : status.status === "running"
       ? "后端状态：运行中"
       : status.status === "starting"
         ? "后端状态：启动中…"
@@ -490,8 +552,14 @@ function buildTrayMenu(status: BackendStatus): Menu {
 
   return Menu.buildFromTemplate([
     { label: "显示 KWorks", click: () => showLastActiveWindow() },
-    { label: "新建聊天窗口", click: () => createNewTaskWindow("/workspace/chats/new") },
-    { label: "新建 Coding 窗口", click: () => createNewTaskWindow("/workspace/coding") },
+    {
+      label: "新建聊天窗口",
+      click: () => createNewTaskWindow("/workspace/chats/new"),
+    },
+    {
+      label: "新建 Coding 窗口",
+      click: () => createNewTaskWindow("/workspace/coding"),
+    },
     { type: "separator" },
     { label: statusLabel, enabled: false },
     {
@@ -526,7 +594,9 @@ function navigateTo(path: string): void {
   const win = getMostRecentWindow() ?? createAppWindow();
   const isDev = !app.isPackaged && process.env.KWORKS_DEV_SERVER === "1";
   if (isDev) {
-    const base = DEV_SERVER_URL.endsWith("/") ? DEV_SERVER_URL.slice(0, -1) : DEV_SERVER_URL;
+    const base = DEV_SERVER_URL.endsWith("/")
+      ? DEV_SERVER_URL.slice(0, -1)
+      : DEV_SERVER_URL;
     void win.loadURL(`${base}${path}`);
   } else {
     void win.loadURL(`${APP_ORIGIN}${path}`);
@@ -585,7 +655,9 @@ void app.whenReady().then(async () => {
     return;
   }
 
-  log.info(`KWorks desktop starting (isPackaged=${app.isPackaged}, version=${app.getVersion()})`);
+  log.info(
+    `KWorks desktop starting (isPackaged=${app.isPackaged}, version=${app.getVersion()})`,
+  );
   log.info(`userData dir: ${app.getPath("userData")}`);
   log.info(`logs dir: ${getLogsDir()}`);
 
@@ -607,7 +679,9 @@ void app.whenReady().then(async () => {
   // Register IPC handlers (returns the shared BackendManager).
   backend = registerIpc();
   backend.onStatusChange((status) => {
-    log.info(`backend status: ${status.status} (port=${status.port}${status.error ? `, error=${status.error}` : ""})`);
+    log.info(
+      `backend status: ${status.status} (port=${status.port}${status.error ? `, error=${status.error}` : ""})`,
+    );
     tray?.setContextMenu(buildTrayMenu(status));
     tray?.setToolTip(`KWorks — ${status.status}`);
   });

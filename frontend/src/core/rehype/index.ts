@@ -5,6 +5,7 @@ import type { BuildVisitor } from "unist-util-visit";
 
 const CJK_TEXT_RE =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const MAX_ANIMATED_TEXT_LENGTH = 2000;
 
 export function rehypeSplitWordsIntoSpans() {
   return (tree: Root) => {
@@ -18,7 +19,10 @@ export function rehypeSplitWordsIntoSpans() {
         const newChildren: Array<ElementContent> = [];
         node.children.forEach((child) => {
           if (child.type === "text") {
-            if (CJK_TEXT_RE.test(child.value)) {
+            if (
+              child.value.length > MAX_ANIMATED_TEXT_LENGTH ||
+              CJK_TEXT_RE.test(child.value)
+            ) {
               newChildren.push(child);
               return;
             }

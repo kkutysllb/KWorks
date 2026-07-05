@@ -126,6 +126,30 @@ describe("TodoList floating panel", () => {
     expect(container.textContent).toContain("兼容旧数据");
   });
 
+  test("hides when todo input is null", () => {
+    ({ container, root } = renderTodoList(null));
+
+    expect(container.textContent).toBe("");
+  });
+
+  test("normalizes malformed todo item fields before rendering", () => {
+    const malformedTodos = [
+      {
+        id: { nested: "bad-id" },
+        content: { text: "对象内容" },
+        status: "unknown",
+      },
+      null,
+      { id: "ok", content: "保留字符串内容", status: "in_progress" },
+    ] as unknown as React.ComponentProps<typeof TodoList>["todos"];
+
+    expect(() => {
+      ({ container, root } = renderTodoList(malformedTodos));
+    }).not.toThrow();
+    expect(container?.textContent).toContain("对象内容");
+    expect(container?.textContent).toContain("保留字符串内容");
+  });
+
   test("reports whether the floating panel occupies chat space", () => {
     const onFloatingVisibilityChange = vi.fn();
     ({ container, root } = renderTodoList(

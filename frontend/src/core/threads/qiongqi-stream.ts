@@ -538,6 +538,10 @@ const RECONNECT_MAX_DELAY = 30000;
 const DISPLAY_TICK_MS = 40;
 const DISPLAY_MIN_CHARS_PER_TICK = 2;
 
+type ScheduledSync =
+  | { type: "animation-frame"; id: number }
+  | { type: "timeout"; id: ReturnType<typeof setTimeout> };
+
 function displayStepForBacklog(pendingCharacters: number): number {
   if (pendingCharacters > 600) return 24;
   if (pendingCharacters > 240) return 12;
@@ -565,6 +569,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
   const isSubscribedRef = useRef(false);
   const mountedRef = useRef(true);
   const workModeIdRef = useRef<string | undefined>(undefined);
+  const scheduledSyncRef = useRef<ScheduledSync | null>(null);
 
   // Callback refs
   const onThreadIdRef = useRef(options.onThreadId);
@@ -607,6 +612,45 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     } as unknown as StateType);
     setIsLoading(mirror.hasActiveTurn() || mirror.hasDisplayBacklog());
   }, []);
+
+  const cancelScheduledSync = useCallback(() => {
+    const scheduled = scheduledSyncRef.current;
+    if (!scheduled) return;
+    scheduledSyncRef.current = null;
+    if (
+      scheduled.type === "animation-frame" &&
+      typeof window !== "undefined" &&
+      typeof window.cancelAnimationFrame === "function"
+    ) {
+      window.cancelAnimationFrame(scheduled.id);
+      return;
+    }
+    if (scheduled.type === "timeout") {
+      clearTimeout(scheduled.id);
+    }
+  }, []);
+
+  const scheduleSyncState = useCallback(() => {
+    if (!mountedRef.current || scheduledSyncRef.current) return;
+    const flush = () => {
+      scheduledSyncRef.current = null;
+      syncState();
+    };
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      scheduledSyncRef.current = {
+        type: "animation-frame",
+        id: window.requestAnimationFrame(flush),
+      };
+      return;
+    }
+    scheduledSyncRef.current = {
+      type: "timeout",
+      id: setTimeout(flush, 16),
+    };
+  }, [syncState]);
 
   // --- Event handler ---
   const handleEvent = useCallback(
@@ -666,9 +710,9 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         onCustomEventRef.current?.(event);
       }
 
-      syncState();
+      scheduleSyncState();
     },
-    [syncState],
+    [scheduleSyncState],
   );
 
   // --- Smooth display pump ---
@@ -797,6 +841,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
   // --- Initial load: fetch thread record + subscribe ---
   useEffect(() => {
     if (!threadId || isMock) {
+      cancelScheduledSync();
       mirrorRef.current.reset();
       workModeIdRef.current = undefined;
       setMessages([]);
@@ -809,6 +854,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     threadIdRef.current = threadId;
 
     // Reset state for new thread
+    cancelScheduledSync();
     mirrorRef.current.reset();
     workModeIdRef.current = undefined;
     setMessages([]);
@@ -876,6 +922,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
 
     return () => {
       cancelled = true;
+      cancelScheduledSync();
       abortRef.current?.abort();
       isSubscribedRef.current = false;
     };
@@ -907,9 +954,10 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      cancelScheduledSync();
       abortRef.current?.abort();
     };
-  }, []);
+  }, [cancelScheduledSync]);
 
   const ensureThread = useCallback(
     async (

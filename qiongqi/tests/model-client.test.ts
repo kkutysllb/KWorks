@@ -6,6 +6,7 @@ import {
   makeCompactionItem,
   makeToolCallItem,
   makeToolResultItem,
+  makeUserInputItem,
   makeUserItem
 } from '@qiongqi/domain'
 import type { ModelRequest, ModelStreamChunk } from '@qiongqi/ports'
@@ -531,6 +532,105 @@ describe('DeepseekCompatModelClient', () => {
     expect(JSON.stringify(messages)).toContain('<qiongqi_internal_tool_context>')
     expect(JSON.stringify(messages)).toContain('assistant_preface:')
     expect(JSON.stringify(messages)).toContain('Checking the final file shape.')
+    expect(messages.at(-1)).toMatchObject({ role: 'user', content: 'Continue.' })
+  })
+
+  it('folds replay-shifted GLM user-input tool history without orphan assistant messages', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'glm-replayed-user-input-tool-history',
+      model: 'glm-5.2',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ]
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.history = [
+      makeCompactionItem({
+        id: 'compaction_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        summary: 'Earlier user request and tool work were summarized.',
+        replacedTokens: 123,
+        pinnedConstraints: []
+      }),
+      makeAssistantTextItem({
+        id: 'assistant_preface',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'I need one decision before continuing.',
+        status: 'completed'
+      }),
+      {
+        ...makeUserInputItem({
+          id: 'input_1',
+          turnId: 'turn_1',
+          threadId: 'thr_1',
+          inputId: 'in_1',
+          prompt: 'Input requested',
+          questions: [
+            {
+              header: 'Choice',
+              id: 'choice',
+              question: 'Pick one',
+              options: [{ label: 'A', description: 'Use A' }]
+            }
+          ]
+        }),
+        status: 'submitted' as const
+      },
+      makeToolCallItem({
+        id: 'call_user_input',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_user_input',
+        toolName: 'request_user_input',
+        arguments: { questions: [{ id: 'choice', question: 'Pick one' }] }
+      }),
+      makeToolResultItem({
+        id: 'result_user_input',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_user_input',
+        toolName: 'request_user_input',
+        output: {
+          status: 'submitted',
+          answers: [{ id: 'choice', label: 'A', value: 'A' }]
+        }
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    expect(messages.some((message) => message.role === 'assistant')).toBe(false)
+    expect(JSON.stringify(messages)).not.toContain('"tool_calls"')
+    expect(messages.some((message) => message.role === 'tool')).toBe(false)
+    expect(String(messages[0]?.content)).toContain('<qiongqi_internal_tool_context>')
+    expect(String(messages[0]?.content)).toContain('assistant_preface:')
+    expect(String(messages[0]?.content)).toContain('I need one decision before continuing.')
     expect(messages.at(-1)).toMatchObject({ role: 'user', content: 'Continue.' })
   })
 

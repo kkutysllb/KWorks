@@ -38,6 +38,7 @@ export function groupMessages<T>(
   }
 
   const groups: MessageGroup[] = [];
+  const toolCallGroupById = new Map<string, MessageGroup>();
   let groupIndex = 0;
 
   function nextGroupId(messageId: string | undefined): string {
@@ -59,6 +60,17 @@ export function groupMessages<T>(
     return null;
   }
 
+  function rememberToolCallGroups(message: Message, group: MessageGroup) {
+    if (message.type !== "ai") {
+      return;
+    }
+    for (const toolCall of message.tool_calls ?? []) {
+      if (toolCall.id) {
+        toolCallGroupById.set(toolCall.id, group);
+      }
+    }
+  }
+
   for (const message of messages) {
     if (isHiddenFromUIMessage(message)) {
       continue;
@@ -70,30 +82,22 @@ export function groupMessages<T>(
     }
 
     if (message.type === "tool") {
+      const matchingGroup = message.tool_call_id
+        ? toolCallGroupById.get(message.tool_call_id)
+        : undefined;
       if (isClarificationToolMessage(message)) {
         // Add to the preceding processing group to preserve tool-call association,
         // then also open a standalone clarification group for prominent display.
-        lastOpenGroup()?.messages.push(message);
+        (matchingGroup ?? lastOpenGroup())?.messages.push(message);
         groups.push({
           id: nextGroupId(message.id),
           type: "assistant:clarification",
           messages: [message],
         });
       } else {
-        const open = lastOpenGroup();
+        const open = matchingGroup ?? lastOpenGroup();
         if (open) {
           open.messages.push(message);
-        } else {
-          // Tool messages without an open processing group are typically
-          // caused by upstream LLM failures (e.g. model errors, timeouts)
-          // that prevented the corresponding tool-call AI message from
-          // being created.  The backend already surfaces the error to the
-          // user via the error-handling middleware, so we silently skip
-          // the orphaned tool result here.
-          console.warn(
-            "Orphaned tool message (no open processing group) — this is expected when an LLM call fails upstream",
-            message.name ?? message.type,
-          );
         }
       }
       continue;
@@ -102,34 +106,43 @@ export function groupMessages<T>(
     if (message.type === "ai") {
       const hasVisibleContent = hasContent(message);
       if (hasPresentFiles(message)) {
-        groups.push({
+        const group: AssistantPresentFilesGroup = {
           id: nextGroupId(message.id),
           type: "assistant:present-files",
           messages: [message],
-        });
+        };
+        groups.push(group);
+        rememberToolCallGroups(message, group);
       } else if (hasUserInput(message)) {
-        groups.push({
+        const group: AssistantUserInputGroup = {
           id: nextGroupId(message.id),
           type: "assistant:user-input",
           messages: [message],
-        });
+        };
+        groups.push(group);
+        rememberToolCallGroups(message, group);
       } else if (hasSubagent(message)) {
-        groups.push({
+        const group: AssistantSubagentGroup = {
           id: nextGroupId(message.id),
           type: "assistant:subagent",
           messages: [message],
-        });
-      } else if (!hasVisibleContent && (hasReasoning(message) || hasToolCalls(message))) {
+        };
+        groups.push(group);
+        rememberToolCallGroups(message, group);
+      } else if (hasToolCalls(message) || (!hasVisibleContent && hasReasoning(message))) {
         const lastGroup = groups[groups.length - 1];
         // Accumulate consecutive intermediate AI messages into one processing group.
         if (lastGroup?.type !== "assistant:processing") {
-          groups.push({
+          const group: AssistantProcessingGroup = {
             id: nextGroupId(message.id),
             type: "assistant:processing",
             messages: [message],
-          });
+          };
+          groups.push(group);
+          rememberToolCallGroups(message, group);
         } else {
           lastGroup.messages.push(message);
+          rememberToolCallGroups(message, lastGroup);
         }
       }
 

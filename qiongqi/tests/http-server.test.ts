@@ -1787,6 +1787,119 @@ describe('HTTP server', () => {
     })
   })
 
+  it('returns empty follow-up suggestions for the KWorks compatibility input box', async () => {
+    const h = buildHarness()
+    await h.threadService.create({
+      workspace: '/tmp',
+      model: 'deepseek-chat',
+      mode: 'agent'
+    }, { id: 'thread_suggestions', title: 'Suggestions' })
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/threads/thread_suggestions/suggestions', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'user', content: 'hello' },
+            { role: 'assistant', content: 'hi' }
+          ],
+          n: 3
+        })
+      })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(readJson(response)).resolves.toEqual({ suggestions: [] })
+  })
+
+  it('accepts KWorks compatibility run feedback without requiring legacy storage', async () => {
+    const h = buildHarness()
+    await h.threadService.create({
+      workspace: '/tmp',
+      model: 'deepseek-chat',
+      mode: 'agent'
+    }, { id: 'thread_feedback', title: 'Feedback' })
+
+    const upsert = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/threads/thread_feedback/runs/run_1/feedback', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ rating: 1, comment: null })
+      })
+    )
+
+    expect(upsert.status).toBe(200)
+    await expect(readJson(upsert)).resolves.toEqual({
+      feedback_id: 'thread_feedback:run_1',
+      rating: 1,
+      comment: null
+    })
+
+    const remove = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/threads/thread_feedback/runs/run_1/feedback', {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(remove.status).toBe(200)
+    await expect(readJson(remove)).resolves.toEqual({ success: true })
+  })
+
+  it('keeps legacy KWorks settings compatibility actions from returning route 404s', async () => {
+    const h = buildHarness()
+
+    const restartChannel = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/channels/zhipu/restart', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+    expect(restartChannel.status).toBe(200)
+    await expect(readJson(restartChannel)).resolves.toEqual({
+      success: true,
+      message: 'Channel restart is not required for the QiongQi runtime'
+    })
+
+    const clearMemory = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/memory', {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+    expect(clearMemory.status).toBe(200)
+    await expect(readJson(clearMemory)).resolves.toEqual({
+      enabled: true,
+      facts: [],
+      memories: []
+    })
+
+    const updateFact = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/memory/facts/fact_1', {
+        method: 'PATCH',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'updated' })
+      })
+    )
+    expect(updateFact.status).toBe(200)
+
+    const deleteFact = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/memory/facts/fact_1', {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+    expect(deleteFact.status).toBe(200)
+  })
+
   it('derives the KWorks thread title from the first prompt for existing default-title threads', async () => {
     const h = buildHarness()
     const create = await dispatchRequest(
@@ -3765,7 +3878,7 @@ describe('HTTP server', () => {
     expect(cancel.status).toBe(200)
     await expect(cancelPending).resolves.toEqual({ status: 'cancelled' })
     const events = await h.sessionStore.loadEventsSince('thr_1', 0)
-    expect(events.filter((event) => event.kind === 'user_input_resolved')).toHaveLength(2)
+    expect(events.filter((event) => event.kind === 'user_input_resolved')).toHaveLength(0)
   })
 
   it('forks a thread with copied history and lineage metadata', async () => {

@@ -15,7 +15,12 @@ import { createRequire } from "node:module";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 
-import { BackendManager, resolveGatewayPort, type BackendStatus } from "./backend.js";
+import {
+  BackendManager,
+  resolveGatewayPort,
+  type BackendStatus,
+} from "./backend.js";
+import { appendRendererLog } from "./logger.js";
 import { isAllowedExternalUrl } from "./url-policy.js";
 import { getGrantedPathsPath, getKworksHome, REPO_ROOT } from "./paths.js";
 import { buildChildProcessEnv } from "./process-env.js";
@@ -94,6 +99,13 @@ interface TerminalProcess {
   owner: Electron.WebContents;
   cwd: string;
   shell: string;
+}
+
+interface RendererErrorPayload {
+  kind?: string;
+  message?: string;
+  stack?: string;
+  source?: string;
 }
 
 /** Minimal MIME map for common upload extensions. */
@@ -246,6 +258,23 @@ function stopTerminalsForOwner(owner: Electron.WebContents): void {
   }
 }
 
+function limitLogText(value: unknown, maxLength = 8000): string {
+  const text = typeof value === "string" ? value : String(value ?? "");
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}...[truncated ${text.length - maxLength} chars]`;
+}
+
+function rendererErrorLogMessage(
+  payload: RendererErrorPayload,
+  senderUrl: string,
+): string {
+  const kind = limitLogText(payload.kind || "renderer-error", 120);
+  const source = limitLogText(payload.source || senderUrl || "unknown", 1000);
+  const message = limitLogText(payload.message || "Unknown renderer error");
+  const stack = payload.stack ? `\n${limitLogText(payload.stack)}` : "";
+  return `[${kind}] ${message} source=${source}${stack}`;
+}
+
 function startEmbeddedTerminal(
   owner: Electron.WebContents,
   folderPath: string,
@@ -325,22 +354,33 @@ export function registerIpc(): BackendManager {
   const manager = new BackendManager();
 
   // ── Backend lifecycle ──────────────────────────────────────────────
-  ipcMain.handle("backend:get-status", (): BackendStatus =>
-    manager.getStatus(),
+  ipcMain.handle(
+    "backend:get-status",
+    (): BackendStatus => manager.getStatus(),
   );
-  ipcMain.handle("backend:start", async (): Promise<BackendStatus> =>
-    manager.launch(),
+  ipcMain.handle(
+    "backend:start",
+    async (): Promise<BackendStatus> => manager.launch(),
   );
-  ipcMain.handle("backend:stop", async (): Promise<BackendStatus> =>
-    manager.stop(),
+  ipcMain.handle(
+    "backend:stop",
+    async (): Promise<BackendStatus> => manager.stop(),
   );
-  ipcMain.handle("backend:restart", async (): Promise<BackendStatus> =>
-    manager.restart(),
+  ipcMain.handle(
+    "backend:restart",
+    async (): Promise<BackendStatus> => manager.restart(),
   );
   ipcMain.handle("backend:get-logs", (): string[] => manager.getLogs());
   ipcMain.handle("backend:get-gateway-config", () => ({
     port: resolveGatewayPort(),
   }));
+  ipcMain.on("renderer:error", (_evt, payload: RendererErrorPayload = {}) => {
+    appendRendererLog(
+      "ERROR",
+      rendererErrorLogMessage(payload, _evt.sender.getURL()),
+      "preload",
+    );
+  });
 
   // ── Native file dialog ──────────────────────────────────────────────
   ipcMain.handle(
@@ -418,11 +458,14 @@ export function registerIpc(): BackendManager {
       terminal.process.resize(cols, rows);
     },
   );
-  ipcMain.handle("terminal:stop", async (_evt, sessionId: string): Promise<void> => {
-    const terminal = terminalProcesses.get(sessionId);
-    if (!terminal || terminal.owner !== _evt.sender) return;
-    stopTerminalProcess(sessionId);
-  });
+  ipcMain.handle(
+    "terminal:stop",
+    async (_evt, sessionId: string): Promise<void> => {
+      const terminal = terminalProcesses.get(sessionId);
+      if (!terminal || terminal.owner !== _evt.sender) return;
+      stopTerminalProcess(sessionId);
+    },
+  );
 
   // ── Native directory picker (for Code Mode project selection) ───────
   ipcMain.handle(
@@ -508,10 +551,13 @@ export function registerIpc(): BackendManager {
   );
 
   // ── List / revoke granted paths (for settings UI) ───────────────────
-  ipcMain.handle("granted-paths:list", async (): Promise<GrantedPathEntry[]> => {
-    const store = await readGrantedPaths();
-    return store.granted_paths;
-  });
+  ipcMain.handle(
+    "granted-paths:list",
+    async (): Promise<GrantedPathEntry[]> => {
+      const store = await readGrantedPaths();
+      return store.granted_paths;
+    },
+  );
 
   ipcMain.handle(
     "granted-paths:revoke",
@@ -534,13 +580,10 @@ export function registerIpc(): BackendManager {
     return detectSources(REPO_ROOT);
   });
 
-  ipcMain.handle(
-    "migration:scan",
-    async (_evt, sourcePath?: string) => {
-      const source = sourcePath && sourcePath.trim() ? sourcePath : REPO_ROOT;
-      return scanSources(source);
-    },
-  );
+  ipcMain.handle("migration:scan", async (_evt, sourcePath?: string) => {
+    const source = sourcePath && sourcePath.trim() ? sourcePath : REPO_ROOT;
+    return scanSources(source);
+  });
 
   ipcMain.handle(
     "migration:execute",
@@ -552,10 +595,15 @@ export function registerIpc(): BackendManager {
         authToken?: string;
       },
     ) => {
-      return runMigration(params.sourceRepoRoot, getKworksHome(), params.options, {
-        authToken: params.authToken,
-        gatewayBaseUrl: `http://127.0.0.1:${resolveGatewayPort()}`,
-      });
+      return runMigration(
+        params.sourceRepoRoot,
+        getKworksHome(),
+        params.options,
+        {
+          authToken: params.authToken,
+          gatewayBaseUrl: `http://127.0.0.1:${resolveGatewayPort()}`,
+        },
+      );
     },
   );
 

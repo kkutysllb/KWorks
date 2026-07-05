@@ -24,6 +24,7 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "..");
 const APP_DIR = join(ROOT, "src", "app");
 const BACKUP_DIR = join(ROOT, ".desktop-build-backup");
+const DESKTOP_DEV_SERVER_PORT = process.env.KWORKS_DEV_SERVER_PORT ?? "18659";
 
 // ── Resolve gateway port from the shared repo-root .env ───────────────────
 // The Electron static export talks to the embedded gateway owned by the
@@ -51,6 +52,53 @@ function resolveGatewayPort() {
 }
 const GATEWAY_PORT = resolveGatewayPort();
 console.log(`[desktop-build] using GATEWAY_PORT=${GATEWAY_PORT} (from shared .env or fallback)`);
+
+function findListenerPids(port) {
+  try {
+    if (process.platform === "win32") {
+      const output = execSync(`netstat -ano -p tcp | findstr :${port}`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      return Array.from(
+        new Set(
+          output
+            .split(/\r?\n/)
+            .filter((line) => line.includes("LISTENING"))
+            .map((line) => Number.parseInt(line.trim().split(/\s+/).at(-1) ?? "", 10))
+            .filter((pid) => Number.isInteger(pid) && pid > 0),
+        ),
+      );
+    }
+    const output = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return Array.from(
+      new Set(
+        output
+          .split(/\s+/)
+          .map((part) => Number.parseInt(part, 10))
+          .filter((pid) => Number.isInteger(pid) && pid > 0),
+      ),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function assertNoDevServerListener() {
+  if (process.env.KWORKS_ALLOW_DESKTOP_BUILD_WITH_DEV_SERVER === "1") {
+    return;
+  }
+  const pids = findListenerPids(DESKTOP_DEV_SERVER_PORT);
+  if (pids.length === 0) {
+    return;
+  }
+  throw new Error(
+    `[desktop-build] Refusing to remove .next while Next dev is listening on port ${DESKTOP_DEV_SERVER_PORT} (pid${pids.length > 1 ? "s" : ""}: ${pids.join(", ")}). Stop the desktop dev environment before running the static desktop build.`,
+  );
+}
 
 // ── Directories to move aside (incompatible with static export) ───────────
 // api/ — server-only route handlers
@@ -381,6 +429,7 @@ function main() {
   // `.next/types`), which break the build worker's type-check step.
   const nextDir = join(ROOT, ".next");
   if (existsSync(nextDir)) {
+    assertNoDevServerListener();
     console.log("[desktop-build] Clearing stale .next cache...");
     rmSync(nextDir, { recursive: true, force: true });
   }

@@ -11,6 +11,13 @@
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron";
 
+declare const window: {
+  addEventListener(
+    type: "error" | "unhandledrejection",
+    listener: (event: unknown) => void,
+  ): void;
+};
+
 // ── Payload types (kept structurally identical to the frontend's) ────────
 
 interface FileDialogOptions {
@@ -87,6 +94,87 @@ interface DetectedSource {
 // main process responds.
 const DEFAULT_GATEWAY_PORT = 19987;
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function stringField(
+  record: Record<string, unknown> | null,
+  key: string,
+): string | undefined {
+  const value = record?.[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function numberField(
+  record: Record<string, unknown> | null,
+  key: string,
+): number | undefined {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function describeUnknownError(value: unknown): {
+  message: string;
+  stack?: string;
+} {
+  if (value instanceof Error) {
+    return { message: value.message, stack: value.stack };
+  }
+  const record = asRecord(value);
+  const message = stringField(record, "message");
+  const stack = stringField(record, "stack");
+  if (message) return { message, stack };
+  return { message: String(value ?? "Unknown renderer error") };
+}
+
+function sourceFromEvent(record: Record<string, unknown> | null): string {
+  const filename = stringField(record, "filename");
+  const lineno = numberField(record, "lineno");
+  const colno = numberField(record, "colno");
+  if (!filename) return "renderer";
+  if (lineno === undefined) return filename;
+  return `${filename}:${lineno}${colno === undefined ? "" : `:${colno}`}`;
+}
+
+function reportRendererError(payload: {
+  kind: string;
+  message: string;
+  source?: string;
+  stack?: string;
+}): void {
+  try {
+    ipcRenderer.send("renderer:error", payload);
+  } catch {
+    /* logging must never break renderer startup */
+  }
+}
+
+window.addEventListener("error", (event: unknown) => {
+  const record = asRecord(event);
+  const error = describeUnknownError(record?.error);
+  reportRendererError({
+    kind: "window.error",
+    message: stringField(record, "message") ?? error.message,
+    source: sourceFromEvent(record),
+    stack: error.stack,
+  });
+});
+
+window.addEventListener("unhandledrejection", (event: unknown) => {
+  const record = asRecord(event);
+  const error = describeUnknownError(record?.reason);
+  reportRendererError({
+    kind: "unhandledrejection",
+    message: error.message,
+    source: "renderer",
+    stack: error.stack,
+  });
+});
+
 contextBridge.exposeInMainWorld("kworksDesktop", {
   gatewayPort: DEFAULT_GATEWAY_PORT,
 
@@ -97,8 +185,7 @@ contextBridge.exposeInMainWorld("kworksDesktop", {
     ipcRenderer.invoke("backend:get-status"),
   startBackend: (): Promise<BackendStatus> =>
     ipcRenderer.invoke("backend:start"),
-  stopBackend: (): Promise<BackendStatus> =>
-    ipcRenderer.invoke("backend:stop"),
+  stopBackend: (): Promise<BackendStatus> => ipcRenderer.invoke("backend:stop"),
   restartBackend: (): Promise<BackendStatus> =>
     ipcRenderer.invoke("backend:restart"),
   getBackendLogs: (): Promise<string[]> =>
@@ -142,7 +229,11 @@ contextBridge.exposeInMainWorld("kworksDesktop", {
     };
   },
   onTerminalExit: (
-    handler: (event: { sessionId: string; code: number | null; signal: string | null }) => void,
+    handler: (event: {
+      sessionId: string;
+      code: number | null;
+      signal: string | null;
+    }) => void,
   ): (() => void) => {
     const listener = (
       _evt: IpcRendererEvent,
@@ -156,10 +247,7 @@ contextBridge.exposeInMainWorld("kworksDesktop", {
     };
   },
   onFileDrop: (handler: (files: PickedFile[]) => void): (() => void) => {
-    const listener = (
-      _evt: IpcRendererEvent,
-      files: PickedFile[],
-    ): void => {
+    const listener = (_evt: IpcRendererEvent, files: PickedFile[]): void => {
       handler(files);
     };
     ipcRenderer.on("desktop:file-drop", listener);
@@ -171,8 +259,7 @@ contextBridge.exposeInMainWorld("kworksDesktop", {
   // ── Auto-update ─────────────────────────────────────────────────────
   checkForUpdates: (): Promise<UpdateInfo> =>
     ipcRenderer.invoke("updater:check"),
-  installUpdate: (): Promise<boolean> =>
-    ipcRenderer.invoke("updater:install"),
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke("updater:install"),
   onCheckUpdateRequest: (callback: () => void): (() => void) => {
     const listener = (): void => callback();
     ipcRenderer.on("menu:check-update", listener);

@@ -1,11 +1,14 @@
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { dispatchRequest } from '@qiongqi/http'
 import { buildHarness, readJson } from './http-server-test-harness.js'
 
 const tempRoots: string[] = []
+const execFileAsync = promisify(execFile)
 
 describe('project APIs', () => {
   afterEach(async () => {
@@ -191,6 +194,46 @@ describe('project APIs', () => {
     })
   })
 
+  it('returns utf-8 paths for changed files with Chinese filenames', async () => {
+    const h = buildHarness()
+    const projectRoot = await mkdtemp(join(tmpdir(), 'qiongqi-project-'))
+    await useTempDataDir(h)
+    tempRoots.push(projectRoot)
+    await git(projectRoot, 'init')
+    await git(projectRoot, 'config', 'user.email', 'test@example.com')
+    await git(projectRoot, 'config', 'user.name', 'Test User')
+    await mkdir(join(projectRoot, '.qiongqisdd', 'plan'), { recursive: true })
+    const relativePath = join('.qiongqisdd', 'plan', 'skills-项目分析.md')
+    await writeFile(join(projectRoot, relativePath), '初始内容\n', 'utf8')
+    await git(projectRoot, 'add', '.')
+    await git(projectRoot, 'commit', '-m', 'initial')
+    await writeFile(join(projectRoot, relativePath), '初始内容\n新增内容\n', 'utf8')
+    const status = await execFileAsync('git', ['-c', 'core.quotePath=false', 'status', '--porcelain'], { cwd: projectRoot })
+    expect(status.stdout).toContain(relativePath)
+
+    const create = await api(h, '/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'UTF8 Project',
+        path: projectRoot
+      })
+    })
+    const project = await readJson(create) as { id: string }
+
+    const diff = await api(h, `/api/projects/${project.id}/diff`)
+    expect(diff.status).toBe(200)
+    const diffBody = await readJson(diff) as {
+      files: Array<{ path: string; additions: number; deletions: number }>
+    }
+    expect(diffBody.files).toEqual([
+      expect.objectContaining({
+        path: relativePath,
+        additions: 1,
+        deletions: 0
+      })
+    ])
+  })
+
   it('returns stable coding workbench inspector data for legacy panels', async () => {
     const h = buildHarness()
     const projectRoot = await mkdtemp(join(tmpdir(), 'qiongqi-project-'))
@@ -341,5 +384,9 @@ describe('project APIs', () => {
     const originalInfo = h.runtime.info
     h.runtime.info = () => ({ ...originalInfo(), dataDir })
     return dataDir
+  }
+
+  async function git(cwd: string, ...args: string[]): Promise<void> {
+    await execFileAsync('git', args, { cwd })
   }
 })

@@ -10,6 +10,12 @@ test("renderer runs with node disabled, context isolation, and sandbox enabled",
   assert.match(mainSource, /sandbox:\s*true/);
 });
 
+test("packaged app protocol serves html with a content security policy", () => {
+  assert.match(mainSource, /Content-Security-Policy/);
+  assert.match(mainSource, /script-src 'self' 'unsafe-inline'/);
+  assert.doesNotMatch(mainSource, /unsafe-eval/);
+});
+
 test("tray uses a small dedicated icon instead of the app icon", () => {
   assert.match(mainSource, /function resolveTrayIcon\(\): Electron\.NativeImage \| undefined/);
   assert.match(mainSource, /build", "icons", "16x16\.png"/);

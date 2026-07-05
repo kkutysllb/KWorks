@@ -52,6 +52,14 @@ describe("desktop static build", () => {
     expect(codingProjectLayout).toContain('projectId: "__init__"');
   });
 
+  test("refuses to clear Next dev cache while the desktop dev server is running", () => {
+    expect(desktopBuildScript).toContain("assertNoDevServerListener");
+    expect(desktopBuildScript).toContain("Refusing to remove .next");
+    expect(desktopBuildScript.indexOf("assertNoDevServerListener()")).toBeLessThan(
+      desktopBuildScript.indexOf("rmSync(nextDir"),
+    );
+  });
+
   test("uses checked-in workspace content so settings provider cannot drift in desktop builds", () => {
     expect(desktopBuildScript).not.toContain(
       'file: join(APP_DIR, "workspace", "workspace-content.tsx")',

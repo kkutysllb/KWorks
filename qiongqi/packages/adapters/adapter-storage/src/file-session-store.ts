@@ -89,18 +89,14 @@ export class FileSessionStore implements SessionStore {
   async loadItems(threadId: string): Promise<TurnItem[]> {
     const raw = await readJsonl<TurnItem>(this.messagesPath(threadId))
     const latestById = new Map<string, TurnItem>()
+    const order: string[] = []
     for (const item of raw) {
+      if (!latestById.has(item.id)) order.push(item.id)
       latestById.set(item.id, item)
     }
-    const seen = new Set<string>()
-    const ordered: TurnItem[] = []
-    for (let index = raw.length - 1; index >= 0; index -= 1) {
-      const item = raw[index]!
-      if (seen.has(item.id)) continue
-      seen.add(item.id)
-      ordered.unshift(latestById.get(item.id)!)
-    }
-    return ordered
+    return order
+      .map((id) => latestById.get(id))
+      .filter((item): item is TurnItem => item !== undefined)
   }
 
   async loadSession(threadId: string): Promise<AgentSession | null> {

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { UsageSnapshot } from '@qiongqi/contracts'
+import { makeAssistantTextItem } from '@qiongqi/domain'
 
 const atomicWriteFileMock = vi.hoisted(() => vi.fn())
 
@@ -79,5 +80,31 @@ describe('FileSessionStore', () => {
     expect(events.map((event) => event.seq)).toEqual([1, 2, 3])
     expect(atomicWriteFileMock).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('usage event compaction failed'))
+  })
+
+  it('keeps an updated item at its original model-history position', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    await sessionStore.appendItem('thr_order', makeAssistantTextItem({
+      id: 'item_a',
+      threadId: 'thr_order',
+      turnId: 'turn_1',
+      text: 'first',
+      status: 'running'
+    }))
+    await sessionStore.appendItem('thr_order', makeAssistantTextItem({
+      id: 'item_b',
+      threadId: 'thr_order',
+      turnId: 'turn_1',
+      text: 'second',
+      status: 'completed'
+    }))
+    await sessionStore.updateItem('thr_order', 'item_a', {
+      text: 'first updated',
+      status: 'completed'
+    })
+
+    const loaded = await sessionStore.loadItems('thr_order')
+    expect(loaded.map((item) => item.id)).toEqual(['item_a', 'item_b'])
+    expect(loaded[0]).toMatchObject({ id: 'item_a', text: 'first updated', status: 'completed' })
   })
 })

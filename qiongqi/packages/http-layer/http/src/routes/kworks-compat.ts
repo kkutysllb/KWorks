@@ -1708,7 +1708,7 @@ function languageFromPath(path: string): string {
 
 async function runGit(workspace: string, args: string[]): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', args, {
+    const { stdout } = await execFileAsync('git', ['-c', 'core.quotePath=false', ...args], {
       cwd: workspace,
       timeout: 5000,
       maxBuffer: 10 * 1024 * 1024
@@ -1721,7 +1721,7 @@ async function runGit(workspace: string, args: string[]): Promise<string> {
 
 async function runGitStrict(workspace: string, args: string[]): Promise<{ ok: true; output: string } | { ok: false; detail: string }> {
   try {
-    const { stdout, stderr } = await execFileAsync('git', args, {
+    const { stdout, stderr } = await execFileAsync('git', ['-c', 'core.quotePath=false', ...args], {
       cwd: workspace,
       timeout: 10000,
       maxBuffer: 10 * 1024 * 1024

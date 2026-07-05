@@ -12,16 +12,55 @@ import { cn } from "@/lib/utils";
 
 type TodoListVariant = "inline" | "floating";
 
-function normalizeTodos(todos: TodoListProps["todos"]): Todo[] {
-  if (Array.isArray(todos)) return todos;
-  if (
-    todos &&
-    typeof todos === "object" &&
-    Array.isArray((todos as { items?: unknown }).items)
-  ) {
-    return (todos as { items: Todo[] }).items;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function coerceTodoText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
   }
-  return [];
+  if (value === null || value === undefined) return undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeTodoStatus(value: unknown): Todo["status"] {
+  if (value === "pending" || value === "in_progress" || value === "completed") {
+    return value;
+  }
+  return "pending";
+}
+
+function normalizeTodoItem(value: unknown, index: number): Todo | null {
+  if (!isRecord(value)) return null;
+  const content = coerceTodoText(value.content);
+  const id = coerceTodoText(value.id) ?? String(index);
+  if (!content) return null;
+  return {
+    id,
+    content,
+    status: normalizeTodoStatus(value.status),
+  };
+}
+
+function normalizeTodos(todos: TodoListProps["todos"]): Todo[] {
+  const rawTodos = Array.isArray(todos)
+    ? todos
+    : todos &&
+        typeof todos === "object" &&
+        Array.isArray((todos as { items?: unknown }).items)
+      ? (todos as { items: unknown[] }).items
+      : [];
+
+  return rawTodos.flatMap((todo, index) => {
+    const normalized = normalizeTodoItem(todo, index);
+    return normalized ? [normalized] : [];
+  });
 }
 
 function getTodoSignature(todos: Todo[]): string {

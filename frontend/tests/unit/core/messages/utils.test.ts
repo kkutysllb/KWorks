@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import {
   extractContentFromMessage,
@@ -186,6 +186,111 @@ test("reasoning-only ai messages are grouped as processing instead of assistant 
     {
       type: "assistant:processing",
       messages: ["reasoning_1"],
+    },
+  ]);
+});
+
+test("orphaned tool messages are skipped without noisy console warnings", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const message = {
+    id: "tool_1",
+    type: "tool",
+    name: "bash",
+    content: "orphaned result",
+    additional_kwargs: {},
+  };
+
+  const groups = groupMessages([message as never], (group) => ({
+    type: group.type,
+    messages: group.messages.map((item) => item.id),
+  }));
+
+  expect(groups).toEqual([]);
+  expect(warn).not.toHaveBeenCalled();
+  warn.mockRestore();
+});
+
+test("tool calls with qiongqi repair summaries still group with their result", () => {
+  const toolCall = {
+    id: "tool_call_1",
+    type: "ai",
+    content: "Repaired tool call: scavenged JSON object from command",
+    tool_calls: [
+      {
+        id: "call_1",
+        name: "bash",
+        args: {},
+      },
+    ],
+    additional_kwargs: {},
+  };
+  const toolResult = {
+    id: "tool_result_1",
+    type: "tool",
+    name: "bash",
+    tool_call_id: "call_1",
+    content: JSON.stringify({ error: "command is required" }),
+    additional_kwargs: {},
+  };
+
+  const groups = groupMessages([toolCall, toolResult] as never, (group) => ({
+    type: group.type,
+    messages: group.messages.map((item) => item.id),
+  }));
+
+  expect(groups).toEqual([
+    {
+      type: "assistant:processing",
+      messages: ["tool_call_1", "tool_result_1"],
+    },
+  ]);
+});
+
+test("tool results attach by call id when assistant text is interleaved", () => {
+  const toolCall = {
+    id: "tool_call_1",
+    type: "ai",
+    content: "",
+    tool_calls: [
+      {
+        id: "call_1",
+        name: "bash",
+        args: { command: "pwd" },
+      },
+    ],
+    additional_kwargs: {},
+  };
+  const assistantText = {
+    id: "assistant_1",
+    type: "ai",
+    content: "Continuing after the tool call.",
+    additional_kwargs: {},
+  };
+  const toolResult = {
+    id: "tool_result_1",
+    type: "tool",
+    name: "bash",
+    tool_call_id: "call_1",
+    content: "/tmp/project",
+    additional_kwargs: {},
+  };
+
+  const groups = groupMessages(
+    [toolCall, assistantText, toolResult] as never,
+    (group) => ({
+      type: group.type,
+      messages: group.messages.map((item) => item.id),
+    }),
+  );
+
+  expect(groups).toEqual([
+    {
+      type: "assistant:processing",
+      messages: ["tool_call_1", "tool_result_1"],
+    },
+    {
+      type: "assistant",
+      messages: ["assistant_1"],
     },
   ]);
 });
