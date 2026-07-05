@@ -1995,25 +1995,33 @@ function reasoningContentOrSpace(text: string): string {
 
 /**
  * Some strict OpenAI-compatible providers (notably MiniMax, error 2013
- * "chat content is empty") reject any message whose `content` is an empty
- * string. The chat_completions path legitimately produces empty content in
- * two cases:
+ * "chat content is empty") reject any message whose `content` is null,
+ * undefined, or an empty/whitespace-only string. The chat_completions path
+ * legitimately produces empty content in two cases:
  *   - an assistant message that only carries tool_calls (no preamble text)
  *   - a tool-result message whose output was empty
  *
  * Both are valid OpenAI chat-completions shapes, but to stay compatible with
- * strict providers we coerce empty `content` to a single space (matching the
- * existing `reasoningContentOrSpace` convention). Messages with non-empty
- * content and messages without a `content` field are left untouched.
+ * strict providers we coerce empty/null content to a short non-whitespace
+ * placeholder. We deliberately avoid a bare space because some providers trim
+ * content before the emptiness check. Messages with real content are left
+ * untouched.
  */
 function sanitizeEmptyMessageContent(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((message) => {
-    if (message.content !== '') return message
-    // Only assistant/tool messages can legitimately have empty content here;
-    // user/system messages should never be empty (their producers guard that).
-    if (message.role === 'assistant' || message.role === 'tool') {
-      return { ...message, content: ' ' }
+    if (message.content !== '' && message.content !== null && message.content !== undefined) {
+      return message
     }
+    if (message.role === 'assistant') {
+      // Tool-call-only assistant message; the placeholder text is never shown
+      // to the model as conversation — it just satisfies the non-empty check.
+      return { ...message, content: '.' }
+    }
+    if (message.role === 'tool') {
+      return { ...message, content: '(no output)' }
+    }
+    // user/system should never reach here with empty content; leave as-is so
+    // any upstream bug surfaces instead of being masked.
     return message
   })
 }

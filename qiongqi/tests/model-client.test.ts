@@ -2391,8 +2391,8 @@ describe('DeepseekCompatModelClient', () => {
       'I need to inspect the current changes before writing the commit message.'
     )
     // Tool-call-only assistant messages have their empty content coerced to a
-    // single space for chat_completions (strict providers reject empty content).
-    expect(assistantToolMessage?.content).toBe(' ')
+    // short placeholder for chat_completions (strict providers reject empty content).
+    expect(assistantToolMessage?.content).toBe('.')
     expect((assistantToolMessage?.tool_calls as Array<{ id?: string }> | undefined)?.map((call) => call.id))
       .toEqual(['call_a', 'call_b'])
     expect(messages.filter((message) => message.role === 'tool').map((message) => message.tool_call_id))
@@ -2465,7 +2465,7 @@ describe('DeepseekCompatModelClient', () => {
 
     expect(assistantTextMessage?.reasoning_content).toBe(' ')
     expect(assistantToolMessage?.reasoning_content).toBe(' ')
-    expect(assistantToolMessage?.content).toBe(' ')
+    expect(assistantToolMessage?.content).toBe('.')
   })
 
   it('treats fixed DeepSeek v4 models as thinking producers without content-block thinking in chat completions', async () => {
@@ -3137,10 +3137,10 @@ describe('DeepseekCompatModelClient', () => {
     const toolMessage = messages.find((message) => message.role === 'tool')
 
     // Strict providers (e.g. MiniMax error 2013 "chat content is empty") reject
-    // empty content, so both the tool-call-only assistant message and the empty
-    // tool result are coerced to a single space rather than ''.
-    expect(assistantMessage?.content).toBe(' ')
-    expect(toolMessage?.content).toBe(' ')
+    // empty content, so the tool-call-only assistant message is coerced to '.'
+    // and the empty tool result to '(no output)' rather than ''.
+    expect(assistantMessage?.content).toBe('.')
+    expect(toolMessage?.content).toBe('(no output)')
   })
 
   it('sends compaction summaries as mutable system messages', async () => {
