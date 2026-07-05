@@ -67,7 +67,7 @@ describe("desktop authenticated artifact URLs", () => {
   test("requires authenticated fetch only for desktop production artifact API URLs", () => {
     expect(
       requiresAuthenticatedArtifactFetch(
-        "http://127.0.0.1:19987/api/threads/t1/artifacts/mnt/out/report.txt",
+        "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.txt",
       ),
     ).toBe(true);
 
@@ -80,14 +80,14 @@ describe("desktop authenticated artifact URLs", () => {
     stubLocationPort("18659");
     expect(
       requiresAuthenticatedArtifactFetch(
-        "http://127.0.0.1:19987/api/threads/t1/artifacts/mnt/out/report.txt",
+        "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.txt",
       ),
     ).toBe(false);
   });
 
   test("fetches artifact blobs with the desktop bearer token", async () => {
     const url = await createAuthenticatedArtifactObjectUrl(
-      "http://127.0.0.1:19987/api/threads/t1/artifacts/mnt/out/report.txt",
+      "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.txt",
     );
 
     expect(url).toBe("blob:artifact");
@@ -103,7 +103,7 @@ describe("desktop authenticated artifact URLs", () => {
       .mockImplementation(() => undefined);
 
     await downloadArtifactUrl(
-      "http://127.0.0.1:19987/api/threads/t1/artifacts/mnt/out/report.txt?download=true",
+      "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.txt",
       "report.txt",
     );
 
@@ -127,7 +127,7 @@ describe("desktop authenticated artifact URLs", () => {
       .mockImplementation(() => undefined);
 
     await openArtifactUrl(
-      "http://127.0.0.1:19987/api/threads/t1/artifacts/mnt/out/report.html",
+      "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.html",
       "report.html",
     );
 

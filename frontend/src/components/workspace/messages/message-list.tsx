@@ -25,7 +25,6 @@ import type { BaseStream } from "@/core/threads/qiongqi-types";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
-import { FollowupPanel } from "../followups-context";
 import { StreamingIndicator } from "../streaming-indicator";
 
 import { MarkdownContent } from "./markdown-content";
@@ -35,7 +34,6 @@ import { MessageListSkeleton } from "./skeleton";
 import { SubtaskCard } from "./subtask-card";
 
 export const MESSAGE_LIST_DEFAULT_PADDING_BOTTOM = 240;
-export const MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM = 80;
 
 const LOAD_MORE_HISTORY_THROTTLE_MS = 1200;
 
@@ -340,13 +338,6 @@ export function MessageList({
           );
         })}
         {thread.isLoading && <StreamingIndicator className="my-4" />}
-        {/*
-          Follow-up suggestions are rendered as the last element of the
-          conversation flow instead of a floating overlay above the input box.
-          Data & click handling are supplied via FollowupsContext (owned by
-          InputBox), so this panel stays anchored to the page content.
-        */}
-        {!thread.isLoading && <FollowupPanel className="my-4" />}
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>
     </Conversation>

@@ -177,11 +177,9 @@ export const enUS: Translations = {
     chats: "Chats",
     historyTasks: "History tasks",
     demoTasks: "Demo tasks",
-    agents: "Agents",
     models: "Models",
     skills: "Skills",
-    channels: "Channels",
-        mcp: "MCP",
+    mcp: "MCP",
     crons: "Automations",
     tokenUsage: "Token Usage",
     coding: "Coding",
@@ -191,53 +189,6 @@ export const enUS: Translations = {
   toolbar: {
     refresh: "Refresh",
     refreshing: "Refreshing…",
-  },
-
-  // Agents
-  agents: {
-    title: "Agents",
-    description:
-      "Create and manage custom agents with specialized prompts and capabilities.",
-    newAgent: "New Agent",
-    emptyTitle: "No custom agents yet",
-    emptyDescription:
-      "Create your first custom agent with a specialized system prompt.",
-    chat: "Chat",
-    delete: "Delete",
-    deleteConfirm:
-      "Are you sure you want to delete this agent? This action cannot be undone.",
-    deleteSuccess: "Agent deleted",
-    newChat: "New chat",
-    createPageTitle: "Design your Agent",
-    createPageSubtitle:
-      "Describe the agent you want — I'll help you create it through conversation.",
-    nameStepTitle: "Name your new Agent",
-    nameStepHint:
-      "Letters, digits, and hyphens only — stored lowercase (e.g. code-reviewer)",
-    nameStepPlaceholder: "e.g. code-reviewer",
-    nameStepContinue: "Continue",
-    nameStepInvalidError:
-      "Invalid name — use only letters, digits, and hyphens",
-    nameStepAlreadyExistsError: "An agent with this name already exists",
-    nameStepNetworkError:
-      "Network request failed — check your network or backend connection",
-    nameStepCheckError: "Could not verify name availability — please try again",
-    nameStepBootstrapMessage:
-      "The new custom agent name is {name}. Let's bootstrap it's **SOUL**.",
-    save: "Save agent",
-    saving: "Saving agent...",
-    saveRequested:
-      "Save requested. KWorks is generating and saving an initial version now.",
-    saveHint:
-      "You can save this agent at any time from the top-right menu, even if this is only a first draft.",
-    saveCommandMessage:
-      "Please save this custom agent now based on everything we have discussed so far. Treat this as my explicit confirmation to save. If some details are still missing, make reasonable assumptions, generate a concise first SOUL.md in English, and call setup_agent immediately without asking me for more confirmation.",
-    agentCreatedPendingRefresh:
-      "The agent was created, but KWorks could not load it yet. Please refresh this page in a moment.",
-    more: "More actions",
-    agentCreated: "Agent created!",
-    startChatting: "Start chatting",
-    backToGallery: "Back to Gallery",
   },
 
   // Breadcrumb
@@ -257,28 +208,6 @@ export const enUS: Translations = {
       admin: "Admin",
       user: "User",
     },
-  },
-
-  // Channels
-  channels: {
-    title: "IM Channel Management",
-    description: "Manage external messaging platform integrations. Once configured, users can interact with KWorks via Feishu, DingTalk, WeChat, and other IM tools.",
-    enabled: "Enabled",
-    disabled: "Disabled",
-    running: "Running",
-    stopped: "Stopped",
-    configured: "Credentials Configured",
-    notConfigured: "No Credentials",
-    editConfig: "Edit Config",
-    restart: "Restart",
-    restartSuccess: "Channel restarted",
-    help: "Setup Guide",
-    saveSuccess: "Channel config saved",
-    emptyTitle: "No channels configured",
-    emptyDescription: "Configure IM channels to let users interact with KWorks via Feishu, DingTalk, and other platforms.",
-    credentials: "Credentials",
-    status: "Status",
-    guide: "Setup Guide",
   },
 
   // MCP

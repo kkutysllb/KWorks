@@ -140,7 +140,6 @@ export default function ChatsPage() {
                 ) : (
                   filteredThreads?.map((thread) => {
                     const displayTitle = displayTitleOfThread(thread, workModes);
-                    const agentName = thread.metadata?.agent_name as string | undefined;
                     return (
                       <Link
                         key={thread.thread_id}
@@ -159,11 +158,6 @@ export default function ChatsPage() {
                               <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
                                 {displayTitle}
                               </h3>
-                              {agentName && (
-                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 ring-1 ring-inset ring-violet-500/20">
-                                  {agentName}
-                                </span>
-                              )}
                             </div>
                             {thread.updated_at && (
                               <p className="mt-1 text-xs text-muted-foreground/70">

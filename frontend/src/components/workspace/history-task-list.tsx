@@ -87,18 +87,6 @@ function parseThreadIdFromPath(pathname: string | null): string {
   }
 }
 
-function parseAgentNameFromPath(pathname: string | null): string | undefined {
-  if (!pathname) return undefined;
-  const match = /\/workspace\/agents\/([^/]+)\//.exec(pathname);
-  const raw = match?.[1];
-  if (!raw) return undefined;
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-
 function withCodingProjectRoutes(
   threads: AgentThread[],
   projects: Project[],
@@ -133,10 +121,9 @@ export function HistoryTaskList() {
   const router = useRouter();
   const pathname = usePathname();
   // In the Electron desktop build, useParams() returns stale values from the
-  // pre-rendered new.html RSC payload. Parse thread_id and agent_name from
-  // the real URL pathname instead.
+  // pre-rendered new.html RSC payload. Parse thread_id from the real URL
+  // pathname instead.
   const threadIdFromPath = parseThreadIdFromPath(pathname);
-  const agentNameFromPath = parseAgentNameFromPath(pathname);
   const { data: threads = [] } = useThreads();
   const { projects } = useProjects();
   const { workModes } = useWorkModes();
@@ -159,9 +146,7 @@ export function HistoryTaskList() {
         const threadIndex = routableThreads.findIndex(
           (t) => t.thread_id === threadId,
         );
-        let nextThreadPath = pathOfThread("new", {
-          agent_name: agentNameFromPath,
-        });
+        let nextThreadPath = pathOfThread("new");
         if (threadIndex > -1) {
           if (routableThreads[threadIndex + 1]) {
             nextThreadPath = pathOfThread(routableThreads[threadIndex + 1]!);
@@ -173,7 +158,6 @@ export function HistoryTaskList() {
       }
     },
     [
-      agentNameFromPath,
       deleteThread,
       router,
       routableThreads,

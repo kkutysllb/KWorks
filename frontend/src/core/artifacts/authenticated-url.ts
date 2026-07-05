@@ -22,7 +22,7 @@ function parseUrl(url: string): URL | null {
 function isArtifactApiUrl(url: string): boolean {
   const parsed = parseUrl(url);
   if (!parsed) return false;
-  return /^\/api\/threads\/[^/]+\/artifacts\//.test(parsed.pathname);
+  return /^\/v1\/threads\/[^/]+\/artifacts\/content$/.test(parsed.pathname);
 }
 
 function revokeIfObjectUrl(url: string): void {

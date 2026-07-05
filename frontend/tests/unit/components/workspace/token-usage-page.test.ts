@@ -7,6 +7,11 @@ import { TokenUsagePage } from "@/components/workspace/token-usage/token-usage-p
 import { I18nProvider } from "@/core/i18n/context";
 import { DEFAULT_LOCALE } from "@/core/i18n/locale";
 
+const TestI18nProvider = I18nProvider as React.ComponentType<{
+  children?: React.ReactNode;
+  initialLocale: typeof DEFAULT_LOCALE;
+}>;
+
 const { fetchTokenUsageStatsMock, fetchTokenUsageTimeseriesMock, loadModelsMock } =
   vi.hoisted(() => ({
     fetchTokenUsageStatsMock: vi.fn(),
@@ -83,11 +88,11 @@ describe("TokenUsagePage charts", () => {
     await act(async () => {
       root!.render(
         React.createElement(
-          I18nProvider,
+          TestI18nProvider,
           {
             initialLocale: DEFAULT_LOCALE,
-            children: React.createElement(TokenUsagePage),
           },
+          React.createElement(TokenUsagePage),
         ),
       );
       await Promise.resolve();

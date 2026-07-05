@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, test } from "vitest";
@@ -33,7 +33,7 @@ describe("workspace workbench layout", () => {
     expect(nav).not.toContain('href="/workspace"');
     expect(nav).not.toContain('href="/workspace/channels"');
     expect(nav).not.toContain('href="/workspace/agents"');
-    expect(nav).not.toContain('href="/workspace/coding"');
+    expect(nav).toContain('href="/workspace/coding"');
   });
 
   test("workspace root redirects to the new task surface instead of rendering a workbench", () => {
@@ -133,23 +133,14 @@ describe("workspace workbench layout", () => {
       resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
       "utf8",
     );
-    const agentChatPage = readFileSync(
-      resolve(
-        repoRoot,
-        "src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx",
-      ),
-      "utf8",
-    );
 
-    for (const page of [chatPage, agentChatPage]) {
-      expect(page).toContain("todoPanelOccupiesSpace");
-      expect(page).toContain(
-        "onFloatingVisibilityChange={setTodoPanelOccupiesSpace}",
-      );
-      expect(page).toContain("todoPanelContentOffsetClass");
-      expect(page).toContain("xl:-translate-x-20");
-      expect(page).not.toContain("xl:pr-[24rem]");
-    }
+    expect(chatPage).toContain("todoPanelOccupiesSpace");
+    expect(chatPage).toContain(
+      "onFloatingVisibilityChange={setTodoPanelOccupiesSpace}",
+    );
+    expect(chatPage).toContain("todoPanelContentOffsetClass");
+    expect(chatPage).toContain("xl:-translate-x-20");
+    expect(chatPage).not.toContain("xl:pr-[24rem]");
   });
 
   test("welcome surface no longer advertises legacy KWorks or runtime copy", () => {
@@ -402,5 +393,59 @@ describe("workspace workbench layout", () => {
     expect(settings).not.toContain("Coding Agent");
     expect(settings).not.toContain("YAML 编辑器");
     expect(settings).not.toContain("数据库");
+  });
+
+  test("removes unreachable empty-result workspace surfaces", () => {
+    const removedPaths = [
+      "src/app/workspace/agents",
+      "src/components/workspace/agents",
+      "src/core/agents",
+      "src/app/workspace/channels",
+      "src/components/workspace/channels",
+      "src/core/channels",
+      "src/components/workspace/settings/memory-settings-page.tsx",
+      "src/core/memory",
+      "src/core/api/feedback.ts",
+    ];
+
+    for (const removedPath of removedPaths) {
+      expect(existsSync(resolve(repoRoot, removedPath))).toBe(false);
+    }
+  });
+
+  test("chat input no longer calls the legacy empty follow-up suggestions API", () => {
+    const inputBox = readFileSync(
+      resolve(repoRoot, "src/components/workspace/input-box.tsx"),
+      "utf8",
+    );
+    const chatPage = readFileSync(
+      resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
+      "utf8",
+    );
+    const messageList = readFileSync(
+      resolve(repoRoot, "src/components/workspace/messages/message-list.tsx"),
+      "utf8",
+    );
+
+    expect(inputBox).not.toContain("/api/threads/${threadId}/suggestions");
+    expect(inputBox).not.toContain("setFollowupsLoading");
+    expect(inputBox).not.toContain("useFollowupsContext");
+    expect(chatPage).not.toContain("FollowupsProvider");
+    expect(messageList).not.toContain("FollowupPanel");
+  });
+
+  test("message items do not expose synthetic legacy run feedback controls", () => {
+    const item = readFileSync(
+      resolve(
+        repoRoot,
+        "src/components/workspace/messages/message-list-item.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(item).not.toContain("@/core/api/feedback");
+    expect(item).not.toContain("FeedbackButtons");
+    expect(item).not.toContain("ThumbsUpIcon");
+    expect(item).not.toContain("ThumbsDownIcon");
   });
 });

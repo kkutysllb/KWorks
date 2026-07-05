@@ -36,7 +36,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChatBox } from "@/components/workspace/chats";
-import { FollowupsProvider } from "@/components/workspace/followups-context";
 import {
   InputBox,
   type InputBoxSubmitContext,
@@ -44,7 +43,6 @@ import {
 import {
   MessageList,
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
-  MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import {
@@ -88,11 +86,10 @@ const MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM = 92;
 /**
  * Right-hand Coding Agent chat panel.
  *
- * Talks to the ``coding_agent`` qiongqi graph (routed by the gateway when
- * ``assistantId === "coding_agent"``) and scopes the agent to the open
- * project by passing ``project_root`` (the project's absolute path) as run
- * context. One thread is derived per project so conversations persist across
- * page reloads within a session.
+ * Talks to the qiongqi runtime with Coding work-mode context and scopes the
+ * agent to the open project by passing ``project_root`` (the project's
+ * absolute path) as run context. One thread is derived per project so
+ * conversations persist across page reloads within a session.
  */
 export function AgentPanel({
   avoidRightFloatingPanels = false,
@@ -102,19 +99,17 @@ export function AgentPanel({
   onTodosChange,
 }: AgentPanelProps) {
   return (
-    <FollowupsProvider>
-      <SubtasksProvider>
-        <PromptInputProvider>
-          <AgentPanelInner
-            avoidRightFloatingPanels={avoidRightFloatingPanels}
-            projectId={projectId}
-            onFocusFile={onFocusFile}
-            onThreadIdChange={onThreadIdChange}
-            onTodosChange={onTodosChange}
-          />
-        </PromptInputProvider>
-      </SubtasksProvider>
-    </FollowupsProvider>
+    <SubtasksProvider>
+      <PromptInputProvider>
+        <AgentPanelInner
+          avoidRightFloatingPanels={avoidRightFloatingPanels}
+          projectId={projectId}
+          onFocusFile={onFocusFile}
+          onThreadIdChange={onThreadIdChange}
+          onTodosChange={onTodosChange}
+        />
+      </PromptInputProvider>
+    </SubtasksProvider>
   );
 }
 
@@ -159,7 +154,6 @@ function AgentPanelInner({
   const uiThreadId = threadId ?? projectId;
   const { changes } = useCodingSessionChanges(uiThreadId);
   const [settings, setSettings] = useThreadSettings(`coding:${projectId}`);
-  const [showFollowups, setShowFollowups] = useState(false);
   const [agentStatus, setAgentStatus] = useState<CodingAgentStatus>("idle");
   const [lastToolLabel, setLastToolLabel] = useState<string | null>(null);
   const { textInput } = usePromptInputController();
@@ -249,7 +243,6 @@ function AgentPanelInner({
     streamThreadId,
   } = useThreadStream({
     threadId,
-    assistantId: "coding_agent",
     context: settings.context,
     onStart: (createdThreadId) => {
       setThreadId(createdThreadId);
@@ -459,12 +452,9 @@ function AgentPanelInner({
   useEffect(() => {
     return () => onTodosChange?.([]);
   }, [onTodosChange]);
-  const messageListPaddingBottom = showFollowups
-    ? MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
-      MESSAGE_LIST_FOLLOWUPS_EXTRA_PADDING_BOTTOM +
-      MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM
-    : MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
-      (hasCodingChanges ? MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM : 0);
+  const messageListPaddingBottom =
+    MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
+    (hasCodingChanges ? MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM : 0);
 
   const status = thread.error
     ? "error"
@@ -544,7 +534,6 @@ function AgentPanelInner({
                       onContextChange={(context) =>
                         setSettings("context", context)
                       }
-                      onFollowupsVisibilityChange={setShowFollowups}
                       onSubmit={handleSubmit}
                       onStop={handleStop}
                     />

@@ -24,7 +24,6 @@ export type MockThread = {
   thread_id: string;
   title?: string;
   updated_at?: string;
-  agent_name?: string;
   workModeId?: string;
   workspaceRoot?: string;
   todos?: Array<{
@@ -42,12 +41,6 @@ export type MockProject = {
   is_git_repo?: boolean;
 };
 
-export type MockAgent = {
-  name: string;
-  description?: string;
-  system_prompt?: string;
-};
-
 export type MockModel = {
   id: string;
   name: string;
@@ -61,7 +54,6 @@ export type MockModel = {
 export type MockAPIOptions = {
   threads?: MockThread[];
   projects?: MockProject[];
-  agents?: MockAgent[];
   models?: MockModel[];
 };
 
@@ -77,7 +69,6 @@ export type MockAPIOptions = {
 export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
   const threads = options?.threads ?? [];
   const projects = options?.projects ?? [];
-  const agents = options?.agents ?? [];
   const models = options?.models ?? [];
   const modelProfiles = Object.fromEntries(
     models.map((model) => [
@@ -264,7 +255,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
       thread_id: t.thread_id,
       created_at: "2025-01-01T00:00:00Z",
       updated_at: t.updated_at ?? "2025-01-01T00:00:00Z",
-      metadata: t.agent_name ? { agent_name: t.agent_name } : {},
+      metadata: {},
       status: "idle",
       values: { title: t.title ?? "Untitled" },
       context: {
@@ -604,49 +595,6 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
     return route.fallback();
   });
 
-  // Follow-up suggestions — input box auto-suggest after AI response
-  void page.route("**/api/threads/*/suggestions", (route) => {
-    if (route.request().method() === "POST") {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ suggestions: [] }),
-      });
-    }
-    return route.fallback();
-  });
-
-  // Agents list — sidebar & gallery page
-  void page.route("**/api/agents", (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ agents }),
-      });
-    }
-    return route.fallback();
-  });
-
-  // Individual agent — agent chat page
-  void page.route("**/api/agents/*", (route) => {
-    if (route.request().method() === "GET") {
-      const url = route.request().url();
-      const agent = agents.find((a) => url.endsWith(`/api/agents/${a.name}`));
-      if (agent) {
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(agent),
-        });
-      }
-    }
-    return route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({ detail: "Agent not found" }),
-    });
-  });
 }
 
 // ---------------------------------------------------------------------------

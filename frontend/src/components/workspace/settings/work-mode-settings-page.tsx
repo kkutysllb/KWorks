@@ -84,7 +84,7 @@ export function WorkModeSettingsPage() {
                     <ItemDescription className="mt-2 min-w-0 space-y-1">
                       <p className="truncate text-xs">{mode.id}</p>
                       <p className="line-clamp-2">
-                        {mode.description || "暂无说明"}
+                        {mode.description ?? "暂无说明"}
                       </p>
                       <p className="text-xs">
                         已启用 {enabledSkills} / {totalSkills} 个技能

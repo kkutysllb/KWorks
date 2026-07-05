@@ -45,8 +45,8 @@ describe("coding agent change summary card", () => {
     expect(agentPanel).toContain("handleReviewChanges");
     expect(agentPanel).toContain("handleDiscardChanges");
     expect(agentPanel).toContain("Promise.all");
-    expect(agentPanel).toContain("flex w-full max-w-4xl flex-col");
-    expect(agentPanel).toContain('<div className="w-full">');
+    expect(agentPanel).toContain("relative flex w-full max-w-4xl min-w-0 flex-col");
+    expect(agentPanel).toContain('<div\n                    className="w-full min-w-0"');
     expect(agentPanel).toContain("min-h-32 w-full");
     expect(agentPanel).toContain("[&_[data-slot=input-group]]:min-h-32");
     expect(agentPanel).toContain(

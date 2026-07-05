@@ -25,11 +25,6 @@ export interface UploadResponse {
   message: string;
 }
 
-export interface ListFilesResponse {
-  files: UploadedFileInfo[];
-  count: number;
-}
-
 async function readErrorDetail(
   response: Response,
   fallback: string,
@@ -61,70 +56,91 @@ async function readErrorDetail(
   return `${fallback} (${response.status}): ${detail}`;
 }
 
-/**
- * Upload files to a thread
- */
 export async function uploadFiles(
   threadId: string,
   files: File[],
 ): Promise<UploadResponse> {
-  const formData = new FormData();
-
-  files.forEach((file) => {
-    formData.append("files", file);
-  });
-
-  const response = await fetch(
-    `${getBackendBaseURL()}/api/threads/${threadId}/uploads`,
-    {
-      method: "POST",
-      body: formData,
-    },
+  const uploaded = await Promise.all(
+    files.map((file) => uploadAttachment(threadId, file)),
   );
+  return {
+    success: true,
+    files: uploaded,
+    message:
+      uploaded.length === 1
+        ? "Uploaded 1 file"
+        : `Uploaded ${uploaded.length} files`,
+  };
+}
+
+async function uploadAttachment(
+  threadId: string,
+  file: File,
+): Promise<UploadedFileInfo> {
+  const response = await fetch(`${getBackendBaseURL()}/v1/attachments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: file.name || "upload",
+      mimeType: file.type || "application/octet-stream",
+      dataBase64: arrayBufferToBase64(await file.arrayBuffer()),
+      threadId,
+    }),
+  });
 
   if (!response.ok) {
     throw new Error(await readErrorDetail(response, "Upload failed"));
   }
 
-  return response.json();
+  const body = (await response.json()) as {
+    attachment: {
+      id: string;
+      name: string;
+      mimeType?: string;
+      byteSize: number;
+      updatedAt?: string;
+    };
+  };
+  const attachment = body.attachment;
+  return {
+    filename: attachment.name,
+    size: attachment.byteSize,
+    path: attachment.id,
+    virtual_path: attachment.id,
+    artifact_url: `/v1/attachments/${encodeURIComponent(attachment.id)}/content`,
+    ...extensionFromName(attachment.name),
+    ...modifiedFromTimestamp(attachment.updatedAt),
+  };
 }
 
-/**
- * List all uploaded files for a thread
- */
-export async function listUploadedFiles(
-  threadId: string,
-): Promise<ListFilesResponse> {
-  const response = await fetch(
-    `${getBackendBaseURL()}/api/threads/${threadId}/uploads/list`,
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      await readErrorDetail(response, "Failed to list uploaded files"),
-    );
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
   }
-
-  return response.json();
+  if (typeof btoa === "function") {
+    return btoa(binary);
+  }
+  const bufferCtor = (
+    globalThis as typeof globalThis & {
+      Buffer?: { from: (value: Uint8Array) => { toString: (encoding: "base64") => string } };
+    }
+  ).Buffer;
+  return bufferCtor?.from(bytes).toString("base64") ?? "";
 }
 
-/**
- * Delete an uploaded file
- */
-export async function deleteUploadedFile(
-  threadId: string,
-  filename: string,
-): Promise<{ success: boolean; message: string }> {
-  const response = await fetch(
-    `${getBackendBaseURL()}/api/threads/${threadId}/uploads/${filename}`,
-    {
-      method: "DELETE",
-    },
-  );
+function extensionFromName(name: string): Pick<UploadedFileInfo, "extension"> {
+  const extension = name.split(".").pop();
+  return extension && extension !== name ? { extension } : {};
+}
 
-  if (!response.ok) {
-    throw new Error(await readErrorDetail(response, "Failed to delete file"));
-  }
-
-  return response.json();
+function modifiedFromTimestamp(
+  value: string | undefined,
+): Pick<UploadedFileInfo, "modified"> {
+  if (!value) return {};
+  const modified = Date.parse(value);
+  return Number.isFinite(modified) ? { modified } : {};
 }

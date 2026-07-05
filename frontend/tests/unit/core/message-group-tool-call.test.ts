@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import { zhCN } from "@/core/i18n";
-import { explainToolCall } from "@/core/tools/utils";
 import { describeToolCallDisplay } from "@/core/tools/tool-call-display";
+import { explainToolCall } from "@/core/tools/utils";
 
 describe("message group tool call display", () => {
   test("shows the command for bash calls without a description", () => {

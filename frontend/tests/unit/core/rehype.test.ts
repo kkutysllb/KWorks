@@ -1,5 +1,5 @@
-import { expect, test } from "vitest";
 import type { Element, Root } from "hast";
+import { expect, test } from "vitest";
 
 import { rehypeSplitWordsIntoSpans } from "@/core/rehype";
 

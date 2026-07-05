@@ -39,25 +39,13 @@ import {
   PromptInputTextarea,
   PromptInputTools,
   usePromptInputAttachments,
-  usePromptInputController,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { fetch } from "@/core/api/fetcher";
-import { getBackendBaseURL } from "@/core/config";
 import { pickDirectory } from "@/core/desktop";
 import { useI18n } from "@/core/i18n/hooks";
 import { activateModel } from "@/core/models/api";
@@ -73,7 +61,6 @@ import {
 } from "@/core/skills/work-modes";
 import type { AgentThreadContext } from "@/core/threads";
 import { useThreads } from "@/core/threads/hooks";
-import { textOfMessage } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
 
 import {
@@ -87,7 +74,6 @@ import {
   ModelSelectorTrigger,
 } from "../ai-elements/model-selector";
 
-import { useFollowupsContext } from "./followups-context";
 import { useThread } from "./messages/context";
 import {
   getWorkspaceRootDisplayName,
@@ -244,12 +230,10 @@ export function InputBox({
   initialValue,
   initialWorkModeId = "task",
   onContextChange,
-  onFollowupsVisibilityChange,
   onSubmit,
   onStop,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
-  assistantId?: string | null;
   status?: ChatStatus;
   disabled?: boolean;
   context: QiongQiContext;
@@ -258,7 +242,6 @@ export function InputBox({
   initialValue?: string;
   initialWorkModeId?: string;
   onContextChange?: (context: QiongQiContext) => void;
-  onFollowupsVisibilityChange?: (visible: boolean) => void;
   onSubmit?: (
     message: PromptInputMessage,
     context: InputBoxSubmitContext,
@@ -272,32 +255,8 @@ export function InputBox({
   const { models, isLoading: isModelsLoading } = useModels();
   const { defaultModeId, workModes: loadedWorkModes } = useWorkModes();
   const { data: historyThreads } = useThreads();
-  const { thread, isMock } = useThread();
-  const { textInput } = usePromptInputController();
+  const { thread } = useThread();
   const promptRootRef = useRef<HTMLDivElement | null>(null);
-  // Destructure the stable setters out of the context. These come from
-  // useState/useCallback inside the Provider, so their identities are stable
-  // across renders. Using them (rather than the whole `followupsCtx` object)
-  // as useEffect deps is what prevents the infinite update loop: the context
-  // value object identity changes whenever `data`/`hidden` change, but the
-  // setter identities never do.
-  const {
-    setData: setCtxFollowupsData,
-    setHidden: setCtxFollowupsHidden,
-    registerClickHandler: registerCtxClickHandler,
-  } = useFollowupsContext();
-
-  const [followups, setFollowups] = useState<string[]>([]);
-  const [followupsHidden, setFollowupsHidden] = useState(false);
-  const [followupsLoading, setFollowupsLoading] = useState(false);
-  const lastGeneratedForAiIdRef = useRef<string | null>(null);
-  const wasStreamingRef = useRef(false);
-  const messagesRef = useRef(thread.messages);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingSuggestion, setPendingSuggestion] = useState<string | null>(
-    null,
-  );
   const workModes = orderedWorkModes(
     loadedWorkModes.length > 0
       ? withSystemWorkModes(loadedWorkModes)
@@ -525,9 +484,6 @@ export function InputBox({
         setModelDialogOpen(true);
         return;
       }
-      setFollowups([]);
-      setFollowupsHidden(false);
-      setFollowupsLoading(false);
 
       if (resolvedModelName && context.model_name !== resolvedModelName) {
         const nextContext = {
@@ -561,174 +517,6 @@ export function InputBox({
       workModeId,
     ],
   );
-
-  const requestFormSubmit = useCallback(() => {
-    const form = promptRootRef.current?.querySelector("form");
-    form?.requestSubmit();
-  }, []);
-
-  const handleFollowupClick = useCallback(
-    (suggestion: string) => {
-      if (status === "streaming") {
-        return;
-      }
-      const current = (textInput.value ?? "").trim();
-      if (current) {
-        setPendingSuggestion(suggestion);
-        setConfirmOpen(true);
-        return;
-      }
-      textInput.setInput(suggestion);
-      setFollowupsHidden(true);
-      setTimeout(() => requestFormSubmit(), 0);
-    },
-    [requestFormSubmit, status, textInput],
-  );
-
-  const confirmReplaceAndSend = useCallback(() => {
-    if (!pendingSuggestion) {
-      setConfirmOpen(false);
-      return;
-    }
-    textInput.setInput(pendingSuggestion);
-    setFollowupsHidden(true);
-    setConfirmOpen(false);
-    setPendingSuggestion(null);
-    setTimeout(() => requestFormSubmit(), 0);
-  }, [pendingSuggestion, requestFormSubmit, textInput]);
-
-  const confirmAppendAndSend = useCallback(() => {
-    if (!pendingSuggestion) {
-      setConfirmOpen(false);
-      return;
-    }
-    const current = (textInput.value ?? "").trim();
-    const next = current
-      ? `${current}\n${pendingSuggestion}`
-      : pendingSuggestion;
-    textInput.setInput(next);
-    setFollowupsHidden(true);
-    setConfirmOpen(false);
-    setPendingSuggestion(null);
-    setTimeout(() => requestFormSubmit(), 0);
-  }, [pendingSuggestion, requestFormSubmit, textInput]);
-
-  const showFollowups =
-    !disabled &&
-    !isNewThread &&
-    !followupsHidden &&
-    (followupsLoading || followups.length > 0);
-
-  const followupsVisibilityChangeRef = useRef(onFollowupsVisibilityChange);
-
-  useEffect(() => {
-    followupsVisibilityChangeRef.current = onFollowupsVisibilityChange;
-  }, [onFollowupsVisibilityChange]);
-
-  useEffect(() => {
-    followupsVisibilityChangeRef.current?.(showFollowups);
-  }, [showFollowups]);
-
-  useEffect(() => {
-    messagesRef.current = thread.messages;
-  }, [thread.messages]);
-
-  useEffect(() => {
-    return () => followupsVisibilityChangeRef.current?.(false);
-  }, []);
-
-  useEffect(() => {
-    const streaming = status === "streaming";
-    const wasStreaming = wasStreamingRef.current;
-    wasStreamingRef.current = streaming;
-    if (!wasStreaming || streaming) {
-      return;
-    }
-
-    if (disabled || isMock) {
-      return;
-    }
-
-    const lastAi = [...messagesRef.current]
-      .reverse()
-      .find((m) => m.type === "ai");
-    const lastAiId = lastAi?.id ?? null;
-    if (!lastAiId || lastAiId === lastGeneratedForAiIdRef.current) {
-      return;
-    }
-    lastGeneratedForAiIdRef.current = lastAiId;
-
-    const recent = messagesRef.current
-      .filter((m) => m.type === "human" || m.type === "ai")
-      .map((m) => {
-        const role = m.type === "human" ? "user" : "assistant";
-        const content = textOfMessage(m) ?? "";
-        return { role, content };
-      })
-      .filter((m) => m.content.trim().length > 0)
-      .slice(-6);
-
-    if (recent.length === 0) {
-      return;
-    }
-
-    const controller = new AbortController();
-    setFollowupsHidden(false);
-    setFollowupsLoading(true);
-    setFollowups([]);
-
-    fetch(`${getBackendBaseURL()}/api/threads/${threadId}/suggestions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: recent,
-        n: 3,
-        model_name: context.model_name ?? undefined,
-      }),
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          return { suggestions: [] as string[] };
-        }
-        return (await res.json()) as { suggestions?: string[] };
-      })
-      .then((data) => {
-        const suggestions = (data.suggestions ?? [])
-          .map((s) => (typeof s === "string" ? s.trim() : ""))
-          .filter((s) => s.length > 0)
-          .slice(0, 5);
-        setFollowups(suggestions);
-      })
-      .catch(() => {
-        setFollowups([]);
-      })
-      .finally(() => {
-        setFollowupsLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [context.model_name, disabled, isMock, status, threadId]);
-
-  // Sync follow-ups state to context so the panel (rendered at the end of
-  // MessageList) can display the data without floating over the input area.
-  // NOTE: depend only on the stable setters (from useState/useCallback), not
-  // on the whole context object — otherwise the effect re-runs every time the
-  // Provider's value identity changes, calling setData again and looping.
-  useEffect(() => {
-    setCtxFollowupsData({
-      suggestions: showFollowups ? followups : [],
-      loading: showFollowups ? followupsLoading : false,
-    });
-  }, [setCtxFollowupsData, showFollowups, followups, followupsLoading]);
-
-  useEffect(() => {
-    setCtxFollowupsHidden(followupsHidden);
-  }, [setCtxFollowupsHidden, followupsHidden]);
-
-  useEffect(() => {
-    registerCtxClickHandler(handleFollowupClick);
-  }, [registerCtxClickHandler, handleFollowupClick]);
 
   return (
     <div
@@ -886,28 +674,6 @@ export function InputBox({
           />
         </div>
       </PromptInput>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t.inputBox.followupConfirmTitle}</DialogTitle>
-            <DialogDescription>
-              {t.inputBox.followupConfirmDescription}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              {t.common.cancel}
-            </Button>
-            <Button variant="secondary" onClick={confirmAppendAndSend}>
-              {t.inputBox.followupConfirmAppend}
-            </Button>
-            <Button onClick={confirmReplaceAndSend}>
-              {t.inputBox.followupConfirmReplace}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

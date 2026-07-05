@@ -264,7 +264,6 @@ function QiongQiContextSubmitHarness({ threadId }: { threadId: string }) {
 function AssistantSubmitHarness({ threadId }: { threadId: string }) {
   const { sendMessage } = useThreadStream({
     threadId,
-    assistantId: "coding_agent",
     context: { mode: undefined, workModeId: "coding" },
     isMock: false,
   });
@@ -620,7 +619,7 @@ describe("useThreadStream cache bridge", () => {
     expect(submitOptions?.context).not.toHaveProperty("orchestration_mode");
   });
 
-  test("maps assistantId into qiongqi thread agent metadata context", async () => {
+  test("does not add legacy agent metadata to qiongqi submit context", async () => {
     submitMock.mockImplementation(async () => undefined);
 
     container = document.createElement("div");
@@ -649,8 +648,8 @@ describe("useThreadStream cache bridge", () => {
       | undefined;
     expect(submitOptions?.context).toMatchObject({
       workModeId: "coding",
-      agent_name: "coding_agent",
     });
+    expect(submitOptions?.context).not.toHaveProperty("agent_name");
   });
 
   test("lets per-submit context override stale thread settings", async () => {
@@ -1007,10 +1006,9 @@ describe("useThreadStream cache bridge", () => {
         {
           filename: "skill-notes.md",
           size: 5,
-          path: "/data/threads/created-thread/uploads/skill-notes.md",
-          virtual_path: "/mnt/qiongqi/uploads/skill-notes.md",
-          artifact_url:
-            "/api/threads/created-thread/artifacts/mnt/qiongqi/uploads/skill-notes.md",
+          path: "att_skill_notes",
+          virtual_path: "att_skill_notes",
+          artifact_url: "/v1/attachments/att_skill_notes/content",
         },
       ],
     });

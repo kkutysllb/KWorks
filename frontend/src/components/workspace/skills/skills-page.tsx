@@ -408,7 +408,7 @@ function SkillCard({
           size="sm"
           variant="ghost"
           disabled={
-            readonly ||
+            (readonly ?? false) ||
             (skill.locked ?? false) ||
             !skill.enabled ||
             env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
@@ -422,7 +422,7 @@ function SkillCard({
         <Switch
           checked={skill.enabled}
           disabled={
-            readonly ||
+            (readonly ?? false) ||
             (skill.locked ?? false) ||
             env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
           }

@@ -40,8 +40,6 @@ export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
   context: LocalSettings["context"];
   isMock?: boolean;
-  /** qiongqi assistant/graph id to run. Defaults to ``"lead_agent"``. */
-  assistantId?: string;
   onSend?: (threadId: string) => void;
   onStart?: (threadId: string, runId: string) => void;
   onFinish?: (state: AgentThreadState) => void;
@@ -60,7 +58,6 @@ type SendMessageOptions = {
 
 type ThreadSubmitContext = LocalSettings["context"] &
   Record<string, unknown> & {
-    agent_name?: string;
     model_name?: string;
     taskMode?: "agent" | "plan";
     executionProfile?: "fast" | "balanced" | "deep";
@@ -301,7 +298,6 @@ export function useThreadStream({
   threadId,
   context,
   isMock,
-  assistantId = "lead_agent",
   onSend,
   onStart,
   onFinish,
@@ -403,15 +399,6 @@ export function useThreadStream({
     },
     onCreated: (meta) => {
       handleStreamStart(meta.thread_id, meta.run_id);
-      if (context.agent_name && !isMock) {
-        void qiongqiClient
-          .updateThread(meta.thread_id, {
-            metadata: { agent_name: context.agent_name },
-          })
-          .catch(() => {
-            void 0;
-          });
-      }
     },
     onToolEnd: (event) => {
       listeners.current.onToolEnd?.(event);
@@ -620,7 +607,6 @@ export function useThreadStream({
         const baseSubmitContext: ThreadSubmitContext = {
           ...context,
           ...extraContext,
-          ...(assistantId ? { agent_name: assistantId } : {}),
         };
         const buildSubmitContext = (targetThreadId: string | undefined) => ({
           ...baseSubmitContext,
@@ -770,7 +756,7 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, t.uploads.uploadingFiles, context, queryClient, threadId, assistantId],
+    [thread, t.uploads.uploadingFiles, context, queryClient, threadId],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,

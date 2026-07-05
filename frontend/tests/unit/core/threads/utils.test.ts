@@ -6,6 +6,9 @@ import {
   workModeLabelOfThread,
 } from "@/core/threads/utils";
 
+const staleAgentContext = (agent_name: string) =>
+  ({ agent_name }) as unknown as { workModeId?: string; projectId?: string };
+
 test("uses standard chat route when thread has no agent context", () => {
   expect(pathOfThread("thread-123")).toBe("/workspace/chats/thread-123");
   expect(
@@ -15,13 +18,13 @@ test("uses standard chat route when thread has no agent context", () => {
   ).toBe("/workspace/chats/thread-123");
 });
 
-test("uses agent chat route when thread context has agent_name", () => {
+test("uses standard chat route even when stale agent metadata exists", () => {
   expect(
     pathOfThread({
       thread_id: "thread-123",
-      context: { agent_name: "researcher" },
+      context: staleAgentContext("researcher"),
     }),
-  ).toBe("/workspace/agents/researcher/chats/thread-123");
+  ).toBe("/workspace/chats/thread-123");
 });
 
 test("uses coding workbench route when thread belongs to coding mode", () => {
@@ -39,29 +42,32 @@ test("uses coding workbench route when thread belongs to coding mode", () => {
   ).toBe("/workspace/coding/proj_123");
 });
 
-test("uses provided context when pathOfThread is called with a thread id", () => {
-  expect(pathOfThread("thread-123", { agent_name: "ops agent" })).toBe(
-    "/workspace/agents/ops%20agent/chats/thread-123",
+test("ignores provided stale agent context when pathOfThread is called with a thread id", () => {
+  expect(pathOfThread({
+    thread_id: "thread-123",
+    context: staleAgentContext("ops agent"),
+  })).toBe(
+    "/workspace/chats/thread-123",
   );
 });
 
-test("uses agent chat route when thread metadata has agent_name", () => {
+test("uses standard chat route when thread metadata has stale agent_name", () => {
   expect(
     pathOfThread({
       thread_id: "thread-456",
       metadata: { agent_name: "coder" },
     }),
-  ).toBe("/workspace/agents/coder/chats/thread-456");
+  ).toBe("/workspace/chats/thread-456");
 });
 
-test("prefers context.agent_name over metadata.agent_name", () => {
+test("ignores stale agent context and metadata together", () => {
   expect(
     pathOfThread({
       thread_id: "thread-789",
-      context: { agent_name: "from-context" },
+      context: staleAgentContext("from-context"),
       metadata: { agent_name: "from-metadata" },
     }),
-  ).toBe("/workspace/agents/from-context/chats/thread-789");
+  ).toBe("/workspace/chats/thread-789");
 });
 
 test("derives user-visible work mode labels for thread titles", () => {

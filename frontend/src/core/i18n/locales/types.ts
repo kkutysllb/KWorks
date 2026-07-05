@@ -119,10 +119,8 @@ export interface Translations {
     chats: string;
     historyTasks: string;
     demoTasks: string;
-    agents: string;
     models: string;
     skills: string;
-    channels: string;
     mcp: string;
     crons: string;
     tokenUsage: string;
@@ -133,41 +131,6 @@ export interface Translations {
   toolbar: {
     refresh: string;
     refreshing: string;
-  };
-
-  // Agents
-  agents: {
-    title: string;
-    description: string;
-    newAgent: string;
-    emptyTitle: string;
-    emptyDescription: string;
-    chat: string;
-    delete: string;
-    deleteConfirm: string;
-    deleteSuccess: string;
-    newChat: string;
-    createPageTitle: string;
-    createPageSubtitle: string;
-    nameStepTitle: string;
-    nameStepHint: string;
-    nameStepPlaceholder: string;
-    nameStepContinue: string;
-    nameStepInvalidError: string;
-    nameStepAlreadyExistsError: string;
-    nameStepNetworkError: string;
-    nameStepCheckError: string;
-    nameStepBootstrapMessage: string;
-    save: string;
-    saving: string;
-    saveRequested: string;
-    saveHint: string;
-    saveCommandMessage: string;
-    agentCreatedPendingRefresh: string;
-    more: string;
-    agentCreated: string;
-    startChatting: string;
-    backToGallery: string;
   };
 
   // Breadcrumb
@@ -187,28 +150,6 @@ export interface Translations {
       admin: string;
       user: string;
     };
-  };
-
-  // Channels
-  channels: {
-    title: string;
-    description: string;
-    enabled: string;
-    disabled: string;
-    running: string;
-    stopped: string;
-    configured: string;
-    notConfigured: string;
-    editConfig: string;
-    restart: string;
-    restartSuccess: string;
-    help: string;
-    saveSuccess: string;
-    emptyTitle: string;
-    emptyDescription: string;
-    credentials: string;
-    status: string;
-    guide: string;
   };
 
   // MCP

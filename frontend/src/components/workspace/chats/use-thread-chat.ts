@@ -8,8 +8,7 @@ import { uuid } from "@/core/utils/uuid";
 /**
  * Extract the thread_id segment from a workspace chat URL.
  *
- * Supports both ``/workspace/chats/{thread_id}`` and
- * ``/workspace/agents/{agent_name}/chats/{thread_id}`` routes.
+ * Supports ``/workspace/chats/{thread_id}`` routes.
  *
  * In the Electron desktop build (``output: "export"``), only
  * ``/workspace/chats/new`` is pre-rendered. All other thread IDs are served
@@ -26,8 +25,7 @@ import { uuid } from "@/core/utils/uuid";
  */
 function parseThreadIdFromPath(pathname: string | null): string {
   if (!pathname) return "new";
-  // Match the last segment after /chats/ in either route shape.
-  // Handles encoded agent names (e.g. /workspace/agents/my%20agent/chats/{id}).
+  // Match the last segment after /chats/.
   const match = /\/chats\/([^/?#]+)/.exec(pathname);
   const raw = match?.[1];
   if (!raw) return "new";

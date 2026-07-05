@@ -17,7 +17,6 @@ export interface AgentThreadContext extends Record<string, unknown> {
   is_plan_mode: boolean;
   subagent_enabled: boolean;
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
-  agent_name?: string;
   taskMode?: "agent" | "plan";
   executionProfile?: "fast" | "balanced" | "deep";
   collaborationPolicy?: "single" | "auto";
