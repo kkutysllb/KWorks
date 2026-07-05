@@ -14,6 +14,9 @@ const REQUIRED_RUNTIME_PACKAGES = [
   "@qiongqi/contracts",
   "@qiongqi/preset-coding",
 ];
+const REQUIRED_RUNTIME_SKILLS = [
+  "qiongqi/skills/tdd/skill.json",
+];
 
 const checks = [];
 
@@ -108,6 +111,7 @@ function verifyRuntimeListing(label, listing) {
     ...REQUIRED_RUNTIME_PACKAGES.map(
       (packageName) => `qiongqi/node_modules/${packageName}/package.json`,
     ),
+    ...REQUIRED_RUNTIME_SKILLS,
   ];
 
   for (const entry of requiredEntries) {

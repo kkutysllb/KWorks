@@ -89,6 +89,10 @@ test("desktop dev launcher uses isolated public skills instead of repo custom sk
   assert.match(devLauncherSource, /syncDesktopPublicSkills/);
   assert.match(devLauncherSource, /const skillsPath = kkworksHome \? join\(kkworksHome, "skills"\) : undefined/);
   assert.match(devLauncherSource, /customTarget/);
+  assert.match(devLauncherSource, /builtinCoreTarget/);
+  assert.match(devLauncherSource, /builtinCodingTarget/);
+  assert.match(devLauncherSource, /join\(QIONGQI_DIR, "skills"\)/);
+  assert.match(devLauncherSource, /\["goal", "todo", "web"\]\.includes\(name\)/);
   assert.doesNotMatch(devLauncherSource, /const skillsPath = join\(REPO_ROOT, "skills"\)/);
 });
 

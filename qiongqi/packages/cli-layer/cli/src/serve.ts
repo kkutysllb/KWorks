@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
 import {
   DEFAULT_SERVE_PORT,
   DEFAULT_SERVE_OPTIONS,
@@ -261,13 +261,42 @@ function skillRootsFromKWorksRoot(root: string): string[] {
     join(root, 'custom', 'shared')
   ]
   const legacy = [join(root, 'public'), join(root, 'custom')]
+  const existingLegacy = legacy.filter((candidate) => existsSync(candidate))
   const hasUnifiedRoots = unified.some((candidate) => existsSync(candidate))
-  const hasLegacyRoots = legacy.some((candidate) => existsSync(candidate))
-  return hasLegacyRoots && !hasUnifiedRoots ? legacy : unified
+  if (existingLegacy.length > 0 && !hasUnifiedRoots) return existingLegacy
+  const unifiedSkillIds = skillPackageIds(unified)
+  const missingLegacyPackages = existingLegacy.flatMap((legacyRoot) =>
+    skillPackageRoots(legacyRoot).filter((candidate) => !unifiedSkillIds.has(basename(candidate)))
+  )
+  return uniqueStrings([...unified, ...missingLegacyPackages])
 }
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)]
+}
+
+function skillPackageIds(roots: readonly string[]): Set<string> {
+  return new Set(roots.flatMap(skillPackageRoots).map((candidate) => basename(candidate)))
+}
+
+function skillPackageRoots(root: string): string[] {
+  if (!existsSync(root)) return []
+  const packages: string[] = []
+  if (isSkillPackage(root)) packages.push(root)
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const candidate = join(root, entry.name)
+      if (isSkillPackage(candidate)) packages.push(candidate)
+    }
+  } catch {
+    return packages
+  }
+  return packages
+}
+
+function isSkillPackage(root: string): boolean {
+  return existsSync(join(root, 'skill.json')) || existsSync(join(root, 'SKILL.md'))
 }
 
 /**

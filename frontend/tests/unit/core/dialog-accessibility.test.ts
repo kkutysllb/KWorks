@@ -7,7 +7,7 @@ const repoRoot = resolve(__dirname, "../../..");
 const sourceRoot = resolve(repoRoot, "src");
 
 describe("dialog accessibility", () => {
-  test("every dialog content declares a description or opts out explicitly", () => {
+  test("every dialog content declares a real description", () => {
     const violations: string[] = [];
 
     for (const file of tsxFiles(sourceRoot)) {
@@ -24,10 +24,15 @@ describe("dialog accessibility", () => {
           closeTagStart === -1 ? openTagEnd + 1 : closeTagStart,
         );
 
-        if (
-          !openTag.includes("aria-describedby") &&
-          !content.includes("<DialogDescription")
-        ) {
+        const hasUndefinedOptOut = openTag.includes(
+          "aria-describedby={undefined}",
+        );
+        const hasRealDescription =
+          !hasUndefinedOptOut &&
+          (openTag.includes("aria-describedby") ||
+            content.includes("<DialogDescription"));
+
+        if (!hasRealDescription) {
           violations.push(`${relative(repoRoot, file)}:${lineOf(source, start)}`);
         }
       }

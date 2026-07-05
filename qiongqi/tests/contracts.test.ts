@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -349,6 +349,58 @@ describe('cli', () => {
         '/Users/tester/.kworks-workspace/skills/custom/shared'
       ]
     })
+  })
+
+  it('retains KWorks public skills when unified skill roots also exist', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kworks-skills-'))
+    try {
+      await mkdir(join(dir, 'builtin', 'core'), { recursive: true })
+      await mkdir(join(dir, 'public', 'deep-research'), { recursive: true })
+      await writeFile(join(dir, 'public', 'deep-research', 'SKILL.md'), '---\nname: deep-research\n---\n')
+
+      const parsed = parseServeOptions([
+        '--api-key=test-key',
+        '--base-url=https://example.invalid/v1'
+      ], {
+        KWorks_SKILLS_PATH: dir
+      })
+
+      expect(parsed.capabilities.skills.roots).toEqual([
+        join(dir, 'builtin', 'core'),
+        join(dir, 'builtin', 'task'),
+        join(dir, 'builtin', 'coding'),
+        join(dir, 'custom', 'shared'),
+        join(dir, 'public', 'deep-research')
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not duplicate KWorks public skills already migrated into unified roots', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kworks-skills-'))
+    try {
+      await mkdir(join(dir, 'builtin', 'task', 'deep-research'), { recursive: true })
+      await writeFile(join(dir, 'builtin', 'task', 'deep-research', 'SKILL.md'), '---\nname: deep-research\n---\n')
+      await mkdir(join(dir, 'public', 'deep-research'), { recursive: true })
+      await writeFile(join(dir, 'public', 'deep-research', 'SKILL.md'), '---\nname: deep-research\n---\n')
+
+      const parsed = parseServeOptions([
+        '--api-key=test-key',
+        '--base-url=https://example.invalid/v1'
+      ], {
+        KWorks_SKILLS_PATH: dir
+      })
+
+      expect(parsed.capabilities.skills.roots).toEqual([
+        join(dir, 'builtin', 'core'),
+        join(dir, 'builtin', 'task'),
+        join(dir, 'builtin', 'coding'),
+        join(dir, 'custom', 'shared')
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('loads serve and context compaction settings from an explicit config file', async () => {

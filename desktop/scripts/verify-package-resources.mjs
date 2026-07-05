@@ -24,6 +24,9 @@ const REQUIRED_RUNTIME_PACKAGES = [
   "@qiongqi/contracts",
   "@qiongqi/preset-coding",
 ];
+const REQUIRED_RUNTIME_SKILLS = [
+  "qiongqi/skills/tdd/skill.json",
+];
 
 const checks = [];
 
@@ -98,6 +101,14 @@ function verifyQiongqiRuntimeListing(label, listing) {
       pass(`${label} contains ${packageEntry}`);
     } else {
       fail(`${label} contains ${packageEntry}`, "Missing from runtime listing");
+    }
+  }
+
+  for (const skillEntry of REQUIRED_RUNTIME_SKILLS) {
+    if (listing.includes(skillEntry)) {
+      pass(`${label} contains ${skillEntry}`);
+    } else {
+      fail(`${label} contains ${skillEntry}`, "Missing from runtime listing");
     }
   }
 

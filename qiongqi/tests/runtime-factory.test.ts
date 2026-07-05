@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { InMemorySessionStore } from '@qiongqi/adapter-storage'
 import { InMemoryThreadStore } from '@qiongqi/adapter-storage'
 import { createThreadRecord } from '@qiongqi/domain'
 import { UsageService } from '@qiongqi/services'
-import { seedUsageCarryover } from '@qiongqi/http'
-import type { UsageSnapshot } from '@qiongqi/contracts'
+import { createAgent, seedUsageCarryover } from '@qiongqi/http'
+import { DEFAULT_QIONGQI_CAPABILITIES_CONFIG, type UsageSnapshot } from '@qiongqi/contracts'
 
 function usage(overrides: Partial<UsageSnapshot>): UsageSnapshot {
   const promptTokens = overrides.promptTokens ?? 10
@@ -66,5 +69,132 @@ describe('runtime factory usage carryover', () => {
       misses: 8,
       hitRate: 0.9
     })
+  })
+})
+
+describe('runtime skill roots', () => {
+  it('keeps runtime-mounted skill roots when config refresh reads empty persisted roots', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-skill-roots-'))
+    const dataDir = join(dir, 'data')
+    const skillsRoot = join(dir, 'skills')
+    const configPath = join(dir, 'qiongqi-config.json')
+    const skillDir = join(skillsRoot, 'runtime-mounted-skill')
+    let runtime: Awaited<ReturnType<typeof createAgent>> | undefined
+
+    try {
+      await mkdir(skillDir, { recursive: true })
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        '---\nname: Runtime Mounted Skill\ndescription: mounted by serve env\n---\nRuntime mounted instructions.\n',
+        'utf8'
+      )
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          capabilities: {
+            skills: {
+              enabled: true,
+              roots: [],
+              legacySkillMd: true
+            }
+          }
+        }),
+        'utf8'
+      )
+
+      runtime = await createAgent({
+        host: '127.0.0.1',
+        port: 0,
+        configPath,
+        dataDir,
+        runtimeToken: 'tok',
+        apiKey: '',
+        baseUrl: 'https://api.example.test/v1',
+        endpointFormat: 'chat_completions',
+        model: 'deepseek-chat',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        tokenEconomyMode: false,
+        insecure: true,
+        storage: { backend: 'file' },
+        capabilities: {
+          ...DEFAULT_QIONGQI_CAPABILITIES_CONFIG,
+          skills: {
+            ...DEFAULT_QIONGQI_CAPABILITIES_CONFIG.skills,
+            enabled: true,
+            roots: [skillsRoot],
+            legacySkillMd: true
+          }
+        }
+      })
+
+      expect((await runtime.skillsV2?.())?.skills.map((skill) => skill.id)).toContain('runtime-mounted-skill')
+
+      await runtime.configStore?.read()
+      await runtime.refreshRuntimeTools?.()
+
+      expect((await runtime.skillsV2?.())?.skills.map((skill) => skill.id)).toContain('runtime-mounted-skill')
+    } finally {
+      await runtime?.shutdown?.()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not report duplicate skills when runtime-mounted roots already contain bundled skills', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-skill-duplicates-'))
+    const dataDir = join(dir, 'data')
+    const skillsRoot = join(dir, 'skills')
+    const mountedSkillDir = join(skillsRoot, 'shared-skill')
+    const bundledSkillDir = join(dataDir, 'builtin-skills', 'shared-skill')
+    let runtime: Awaited<ReturnType<typeof createAgent>> | undefined
+
+    try {
+      await mkdir(mountedSkillDir, { recursive: true })
+      await mkdir(bundledSkillDir, { recursive: true })
+      await writeFile(
+        join(mountedSkillDir, 'SKILL.md'),
+        '---\nname: Shared Skill\n---\nMounted instructions.\n',
+        'utf8'
+      )
+      await writeFile(
+        join(bundledSkillDir, 'SKILL.md'),
+        '---\nname: Shared Skill\n---\nBundled instructions.\n',
+        'utf8'
+      )
+
+      runtime = await createAgent({
+        host: '127.0.0.1',
+        port: 0,
+        dataDir,
+        runtimeToken: 'tok',
+        apiKey: '',
+        baseUrl: 'https://api.example.test/v1',
+        endpointFormat: 'chat_completions',
+        model: 'deepseek-chat',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        tokenEconomyMode: false,
+        insecure: true,
+        storage: { backend: 'file' },
+        capabilities: {
+          ...DEFAULT_QIONGQI_CAPABILITIES_CONFIG,
+          skills: {
+            ...DEFAULT_QIONGQI_CAPABILITIES_CONFIG.skills,
+            enabled: true,
+            roots: [skillsRoot],
+            legacySkillMd: true
+          }
+        }
+      })
+
+      const diagnostics = await runtime.skillsV2?.()
+      expect(diagnostics?.skills.map((skill) => skill.id)).toContain('shared-skill')
+      expect(diagnostics?.validationErrors).not.toContainEqual(
+        expect.objectContaining({ message: 'duplicate Skill id: shared-skill' })
+      )
+    } finally {
+      await runtime?.shutdown?.()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
@@ -146,6 +146,7 @@ requirePath(
   join(RUNTIME_STAGING_QIONGQI_DIR, "node_modules"),
   "QiongQi deployed node_modules",
 );
+copyQiongqiBuiltinSkills();
 
 await rebuildQiongqiRuntimeForElectron();
 
@@ -164,6 +165,14 @@ run(
 );
 
 console.log(`[OK] Created ${RUNTIME_ARCHIVE}`);
+
+function copyQiongqiBuiltinSkills() {
+  const source = join(QIONGQI_DIR, "skills");
+  const target = join(RUNTIME_STAGING_QIONGQI_DIR, "skills");
+  requirePath(join(source, "tdd", "skill.json"), "QiongQi built-in skill tdd");
+  cpSync(source, target, { recursive: true });
+  requirePath(join(target, "tdd", "skill.json"), "QiongQi deployed built-in skill tdd");
+}
 
 async function rebuildQiongqiRuntimeForElectron() {
   const { rebuild } = require("@electron/rebuild");

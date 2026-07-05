@@ -192,12 +192,26 @@ export const DEFAULT_WORK_MODES = {
     builtin: true,
     editable: true,
     defaultSkillIds: [
-      'data-analysis',
+      'academic-paper-review',
       'chart-visualization',
+      'code-documentation',
+      'consulting-analysis',
+      'data-analysis',
       'deep-research',
+      'frontend-design',
+      'github-deep-research',
+      'image-generation',
+      'music-generation',
+      'newsletter-generation',
+      'pdf-processing',
+      'podcast-generation',
       'ppt-generation',
+      'surprise-me',
+      'systematic-literature-review',
+      'vercel-deploy-claimable',
+      'video-generation',
+      'web-design-guidelines',
       'xlsx-creator',
-      'pdf-processing'
     ]
   },
   coding: {

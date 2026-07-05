@@ -14,6 +14,7 @@ import {
 } from '@qiongqi/skills'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+const PUBLIC_CORE_SKILL_IDS = new Set(['bootstrap', 'find-skills', 'skill-creator', 'skill-manage'])
 
 function skillDirectoryIds(root: string): string[] {
   return readdirSync(root, { withFileTypes: true })
@@ -33,6 +34,12 @@ function bundledCodingSkillIds(): string[] {
   ].sort((a, b) => a.localeCompare(b))
 }
 
+function bundledTaskSkillIds(): string[] {
+  const publicRoot = resolve(HERE, '../../skills/public')
+  return skillDirectoryIds(publicRoot)
+    .filter((id) => id !== 'coding' && !PUBLIC_CORE_SKILL_IDS.has(id))
+}
+
 describe('work mode skill contracts', () => {
   it('ships locked core skills and default task/coding modes', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({})
@@ -46,6 +53,12 @@ describe('work mode skill contracts', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({})
 
     expect(cfg.skills.workModes.modes.coding?.defaultSkillIds.slice().sort()).toEqual(bundledCodingSkillIds())
+  })
+
+  it('enables every bundled public task skill in the task work mode by default', () => {
+    const cfg = QiongqiCapabilitiesConfig.parse({})
+
+    expect(cfg.skills.workModes.modes.task?.defaultSkillIds.slice().sort()).toEqual(bundledTaskSkillIds())
   })
 
   it('merges bundled coding skills into stale persisted coding mode configs', () => {
@@ -77,6 +90,32 @@ describe('work mode skill contracts', () => {
       ...new Set([
         ...DEFAULT_LOCKED_SKILL_IDS,
         ...bundledCodingSkillIds()
+      ])
+    ].sort((a, b) => a.localeCompare(b)))
+  })
+
+  it('merges bundled public task skills into stale persisted task mode configs', () => {
+    const cfg = QiongqiCapabilitiesConfig.parse({
+      skills: {
+        workModes: {
+          defaultModeId: 'task',
+          modes: {
+            task: {
+              id: 'task',
+              name: 'Task',
+              builtin: true,
+              editable: true,
+              defaultSkillIds: ['deep-research']
+            }
+          }
+        }
+      }
+    })
+
+    expect(resolveEffectiveSkillIds(cfg.skills, 'task').sort()).toEqual([
+      ...new Set([
+        ...DEFAULT_LOCKED_SKILL_IDS,
+        ...bundledTaskSkillIds()
       ])
     ].sort((a, b) => a.localeCompare(b)))
   })

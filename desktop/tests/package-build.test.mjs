@@ -21,6 +21,10 @@ const verifierUrl = new URL("../scripts/verify-package-resources.mjs", import.me
 const builtVerifierPath = fileURLToPath(
   new URL("../scripts/verify-built-package-resources.mjs", import.meta.url),
 );
+const builtVerifierSource = readFileSync(
+  new URL("../scripts/verify-built-package-resources.mjs", import.meta.url),
+  "utf8",
+);
 const codesignRetryPath = fileURLToPath(
   new URL("../scripts/codesign-retry.mjs", import.meta.url),
 );
@@ -89,6 +93,9 @@ test("QiongQi runtime is generated from production deploy output", () => {
   assert.match(prepareResourcesSource, /--legacy/);
   assert.match(prepareResourcesSource, /--prod/);
   assert.match(prepareResourcesSource, /RUNTIME_STAGING_QIONGQI_DIR/);
+  assert.match(prepareResourcesSource, /copyQiongqiBuiltinSkills/);
+  assert.match(prepareResourcesSource, /join\(QIONGQI_DIR, "skills"\)/);
+  assert.match(prepareResourcesSource, /join\(RUNTIME_STAGING_QIONGQI_DIR, "skills"\)/);
   assert.doesNotMatch(prepareResourcesSource, /archive skipped for this platform/);
   assert.doesNotMatch(prepareResourcesSource, /"-C",\s*\n\s*REPO_ROOT,\s*\n\s*"qiongqi"/);
 });
@@ -235,6 +242,8 @@ test("package resource verifier checks the QiongQi archive when required", () =>
 test("package resource verifier checks required QiongQi packages inside the archive", () => {
   const verifierSource = readFileSync(verifierUrl, "utf8");
   assert.match(verifierSource, /qiongqi\/node_modules\/\$\{packageName\}\/package\.json/);
+  assert.match(verifierSource, /qiongqi\/skills\/tdd\/skill\.json/);
+  assert.match(builtVerifierSource, /qiongqi\/skills\/tdd\/skill\.json/);
 });
 
 test("package resource preparation creates the QiongQi archive on every packaged platform", () => {
@@ -307,7 +316,8 @@ printf '%s\\n' \\
   qiongqi/dist/serve-entry.js \\
   qiongqi/node_modules/@qiongqi/http/package.json \\
   qiongqi/node_modules/@qiongqi/contracts/package.json \\
-  qiongqi/node_modules/@qiongqi/preset-coding/package.json
+  qiongqi/node_modules/@qiongqi/preset-coding/package.json \\
+  qiongqi/skills/tdd/skill.json
 `,
     );
     chmodSync(fakeTar, 0o755);

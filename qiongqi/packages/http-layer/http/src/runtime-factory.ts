@@ -1,7 +1,7 @@
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { buildRouter } from './routes/index.js'
@@ -594,9 +594,14 @@ export async function createToolMatrix(
   configStore?: QiongqiConfigStore
 ): Promise<ToolMatrix> {
   const nowIso = core.nowIso
-  const builtinSkillRoots = await resolveBuiltinSkillRoots(options.dataDir, options.skillRoots)
-  const skillRuntime = await SkillRuntime.create(options.capabilities?.skills)
-  const skillPluginHost = await SkillPluginHost.create(options.capabilities?.skills, {
+  const runtimeMountedSkillRoots = options.capabilities?.skills.roots ?? []
+  const initialCapabilities = withRuntimeMountedSkillRoots(options.capabilities, runtimeMountedSkillRoots)
+  const builtinSkillRoots = await filterDuplicateBuiltinSkillRoots(
+    await resolveBuiltinSkillRoots(options.dataDir, options.skillRoots),
+    initialCapabilities?.skills.roots ?? []
+  )
+  const skillRuntime = await SkillRuntime.create(initialCapabilities?.skills)
+  const skillPluginHost = await SkillPluginHost.create(initialCapabilities?.skills, {
     builtinRoots: builtinSkillRoots,
     enabledSkillsProvider: configStore
       ? (context) => {
@@ -717,15 +722,16 @@ export async function createToolMatrix(
     if (!configStore) return
     const previous = mcpProviders
     const current = runtimeConfigSnapshot(configStore)
-    await skillRuntime.reload(current.capabilities?.skills)
-    await skillPluginHost.reload(current.capabilities?.skills)
+    const currentCapabilities = withRuntimeMountedSkillRoots(current.capabilities, runtimeMountedSkillRoots)
+    await skillRuntime.reload(currentCapabilities?.skills)
+    await skillPluginHost.reload(currentCapabilities?.skills)
     skillMcpServers = collectSkillMcpServers(
       skillPluginHost.list(),
       process.cwd(),
       (p) => skillPluginHost.isEnabled(p)
     )
-    mcpProviders = await buildMcpToolProviders(mergedMcpConfig(current.capabilities?.mcp, skillMcpServers))
-    webProviders = buildWebToolProviders(current.capabilities?.web)
+    mcpProviders = await buildMcpToolProviders(mergedMcpConfig(currentCapabilities?.mcp, skillMcpServers))
+    webProviders = buildWebToolProviders(currentCapabilities?.web)
     registry = buildMainRegistry()
     toolHost.replace(new LocalToolHost({ registry, readTracker: true }))
     matrix.registry = registry
@@ -897,6 +903,80 @@ function tokenEconomyConfigForOptions(
   }
 }
 
+function withRuntimeMountedSkillRoots(
+  capabilities: QiongqiCapabilitiesConfig | undefined,
+  runtimeMountedSkillRoots: readonly string[]
+): QiongqiCapabilitiesConfig | undefined {
+  if (!capabilities?.skills || runtimeMountedSkillRoots.length === 0) return capabilities
+  return {
+    ...capabilities,
+    skills: {
+      ...capabilities.skills,
+      roots: uniqueStrings([
+        ...runtimeMountedSkillRoots,
+        ...capabilities.skills.roots
+      ])
+    }
+  }
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values)]
+}
+
+async function filterDuplicateBuiltinSkillRoots(
+  builtinRoots: readonly string[],
+  configuredRoots: readonly string[]
+): Promise<string[]> {
+  if (builtinRoots.length === 0 || configuredRoots.length === 0) return uniqueStrings(builtinRoots)
+  const configuredIds = await skillPackageIdsFromRoots(configuredRoots)
+  if (configuredIds.size === 0) return uniqueStrings(builtinRoots)
+
+  const roots: string[] = []
+  for (const root of builtinRoots) {
+    const packages = await skillPackageRoots(root)
+    if (packages.length === 0) {
+      roots.push(root)
+      continue
+    }
+    const missing = packages.filter((pkg) => !configuredIds.has(pkg.id))
+    if (missing.length === packages.length) {
+      roots.push(root)
+    } else {
+      roots.push(...missing.map((pkg) => pkg.root))
+    }
+  }
+  return uniqueStrings(roots)
+}
+
+async function skillPackageIdsFromRoots(roots: readonly string[]): Promise<Set<string>> {
+  const ids = new Set<string>()
+  for (const root of roots) {
+    for (const pkg of await skillPackageRoots(root)) ids.add(pkg.id)
+  }
+  return ids
+}
+
+async function skillPackageRoots(root: string): Promise<Array<{ id: string; root: string }>> {
+  if (!existsSync(root)) return []
+  const packages: Array<{ id: string; root: string }> = []
+  if (isSkillPackage(root)) packages.push({ id: basename(root), root })
+  try {
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const candidate = join(root, entry.name)
+      if (isSkillPackage(candidate)) packages.push({ id: entry.name, root: candidate })
+    }
+  } catch {
+    return packages
+  }
+  return packages
+}
+
+function isSkillPackage(root: string): boolean {
+  return existsSync(join(root, 'skill.json')) || existsSync(join(root, 'SKILL.md'))
+}
+
 async function assembleRuntime(input: {
   options: QiongqiServeRuntimeOptions
   core: CoreRuntime
@@ -978,11 +1058,15 @@ async function assembleRuntime(input: {
     : new TurnOrchestrator(orchOpts)
   const currentCapabilities = () => {
     const config = configStore.snapshot?.() ?? qiongqiConfigFromRuntimeOptions(options)
+    const effectiveCapabilities = withRuntimeMountedSkillRoots(
+      config.capabilities ?? options.capabilities,
+      options.capabilities?.skills.roots ?? []
+    )
     return buildRuntimeCapabilityManifest({
-      config: config.capabilities ?? options.capabilities,
+      config: effectiveCapabilities,
       model: model.modelCapabilities(config.serve?.model ?? options.model),
       mcp: {
-        configuredServers: Object.keys(config.capabilities?.mcp.servers ?? {}).length,
+        configuredServers: Object.keys(effectiveCapabilities?.mcp.servers ?? {}).length,
         connectedServers: tools.mcpProviders.connectedServers,
         toolCount: tools.mcpProviders.toolCount,
         lastError: tools.mcpProviders.diagnostics.find((d) => d.lastError)?.lastError,
@@ -999,7 +1083,7 @@ async function assembleRuntime(input: {
         reason: tools.webProviders.diagnostics.find((d) => d.reason)?.reason
       },
       skills: {
-        configuredRoots: config.capabilities?.skills.roots.length,
+        configuredRoots: effectiveCapabilities?.skills.roots.length,
         discoveredSkills: tools.skillRuntime.count(),
         reason: tools.skillRuntime.diagnostics().validationErrors[0]?.message
       },

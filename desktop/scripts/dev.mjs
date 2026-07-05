@@ -292,29 +292,93 @@ function initDesktopExtensionsConfig(configPath) {
 function syncDesktopPublicSkills(skillsPath) {
   if (!skillsPath) return;
   const publicTarget = join(skillsPath, "public");
-  mkdirSync(publicTarget, { recursive: true });
+  const builtinCoreTarget = join(skillsPath, "builtin", "core");
+  const builtinTaskTarget = join(skillsPath, "builtin", "task");
+  const builtinCodingTarget = join(skillsPath, "builtin", "coding");
 
   // Also create the writable custom/ directory so users can create skills
   // at runtime (mirrors backend.ts initSkills).
   const customTarget = join(skillsPath, "custom");
-  mkdirSync(customTarget, { recursive: true });
+  const customSharedTarget = join(customTarget, "shared");
+  for (const dir of [
+    publicTarget,
+    builtinCoreTarget,
+    builtinTaskTarget,
+    builtinCodingTarget,
+    customSharedTarget,
+  ]) {
+    mkdirSync(dir, { recursive: true });
+  }
 
   const bundledPublic = join(REPO_ROOT, "skills", "public");
-  if (!existsSync(bundledPublic)) {
+  let copiedPublic = 0;
+  let copiedUnified = 0;
+  if (existsSync(bundledPublic)) {
+    for (const name of readdirSync(bundledPublic)) {
+      const src = join(bundledPublic, name);
+      if (!statSync(src).isDirectory()) continue;
+      copiedPublic += copyMissingSkill(src, join(publicTarget, name));
+      if (name === "coding") {
+        copiedUnified += copyMissingChildren(src, builtinCodingTarget);
+        continue;
+      }
+      copiedUnified += copyMissingSkill(
+        src,
+        join(targetForPublicDevSkill(name, {
+          builtinCoreTarget,
+          builtinTaskTarget,
+        }), name),
+      );
+    }
+  } else {
     console.warn(`[dev] bundled skills/public not found at ${bundledPublic}`);
-    return;
   }
 
-  const existing = new Set(readdirSync(publicTarget));
+  const qiongqiSkillRoot = join(QIONGQI_DIR, "skills");
+  let copiedQiongqi = 0;
+  if (existsSync(qiongqiSkillRoot)) {
+    for (const name of readdirSync(qiongqiSkillRoot)) {
+      const src = join(qiongqiSkillRoot, name);
+      if (!statSync(src).isDirectory()) continue;
+      const targetParent = ["goal", "todo", "web"].includes(name)
+        ? builtinCoreTarget
+        : builtinCodingTarget;
+      copiedQiongqi += copyMissingSkill(src, join(targetParent, name));
+    }
+  } else {
+    console.warn(`[dev] qiongqi built-in skills not found at ${qiongqiSkillRoot}`);
+  }
+
+  if (copiedPublic > 0) {
+    console.log(`[dev] synced ${copiedPublic} public skill(s) to ${publicTarget}`);
+  }
+  if (copiedUnified > 0 || copiedQiongqi > 0) {
+    console.log(`[dev] synced ${copiedUnified + copiedQiongqi} skill(s) into unified roots under ${skillsPath}`);
+  }
+}
+
+function targetForPublicDevSkill(name, targets) {
+  if (["bootstrap", "find-skills", "skill-creator", "skill-manage"].includes(name)) {
+    return targets.builtinCoreTarget;
+  }
+  return targets.builtinTaskTarget;
+}
+
+function copyMissingChildren(srcParent, dstParent) {
+  if (!existsSync(srcParent)) return 0;
   let copied = 0;
-  for (const name of readdirSync(bundledPublic)) {
-    if (existing.has(name)) continue;
-    cpSync(join(bundledPublic, name), join(publicTarget, name), { recursive: true });
-    copied++;
+  for (const name of readdirSync(srcParent)) {
+    const src = join(srcParent, name);
+    if (!statSync(src).isDirectory()) continue;
+    copied += copyMissingSkill(src, join(dstParent, name));
   }
-  if (copied > 0) {
-    console.log(`[dev] synced ${copied} public skill(s) to ${publicTarget}`);
-  }
+  return copied;
+}
+
+function copyMissingSkill(src, dst) {
+  if (existsSync(dst)) return 0;
+  cpSync(src, dst, { recursive: true });
+  return 1;
 }
 
 function ensureVendoredQiongqiRuntime() {

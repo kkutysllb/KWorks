@@ -2440,6 +2440,66 @@ describe('HTTP server', () => {
     })
   })
 
+  it('prefers v2 skill diagnostics over legacy skill runtime diagnostics', async () => {
+    const h = buildHarness()
+    h.runtime.skills = () => ({
+      enabled: true,
+      roots: ['/tmp/legacy-skills'],
+      skills: [],
+      validationErrors: [
+        {
+          root: '/tmp/legacy-skills/tdd',
+          message: 'legacy parser rejected v2 manifest'
+        }
+      ],
+      lastActivations: []
+    })
+    h.runtime.skillsV2 = () => ({
+      enabled: true,
+      roots: ['/tmp/v2-skills'],
+      skills: [
+        {
+          id: 'tdd',
+          name: 'TDD',
+          description: 'Write tests first',
+          version: '1.0.0',
+          root: '/tmp/v2-skills/tdd',
+          legacy: false,
+          source: 'official',
+          category: 'development',
+          commands: [],
+          contributions: { chatMenu: [], quickTask: [] },
+          permissions: { workspace: 'write', network: false, exec: 'workspace' },
+          triggers: { commands: ['/tdd'], promptPatterns: [], fileTypes: [] },
+          allowedTools: []
+        }
+      ],
+      validationErrors: [],
+      lastActivations: []
+    })
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/skills', {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(200)
+    const body = await readJson(response) as {
+      roots: string[]
+      skills: Array<{ id: string; root: string; commands?: unknown[] }>
+      validationErrors: unknown[]
+    }
+    expect(body.roots).toEqual(['/tmp/v2-skills'])
+    expect(body.skills.map((skill) => skill.id)).toEqual(['tdd'])
+    expect(body.skills[0]).toMatchObject({
+      root: '/tmp/v2-skills/tdd',
+      commands: []
+    })
+    expect(body.validationErrors).toEqual([])
+  })
+
   it('lists KWorks skill lifecycle entries including built-in management skills', async () => {
     const h = buildHarness()
     h.runtime.skillsV2 = () => ({
