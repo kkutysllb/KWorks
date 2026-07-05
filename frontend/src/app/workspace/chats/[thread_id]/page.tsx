@@ -29,6 +29,10 @@ import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
+import {
+  isCreatePlanCompletionEvent,
+  isCreatePlanToolEnd,
+} from "@/core/threads/plan-mode";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -110,6 +114,14 @@ export default function ChatPage() {
 
   const { showNotification } = useNotification();
 
+  const exitPlanModeAfterPlanSaved = useCallback(() => {
+    if ((settings.context.taskMode ?? "agent") !== "plan") return;
+    setSettings("context", {
+      ...settings.context,
+      taskMode: "agent",
+    });
+  }, [setSettings, settings.context]);
+
   const {
     thread,
     sendMessage,
@@ -131,6 +143,16 @@ export default function ChatPage() {
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       const nextPath = `/workspace/chats/${createdThreadId}`;
       history.replaceState(null, "", nextPath);
+    },
+    onToolEnd: (event) => {
+      if (isCreatePlanToolEnd(event)) {
+        exitPlanModeAfterPlanSaved();
+      }
+    },
+    onQiongqiEvent: (event) => {
+      if (isCreatePlanCompletionEvent(event)) {
+        exitPlanModeAfterPlanSaved();
+      }
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {

@@ -43,6 +43,7 @@ export const PLAN_MODE_INSTRUCTION = [
   'When you understand the task well enough, call the `create_plan` tool to save a complete implementation plan as Markdown.',
   'Use `operation: "draft"` for the first plan, and `operation: "refine"` when revising an existing plan; you may call `create_plan` multiple times as the plan evolves.',
   'Write concrete, actionable steps (summary, implementation steps, tests, risks) rather than vague intentions.',
+  'Do not ask the user to switch modes, click GUI controls, or confirm mode transitions; do not explain GUI mode controls in the user-visible reply.',
   'After saving, give the user a short summary of the plan and what to review.'
 ].join('\n')
 
