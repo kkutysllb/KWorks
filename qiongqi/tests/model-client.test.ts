@@ -373,6 +373,41 @@ describe('DeepseekCompatModelClient', () => {
     expect(body?.tools?.[0]).toMatchObject({ type: 'function' })
   })
 
+  it('enables Z.ai streaming tool calls for GLM tool requests', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(sseStream([
+        { choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] },
+        '[DONE]'
+      ]), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    expect(sentBodies[0]).toMatchObject({
+      stream: true,
+      tool_stream: true
+    })
+    expect(sentBodies[0]?.tools).toEqual([
+      expect.objectContaining({ type: 'function' })
+    ])
+  })
+
   it('folds GLM tool-call history into internal system context to avoid Zhipu messages 1214 errors', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {
@@ -3390,6 +3425,48 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[1]).not.toHaveProperty('reasoning_effort')
     expect(sentBodies[1]).not.toHaveProperty('thinking')
     expect(text).toBe('ok')
+  })
+
+  it('retries generic Zhipu 1214 messages errors without stream usage metadata', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      if (sentBodies.length === 1) {
+        return new Response(
+          JSON.stringify({ error: { code: '1214', message: 'messages 参数非法。请检查文档。' } }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      return new Response(sseStream([
+        { choices: [{ delta: { content: 'retried' } }] },
+        { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } },
+        '[DONE]'
+      ]), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      fetchImpl
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const text = chunks
+      .filter((c) => c.kind === 'assistant_text_delta')
+      .map((c) => (c as { text: string }).text)
+      .join('')
+    expect(sentBodies).toHaveLength(2)
+    expect(sentBodies[0]).toHaveProperty('stream_options')
+    expect(sentBodies[1]).not.toHaveProperty('stream_options')
+    expect(text).toBe('retried')
   })
 
   it('retries without message reasoning_content when an OpenAI-compatible provider rejects it', async () => {

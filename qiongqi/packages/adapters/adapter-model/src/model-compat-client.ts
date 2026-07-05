@@ -411,6 +411,9 @@ export class ModelCompatClient implements ModelClient {
           parameters: tool.inputSchema
         }
       }))
+      if (stream && shouldEnableZaiToolStream(this.config.baseUrl, model)) {
+        body.tool_stream = true
+      }
     }
     return body
   }
@@ -1885,7 +1888,8 @@ function shouldRetryWithoutStreamUsage(
 ): boolean {
   if (status !== 400 && status !== 422) return false
   if (!Object.prototype.hasOwnProperty.call(body, 'stream_options')) return false
-  return /\b(stream_options|include_usage)\b/i.test(text)
+  if (/\b(stream_options|include_usage)\b/i.test(text)) return true
+  return !hasReasoningControlField(body) && isGenericZhipuMessages1214Error(text)
 }
 
 function shouldRetryWithoutReasoningFields(
@@ -1894,12 +1898,18 @@ function shouldRetryWithoutReasoningFields(
   body: Record<string, unknown>
 ): boolean {
   if (status !== 400 && status !== 422) return false
-  const hasReasoningField =
-    Object.prototype.hasOwnProperty.call(body, 'reasoning_effort') ||
-    Object.prototype.hasOwnProperty.call(body, 'thinking')
-  if (!hasReasoningField) return false
+  if (!hasReasoningControlField(body)) return false
   return /\b(reasoning_effort|reasoning_content|thinking|reasoning)\b/i.test(text) ||
-    (/\b1214\b/.test(text) && /参数非法|invalid/i.test(text))
+    isGenericZhipuMessages1214Error(text)
+}
+
+function hasReasoningControlField(body: Record<string, unknown>): boolean {
+  return Object.prototype.hasOwnProperty.call(body, 'reasoning_effort') ||
+    Object.prototype.hasOwnProperty.call(body, 'thinking')
+}
+
+function isGenericZhipuMessages1214Error(text: string): boolean {
+  return /\b1214\b/.test(text) && /messages/i.test(text) && /参数非法|invalid/i.test(text)
 }
 
 function isAzureOpenAiEndpoint(baseUrl: string): boolean {
@@ -1918,6 +1928,10 @@ function thinkingDialectForProvider(baseUrl: string, model: string | undefined):
   if (isMiniMaxProvider(baseUrl, model)) return 'minimax'
   if (isBigModelProvider(baseUrl) && isGlmCodingPlanModel(model)) return 'zai'
   return 'none'
+}
+
+function shouldEnableZaiToolStream(baseUrl: string, model: string | undefined): boolean {
+  return isBigModelProvider(baseUrl) && isGlmCodingPlanModel(model)
 }
 
 function supportsReasoningEffortForProvider(baseUrl: string, model: string | undefined): boolean {
