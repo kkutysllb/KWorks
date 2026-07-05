@@ -449,7 +449,22 @@ function sliceTextCharacters(text: string, length: number): string {
 function qiongqiModeFromContext(
   context: Record<string, unknown>,
 ): "agent" | "plan" | undefined {
+  if (context.mode === "agent" || context.mode === "plan") {
+    return context.mode;
+  }
   return context.is_plan_mode === true ? "plan" : undefined;
+}
+
+function qiongqiModelFromContext(
+  context: Record<string, unknown>,
+): string | undefined {
+  if (typeof context.model === "string" && context.model.trim()) {
+    return context.model.trim();
+  }
+  if (typeof context.model_name === "string" && context.model_name.trim()) {
+    return context.model_name.trim();
+  }
+  return undefined;
 }
 
 function qiongqiReasoningEffortFromContext(
@@ -955,10 +970,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       const requestedWorkModeId = workModeIdFromContext(context);
 
       if (!activeThreadId) {
-        const modelName =
-          typeof context.model_name === "string" && context.model_name.trim()
-            ? context.model_name.trim()
-            : undefined;
+        const modelName = qiongqiModelFromContext(context);
         const newThread = await qiongqiClient.createThread({
           ...(requestedThreadId ? { id: requestedThreadId } : {}),
           ...(workspaceRoot ? { workspace: workspaceRoot } : {}),
@@ -1073,10 +1085,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       }
 
       // Start turn
-      const modelName =
-        typeof context.model_name === "string" && context.model_name.trim()
-          ? context.model_name.trim()
-          : undefined;
+      const modelName = qiongqiModelFromContext(context);
       const result = await qiongqiClient.startTurn(activeThreadId, {
         prompt: text,
         ...(modelName ? { model: modelName } : {}),

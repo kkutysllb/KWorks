@@ -183,7 +183,7 @@ describe("workspace workbench layout", () => {
     );
 
     expect(skillsHooks).toContain("useWorkModes");
-    expect(inputBox).toContain('type TaskMode = "auto" | "agent" | "plan"');
+    expect(inputBox).toContain('type TaskMode = "agent" | "plan"');
     expect(inputBox).toContain(
       'type ExecutionProfile = "fast" | "balanced" | "deep"',
     );
@@ -221,8 +221,9 @@ describe("workspace workbench layout", () => {
     expect(inputBox).toContain("协作策略");
     expect(inputBox).not.toContain("多代理协作");
     expect(hooks).toContain("delete submitContext.sandboxMode");
+    expect(hooks).toContain("qiongqiModeForSubmitContext");
     expect(hooks).toContain(
-      "is_plan_mode: isPlanningTaskMode(submitContext.taskMode)",
+      'is_plan_mode: mode === "plan"',
     );
     expect(hooks).toContain(
       'subagent_enabled: submitContext.collaborationPolicy === "auto"',

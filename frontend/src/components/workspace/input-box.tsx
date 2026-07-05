@@ -82,7 +82,7 @@ import {
 } from "./qiongqi-roi-strip";
 import { Tooltip } from "./tooltip";
 
-type TaskMode = "auto" | "agent" | "plan";
+type TaskMode = "agent" | "plan";
 type ExecutionProfile = "fast" | "balanced" | "deep";
 type CollaborationPolicy = "single" | "auto";
 type QiongQiContext = Omit<
@@ -192,7 +192,7 @@ function contextForWorkMode(
   return {
     ...context,
     workModeId,
-    taskMode: context.taskMode ?? "auto",
+    taskMode: context.taskMode === "plan" ? "plan" : "agent",
     executionProfile:
       workModeId === "coding"
         ? getResolvedExecutionProfile("deep", supportThinking)
@@ -282,7 +282,7 @@ export function InputBox({
     onContextChange?.({
       ...context,
       model_name: nextModelName,
-      taskMode: context.taskMode ?? "auto",
+      taskMode: context.taskMode === "plan" ? "plan" : "agent",
       executionProfile: nextProfile,
       collaborationPolicy: context.collaborationPolicy ?? "single",
       workModeId,
@@ -468,14 +468,14 @@ export function InputBox({
       }
 
       if (resolvedModelName && context.model_name !== resolvedModelName) {
-        const nextContext = {
+        const nextContext: QiongQiContext = {
           ...context,
           model_name: resolvedModelName,
           executionProfile: getResolvedExecutionProfile(
             context.executionProfile,
             selectedModel?.supports_thinking ?? false,
           ),
-          taskMode: context.taskMode ?? "auto",
+          taskMode: context.taskMode === "plan" ? "plan" : "agent",
           collaborationPolicy: context.collaborationPolicy ?? "single",
           workModeId,
         };
@@ -579,7 +579,7 @@ export function InputBox({
               onApprovalPolicySelect={handleApprovalPolicySelect}
             />
             <QiongQiTaskModeMenu
-              taskMode={context.taskMode ?? "auto"}
+              taskMode={context.taskMode === "plan" ? "plan" : "agent"}
               onTaskModeSelect={handleTaskModeSelect}
             />
             <QiongQiCollaborationMenu
@@ -765,14 +765,11 @@ function QiongQiTaskModeMenu({
   taskMode: TaskMode;
   onTaskModeSelect: (mode: TaskMode) => void;
 }) {
-  const modeLabel =
-    taskMode === "auto" ? "自动" : taskMode === "plan" ? "规划" : "执行";
+  const modeLabel = taskMode === "plan" ? "规划" : "执行";
   return (
     <PromptInputActionMenu>
       <PromptInputActionMenuTrigger className="gap-1! px-2!">
-        {taskMode === "auto" ? (
-          <LightbulbIcon className="size-3 text-emerald-500" />
-        ) : taskMode === "plan" ? (
+        {taskMode === "plan" ? (
           <GraduationCapIcon className="size-3 text-violet-500" />
         ) : (
           <ZapIcon className="size-3 text-cyan-500" />
@@ -784,13 +781,6 @@ function QiongQiTaskModeMenu({
           <DropdownMenuLabel className="text-muted-foreground text-xs">
             执行方式
           </DropdownMenuLabel>
-          <ModeMenuItem
-            active={taskMode === "auto"}
-            icon={<LightbulbIcon className="mr-2 size-4 text-emerald-500" />}
-            title="自动"
-            description="默认先生成计划，计划保存后自动进入执行。"
-            onSelect={() => onTaskModeSelect("auto")}
-          />
           <ModeMenuItem
             active={taskMode === "agent"}
             icon={<ZapIcon className="mr-2 size-4 text-cyan-500" />}

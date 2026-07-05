@@ -59,7 +59,7 @@ type SendMessageOptions = {
 type ThreadSubmitContext = LocalSettings["context"] &
   Record<string, unknown> & {
     model_name?: string;
-    taskMode?: "auto" | "agent" | "plan";
+    taskMode?: "agent" | "plan";
     executionProfile?: "fast" | "balanced" | "deep";
     collaborationPolicy?: "single" | "auto";
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
@@ -77,10 +77,19 @@ type StoppableThread<T> = T & {
   stop?: (...args: never[]) => unknown;
 };
 
+function qiongqiModeForSubmitContext(
+  context: ThreadSubmitContext,
+): "agent" | "plan" {
+  if (context.mode === "agent" || context.mode === "plan") {
+    return context.mode;
+  }
+  return isPlanningTaskMode(context.taskMode) ? "plan" : "agent";
+}
+
 function isPlanningTaskMode(
   taskMode: ThreadSubmitContext["taskMode"],
 ): boolean {
-  return taskMode === "plan" || taskMode === "auto";
+  return taskMode === "plan";
 }
 
 function mergeMessages(
@@ -618,21 +627,25 @@ export function useThreadStream({
           sandboxMode?: unknown;
         };
         delete submitContext.sandboxMode;
-        const buildSubmitContext = (targetThreadId: string | undefined) => ({
-          ...submitContext,
-          thinking_enabled: submitContext.executionProfile !== "fast",
-          is_plan_mode: isPlanningTaskMode(submitContext.taskMode),
-          subagent_enabled: submitContext.collaborationPolicy === "auto",
-          reasoning_effort:
-            submitContext.reasoning_effort ??
-            (submitContext.executionProfile === "deep"
-              ? "high"
-              : submitContext.executionProfile === "balanced"
-                ? "medium"
-                : undefined),
-          workModeId: submitContext.workModeId,
-          thread_id: targetThreadId,
-        });
+        const buildSubmitContext = (targetThreadId: string | undefined) => {
+          const mode = qiongqiModeForSubmitContext(submitContext);
+          return {
+            ...submitContext,
+            mode,
+            thinking_enabled: submitContext.executionProfile !== "fast",
+            is_plan_mode: mode === "plan",
+            subagent_enabled: submitContext.collaborationPolicy === "auto",
+            reasoning_effort:
+              submitContext.reasoning_effort ??
+              (submitContext.executionProfile === "deep"
+                ? "high"
+                : submitContext.executionProfile === "balanced"
+                  ? "medium"
+                  : undefined),
+            workModeId: submitContext.workModeId,
+            thread_id: targetThreadId,
+          };
+        };
         let activeThreadId = requestedThreadId;
 
         // Upload files first if any

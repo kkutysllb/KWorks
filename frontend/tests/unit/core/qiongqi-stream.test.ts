@@ -516,9 +516,9 @@ describe("useQiongqiStream /v1 contract", () => {
       root!.render(
         React.createElement(SubmitHarness, {
           context: {
-            is_plan_mode: true,
+            mode: "plan",
             reasoning_effort: "minimal",
-            model_name: "minimax-m2",
+            model: "minimax-m2",
             approvalPolicy: "manual",
             sandboxMode: "danger-full-access",
           },

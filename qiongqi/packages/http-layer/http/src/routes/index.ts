@@ -1002,8 +1002,6 @@ async function defaultModelForActor(runtime: ServerRuntime, actor: AuthActor): P
     if (userModels.activeModel && userModels.profiles[userModels.activeModel]) {
       return userModels.activeModel
     }
-    const firstProfile = Object.keys(userModels.profiles)[0]
-    if (firstProfile) return firstProfile
   }
   return runtime.info().model ?? 'default'
 }

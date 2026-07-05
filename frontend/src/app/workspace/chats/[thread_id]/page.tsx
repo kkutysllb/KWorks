@@ -29,19 +29,9 @@ import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
-import { getCreatePlanCompletionKey } from "@/core/threads/plan-mode";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
-
-const AUTO_PLAN_CONTINUE_PROMPT = "继续按照刚刚保存的计划执行任务。";
-
-type SendThreadMessage = (
-  requestedThreadId: string | undefined,
-  message: PromptInputMessage,
-  extraContext?: Record<string, unknown>,
-  options?: { additionalKwargs?: Record<string, unknown> },
-) => Promise<void>;
 
 export default function ChatPage() {
   const { t } = useI18n();
@@ -57,8 +47,6 @@ export default function ChatPage() {
   >(null);
   const mountedRef = useRef(false);
   const activeThreadIdRef = useRef(threadId);
-  const autoExecutedPlanKeysRef = useRef(new Set<string>());
-  const sendMessageRef = useRef<SendThreadMessage | null>(null);
   useSpecificChatMode();
 
   useEffect(() => {
@@ -127,31 +115,6 @@ export default function ChatPage() {
 
   const { showNotification } = useNotification();
 
-  const taskMode = settings.context.taskMode ?? "auto";
-  const continueAfterAutoPlanSaved = useCallback(
-    (event: unknown) => {
-      if (taskMode !== "auto") return;
-      const planKey = getCreatePlanCompletionKey(event);
-      if (!planKey) return;
-      const activeThreadId = activeThreadIdRef.current;
-      const executionKey = `${activeThreadId ?? "pending"}:${planKey}`;
-      if (autoExecutedPlanKeysRef.current.has(executionKey)) return;
-      const send = sendMessageRef.current;
-      if (!send) return;
-
-      autoExecutedPlanKeysRef.current.add(executionKey);
-      void send(
-        activeThreadId,
-        { text: AUTO_PLAN_CONTINUE_PROMPT, files: [] },
-        { taskMode: "agent" },
-        { additionalKwargs: { hide_from_ui: true } },
-      ).catch(() => {
-        autoExecutedPlanKeysRef.current.delete(executionKey);
-      });
-    },
-    [taskMode],
-  );
-
   const {
     thread,
     sendMessage,
@@ -176,12 +139,6 @@ export default function ChatPage() {
       const nextPath = `/workspace/chats/${createdThreadId}`;
       history.replaceState(null, "", nextPath);
     },
-    onToolEnd: (event) => {
-      continueAfterAutoPlanSaved(event);
-    },
-    onQiongqiEvent: (event) => {
-      continueAfterAutoPlanSaved(event);
-    },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
         let body = "Conversation finished";
@@ -199,8 +156,6 @@ export default function ChatPage() {
       }
     },
   });
-  sendMessageRef.current = sendMessage;
-
   const handleSubmit = useCallback(
     (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
       void sendMessage(threadId, message, submitContext);

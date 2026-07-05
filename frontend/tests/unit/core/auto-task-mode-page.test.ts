@@ -25,9 +25,9 @@ const {
     },
   },
   settingsState: {
-    current: {
-      context: {
-        taskMode: "auto" as "auto" | "agent" | "plan",
+      current: {
+        context: {
+        taskMode: "agent" as "agent" | "plan",
       },
     },
   },
@@ -173,7 +173,7 @@ const successfulQiongqiEvent = {
   },
 };
 
-describe("auto task mode chat page behavior", () => {
+describe("chat page plan event behavior", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
 
@@ -191,7 +191,7 @@ describe("auto task mode chat page behavior", () => {
     };
     settingsState.current = {
       context: {
-        taskMode: "auto",
+        taskMode: "agent",
       },
     };
     setSettingsMock.mockReset();
@@ -219,7 +219,7 @@ describe("auto task mode chat page behavior", () => {
     });
   }
 
-  test("auto mode starts one hidden execution turn after a plan is saved", async () => {
+  test("create_plan completion events do not start hidden execution turns", async () => {
     renderPage();
 
     await act(async () => {
@@ -229,13 +229,7 @@ describe("auto task mode chat page behavior", () => {
       await Promise.resolve();
     });
 
-    expect(sendMessageMock).toHaveBeenCalledTimes(1);
-    expect(sendMessageMock).toHaveBeenCalledWith(
-      "thread-a",
-      { text: "继续按照刚刚保存的计划执行任务。", files: [] },
-      { taskMode: "agent" },
-      { additionalKwargs: { hide_from_ui: true } },
-    );
+    expect(sendMessageMock).not.toHaveBeenCalled();
     expect(setSettingsMock).not.toHaveBeenCalled();
   });
 

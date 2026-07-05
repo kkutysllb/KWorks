@@ -212,7 +212,7 @@ function AutoSubmitHarness({ threadId }: { threadId: string }) {
     threadId,
     context: {
       mode: undefined,
-      taskMode: "auto",
+      taskMode: "auto" as never,
     },
     isMock: false,
   });
@@ -604,7 +604,7 @@ describe("useThreadStream cache bridge", () => {
     expect(submitOptions?.context?.is_plan_mode).toBe(true);
   });
 
-  test("submits auto task mode as an initial planning turn", async () => {
+  test("submits auto task mode as a native agent turn", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -625,9 +625,10 @@ describe("useThreadStream cache bridge", () => {
     });
 
     const submitOptions = submitMock.mock.calls[0]?.[1] as
-      | { context?: { is_plan_mode?: boolean } }
+      | { context?: { is_plan_mode?: boolean; mode?: string } }
       | undefined;
-    expect(submitOptions?.context?.is_plan_mode).toBe(true);
+    expect(submitOptions?.context?.is_plan_mode).toBe(false);
+    expect(submitOptions?.context?.mode).toBe("agent");
   });
 
   test("submits QiongQi execution context into the turn payload", async () => {

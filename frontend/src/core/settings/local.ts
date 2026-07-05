@@ -6,7 +6,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   },
   context: {
     model_name: undefined,
-    taskMode: "auto",
+    taskMode: "agent",
     workModeId: undefined,
     executionProfile: undefined,
     collaborationPolicy: "single",
@@ -35,7 +35,7 @@ export interface LocalSettings {
     | "reasoning_effort"
   > & {
     model_name?: string | undefined;
-    taskMode?: "auto" | "agent" | "plan";
+    taskMode?: "agent" | "plan";
     executionProfile?: "fast" | "balanced" | "deep";
     collaborationPolicy?: "single" | "auto";
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
@@ -47,6 +47,9 @@ function sanitizeGlobalContext(
 ): Partial<LocalSettings["context"]> {
   const next = { ...(context ?? {}) };
   delete next.workspaceRoot;
+  if ((next as { taskMode?: unknown }).taskMode === "auto") {
+    next.taskMode = "agent";
+  }
   return next;
 }
 

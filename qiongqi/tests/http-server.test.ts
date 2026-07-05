@@ -916,6 +916,69 @@ describe('HTTP server', () => {
     expect(turn?.model).toBe('user-zhipu')
   })
 
+  it('does not use the first saved user model profile as a native default when none is active', async () => {
+    const h = buildHarness()
+    const session = await h.runtime.authService?.initialize({
+      email: 'native-unselected-model@example.com',
+      password: 'long-password'
+    })
+    expect(session?.accessToken).toEqual(expect.any(String))
+
+    const createModel = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/models', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${session?.accessToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'user-zhipu-unselected',
+          model: 'glm-5.2',
+          base_url: 'https://open.bigmodel.cn/api/paas/v4',
+          api_key: 'sk-user-zhipu'
+        })
+      })
+    )
+    expect(createModel.status).toBe(201)
+
+    const createThread = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/threads', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${session?.accessToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: 'fallback-model-thread',
+          workspace: '/tmp/project'
+        })
+      })
+    )
+    expect(createThread.status).toBe(201)
+    const thread = await readJson(createThread) as { id: string; model: string }
+    expect(thread.model).toBe('deepseek-chat')
+
+    const startTurn = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/threads/fallback-model-thread/turns', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${session?.accessToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: 'hello'
+        })
+      })
+    )
+    expect(startTurn.status).toBe(202)
+    const start = await readJson(startTurn) as { turnId: string }
+    const turn = await h.turnService.getTurn('fallback-model-thread', start.turnId)
+    expect(turn?.model).toBe('deepseek-chat')
+  })
+
   it('rejects invalid QiongQi config writes', async () => {
     const h = buildHarness()
     const response = await dispatchRequest(
