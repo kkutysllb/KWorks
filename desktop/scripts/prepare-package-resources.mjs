@@ -187,7 +187,11 @@ async function rebuildQiongqiRuntimeForElectron() {
     electronVersion,
     arch: process.arch,
     force: true,
-    onlyModules: ["better-sqlite3"],
+    // better-sqlite3 compiles from source via node-gyp and MUST be rebuilt for
+    // Electron's ABI. sharp uses prebuilt per-platform binaries (@img/sharp-*)
+    // that load directly under ELECTRON_RUN_AS_NODE=1, but we include it here
+    // so @electron/rebuild validates its binding against the runtime too.
+    onlyModules: ["better-sqlite3", "sharp"],
     types: ["prod", "optional"],
     mode: "sequential",
   });

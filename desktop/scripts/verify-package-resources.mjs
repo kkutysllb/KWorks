@@ -83,7 +83,46 @@ function verifyQiongqiRuntimeDirectory() {
   verifyQiongqiRuntimeListing("resources/qiongqi deployed runtime", listing);
   verifyQiongqiRuntimePackageLinks();
   verifyQiongqiRuntimeImport();
+  verifyQiongqiRuntimeSharpBinding();
 }
+
+function verifyQiongqiRuntimeSharpBinding() {
+  // The runtime auto-generates image text fallbacks via sharp, whose native
+  // binding (@img/sharp-<os>-<arch>) must be present in the deployed tree.
+  // A listing-only check is not enough — confirm the binary actually loads and
+  // can decode/encode an image, exactly like the runtime will at request time.
+  const result = spawnSync(
+    process.execPath,
+    ["-e", SHARP_SMOKE_TEST],
+    {
+      cwd: QIONGQI_RUNTIME_DIR,
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  if (result.status !== 0) {
+    fail(
+      "resources/qiongqi deployed sharp native binding",
+      (result.stderr || result.stdout || `node exited with ${result.status}`).trim(),
+    );
+  } else {
+    pass("resources/qiongqi deployed sharp native binding");
+  }
+}
+
+// Inline smoke test: load sharp from the deployed runtime's node_modules and
+// round-trip a 1x1 PNG through resize→webp. Kept as a string so it runs in the
+// staging cwd without needing the verify-sharp.mjs source file deployed.
+const SHARP_SMOKE_TEST = `
+const sharp = require('sharp');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
+sharp(png).resize(2,2).webp().toBuffer().then(b => {
+  if (b.subarray(0,4).toString('ascii') !== 'RIFF' || b.subarray(8,12).toString('ascii') !== 'WEBP') {
+    throw new Error('sharp produced an invalid webp buffer');
+  }
+}).catch(e => { console.error(e.message); process.exit(1); });
+`;
 
 function verifyQiongqiRuntimeListing(label, listing) {
   if (!listing.includes("qiongqi/dist/serve-entry.js")) {
@@ -124,6 +163,18 @@ function verifyQiongqiRuntimeListing(label, listing) {
     );
   } else {
     pass(`${label} excludes dev native build tools`);
+  }
+
+  // sharp's native binding ships as @img/sharp-<os>-<arch>/lib/*.node. At least
+  // one platform binary must be present or image fallback generation breaks.
+  const hasSharpBinary = /@img\/sharp-[a-z0-9-]+\/lib\/[^/]+\.node/.test(listing);
+  if (hasSharpBinary) {
+    pass(`${label} contains sharp native binary (@img/sharp-*)`);
+  } else {
+    fail(
+      `${label} contains sharp native binary (@img/sharp-*)`,
+      "No @img/sharp-*/lib/*.node entry found; sharp prebuilt dependency is missing",
+    );
   }
 }
 

@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r run typecheck",
     "prepare:sqlite": "node scripts/prepare-sqlite.mjs",
     "verify:sqlite": "pnpm --filter @qiongqi/adapter-storage exec node ../../../scripts/verify-sqlite.mjs",
+    "verify:sharp": "pnpm --filter @qiongqi/attachments exec node ../../../scripts/verify-sharp.mjs",
     "verify:evented-a2a": "node scripts/verify-evented-a2a.mjs --port-a 0 --port-b 0"
   },
   "devDependencies": {

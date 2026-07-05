@@ -3,3 +3,21 @@ packages:
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+  sharp: true
+# sharp ships platform-specific prebuilt binaries as optional dependencies
+# (@img/sharp-<os>-<arch>, @img/sharp-libvips-<os>-<arch>). The desktop runtime
+# tarball is built once and shipped to all platforms, so we resolve optional
+# deps for every target OS/arch here — `pnpm deploy` then materializes them all.
+supportedArchitectures:
+  os:
+    - current
+    - linux
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+  libc:
+    - current
+    - glibc
+    - musl

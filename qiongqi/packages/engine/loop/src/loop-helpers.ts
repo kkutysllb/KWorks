@@ -13,6 +13,7 @@ import type { ThreadGoal, ThreadTodoList } from '@qiongqi/contracts'
 import { CREATE_PLAN_TOOL_NAME } from '@qiongqi/adapter-tools'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '@qiongqi/adapter-tools'
 import { TODO_LIST_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '@qiongqi/adapter-tools'
+import { isImageMimeType } from '@qiongqi/attachments'
 import type { AttachmentContent } from '@qiongqi/attachments'
 import type {
   ModelInputAttachment,
@@ -252,6 +253,22 @@ export function buildTextAttachmentFallback(
       ...(fallback.width ? { width: fallback.width } : {}),
       ...(fallback.height ? { height: fallback.height } : {}),
       ...(fallback.wasCompressed !== undefined ? { wasCompressed: fallback.wasCompressed } : {})
+    }
+  }
+
+  // Non-image files (PDF/ZIP/text/Office/...) are never inlined as base64:
+  // the raw bytes routinely exceed the fallback byte limit and base64-encoding
+  // a binary document only pollutes the prompt. The model is expected to read
+  // the file content on demand via tool calls / artifacts. We surface metadata
+  // only, with an empty dataBase64 so the formatter can omit the base64 block.
+  if (!isImageMimeType(attachment.mimeType)) {
+    return {
+      id: attachment.id,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      dataBase64: '',
+      byteSize: attachment.byteSize,
+      wasCompressed: false
     }
   }
 

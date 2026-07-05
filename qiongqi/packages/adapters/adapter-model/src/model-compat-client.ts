@@ -2356,6 +2356,18 @@ function attachTextFallbacksToLatestUserMessage(
 function formatAttachmentTextFallback(
   attachment: NonNullable<ModelRequest['attachmentTextFallbacks']>[number]
 ): string {
+  const isImage = attachment.mimeType.toLowerCase().startsWith('image/')
+  // Non-image files and image fallbacks with no inlined bytes surface as a
+  // metadata-only block; the model reads the file content via tools/artifacts.
+  if (!isImage || !attachment.dataBase64) {
+    return [
+      '[Attached file]',
+      `Name: ${attachment.name}`,
+      `MIME: ${attachment.mimeType}`,
+      `Bytes: ${attachment.byteSize}`,
+      '[/Attached file]'
+    ].join('\n')
+  }
   return [
     '[Attached image as base64 text]',
     `Name: ${attachment.name}`,

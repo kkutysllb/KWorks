@@ -41,6 +41,7 @@ import type { ContextCompactionConfig } from './model-context-profile.js'
 import { modelCapabilitiesForModel } from './model-context-profile.js'
 import type { SkillRuntime } from '@qiongqi/skills'
 import type { SkillPluginHost, WorkModeInfo } from '@qiongqi/skills'
+import { isImageMimeType } from '@qiongqi/attachments'
 import type { AttachmentStore, AttachmentContent } from '@qiongqi/attachments'
 import type { MemoryStore } from '@qiongqi/memory'
 import type { UserInputResolution } from '@qiongqi/ports'
@@ -564,7 +565,11 @@ export class PromptBuilder {
         threadId: input.threadId,
         workspace: input.workspace
       })
-      if (supportsImageInput) {
+      // Only genuine images can be sent as image_url parts. Non-image files
+      // (PDF/ZIP/text/Office/...) are always routed to the text-fallback path,
+      // even when the model supports image input — providers reject non-image
+      // bytes in image_url slots.
+      if (supportsImageInput && isImageMimeType(attachment.mimeType)) {
         imageAttachments.push({
           id: attachment.id,
           name: attachment.name,
