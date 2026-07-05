@@ -419,7 +419,7 @@ function buildAvailableSkillsInstruction(
     `Available Skills${workModeId ? ` for work mode "${workModeId}"` : ''}:`,
     'These are installed skill instruction packages available in the current work mode. Skills are not direct tool calls; use this list to understand what specialized workflows you can apply, and do not say no skills are installed merely because they are not listed as tools.',
     roots.length ? `Configured skill roots: ${roots.map((root) => resolve(root)).join(', ')}` : 'Configured skill roots: none',
-    'When the user asks about installed, newly created, or available skills, answer from this runtime skill catalog and the configured skill roots. Do not search the current project workspace to discover installed skills.',
+    'When the user asks about installed, newly created, available skills, or what skills you can call or use, answer from this runtime skill catalog and the configured skill roots before discussing built-in tools. Do not search the current project workspace to discover installed skills.',
     ''
   ]
   let bytes = Buffer.byteLength(lines.join('\n'), 'utf8')

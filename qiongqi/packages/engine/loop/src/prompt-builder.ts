@@ -365,11 +365,13 @@ export class PromptBuilder {
     }
     if (toolCatalogDrift.kind === 'breaking') return { kind: 'stop' }
     const toolKinds = new Map(toolSpecs.map((tool) => [tool.name, tool.toolKind]))
-    const createPlanSatisfied = planTurnActive
+    const runtimeCatalogQuestion = isRuntimeCatalogQuestion(turn?.prompt ?? '')
+    const planArtifactRequired = planTurnActive && !runtimeCatalogQuestion
+    const createPlanSatisfied = planArtifactRequired
       ? hasSuccessfulCreatePlanResult(healed.items, turnId)
       : false
     const requiredToolName =
-      planTurnActive &&
+      planArtifactRequired &&
       !createPlanSatisfied &&
       toolSpecs.some((tool) => tool.name === CREATE_PLAN_TOOL_NAME)
         ? CREATE_PLAN_TOOL_NAME
@@ -956,4 +958,24 @@ function currentWorkModeInstruction(workMode: WorkModeInfo | undefined): string 
     ...(workMode.description ? [`- description: ${workMode.description}`] : []),
     'Treat this as the user-selected work mode and single-agent runtime for this turn. Its bound skills and task orchestration define how this qiongqi classic-mode step should run. If asked about the current work mode, answer from this runtime context instead of searching workspace files.'
   ].join('\n')
+}
+
+function isRuntimeCatalogQuestion(prompt: string): boolean {
+  const text = prompt.trim().toLowerCase()
+  if (!text) return false
+  const compact = text.replace(/\s+/g, '')
+  const asksWorkMode =
+    (/\bwork\s*mode\b/.test(text) &&
+      /\b(what|which|current|selected|using|am i|where)\b/.test(text)) ||
+    (/工作模式|当前模式|运行模式/.test(compact) &&
+      /当前|现在|哪种|哪个|什么|处于|使用|所在/.test(compact))
+  const asksSkills =
+    (/\bskills?\b/.test(text) &&
+      /\b(what|which|available|installed|enabled|call|use|using|can)\b/.test(text)) ||
+    (/技能/.test(compact) && /有哪些|可用|安装|启用|调用|使用|能用|识别/.test(compact))
+  const asksTools =
+    (/\btools?\b/.test(text) &&
+      /\b(what|which|available|enabled|call|use|using|can)\b/.test(text)) ||
+    (/工具/.test(compact) && /有哪些|可用|启用|调用|使用|能用|识别/.test(compact))
+  return asksWorkMode || asksSkills || asksTools
 }

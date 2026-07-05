@@ -176,6 +176,7 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain('TDD (tdd)')
     expect(joined).not.toContain('Legacy (legacy)')
     expect(joined).toContain('not direct tool calls')
+    expect(joined).toContain('what skills you can call or use')
   })
 
   it('tells the model to discover installed skills from configured skill roots, not the workspace', async () => {

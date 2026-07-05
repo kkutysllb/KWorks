@@ -6,6 +6,7 @@ import { QiongqiCapabilitiesConfig } from '@qiongqi/contracts'
 import { createThreadRecord } from '@qiongqi/domain'
 import type { ModelClient, ModelRequest } from '@qiongqi/ports'
 import { SkillPluginHost } from '@qiongqi/skills'
+import { buildDefaultLocalTools } from '@qiongqi/adapter-tools'
 import { bootstrapThread, makeHarness } from './loop-test-harness.js'
 
 describe('work mode skill runtime filtering', () => {
@@ -71,7 +72,10 @@ describe('work mode skill runtime filtering', () => {
         yield { kind: 'completed', stopReason: 'stop' }
       }
     }
-    const h = makeHarness(model, { skillPluginHost })
+    const h = makeHarness(model, {
+      skillPluginHost,
+      tools: buildDefaultLocalTools()
+    })
     await bootstrapThread(h, {
       workspace: root,
       request: { prompt: 'please use the shared trigger', workModeId: 'coding' }
@@ -96,7 +100,10 @@ describe('work mode skill runtime filtering', () => {
         yield { kind: 'completed', stopReason: 'stop' }
       }
     }
-    const h = makeHarness(model, { skillPluginHost })
+    const h = makeHarness(model, {
+      skillPluginHost,
+      tools: buildDefaultLocalTools()
+    })
     await bootstrapThread(h, {
       workspace: root,
       request: { prompt: 'what skills are available?', workModeId: 'coding' }
@@ -109,6 +116,41 @@ describe('work mode skill runtime filtering', () => {
     expect(joinedInstructions).toContain('Coding Skill (coding-skill)')
     expect(joinedInstructions).not.toContain('Task Skill (task-skill)')
     expect((await h.turns.getTurn(h.threadId, h.turnId))?.activeSkillIds).toEqual([])
+  })
+
+  it('does not force create_plan for work mode and skill catalog questions in plan execution mode', async () => {
+    const skillPluginHost = await SkillPluginHost.create(config().skills)
+    let seenRequest: ModelRequest | undefined
+    const model: ModelClient = {
+      provider: 'fake',
+      model: 'fake',
+      async *stream(request) {
+        seenRequest = request
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const h = makeHarness(model, {
+      skillPluginHost,
+      tools: buildDefaultLocalTools()
+    })
+    await bootstrapThread(h, {
+      workspace: root,
+      request: {
+        prompt: '我现在在哪种工作模式？有哪些技能可以调用？',
+        mode: 'plan',
+        workModeId: 'coding'
+      }
+    })
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    const joinedInstructions = seenRequest?.contextInstructions?.join('\n') ?? ''
+    expect(seenRequest?.requiredToolName).toBeUndefined()
+    expect(joinedInstructions).toContain('Current Work Mode')
+    expect(joinedInstructions).toContain('id: coding')
+    expect(joinedInstructions).toContain('Available Skills')
+    expect(joinedInstructions).toContain('Coding Skill (coding-skill)')
+    expect(joinedInstructions).not.toContain('Task Skill (task-skill)')
   })
 
   it('tells the model which work mode is currently selected', async () => {
