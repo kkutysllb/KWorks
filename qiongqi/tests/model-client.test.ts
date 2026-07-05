@@ -372,6 +372,232 @@ describe('DeepseekCompatModelClient', () => {
     expect(body?.tools?.[0]).toMatchObject({ type: 'function' })
   })
 
+  it('folds GLM tool-call history into internal system context to avoid Zhipu messages 1214 errors', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'glm-tool-history',
+      model: 'glm-5.2',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ]
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.history = [
+      makeToolCallItem({
+        id: 'call_failed_bash',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_failed_bash',
+        toolName: 'bash',
+        arguments: { command: 'ls missing-file' }
+      }),
+      makeToolResultItem({
+        id: 'result_failed_bash',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_failed_bash',
+        toolName: 'bash',
+        output: {
+          command: 'ls missing-file',
+          exit_code: 1,
+          output: 'ls: missing-file: No such file or directory'
+        },
+        isError: true
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    expect(messages.some((message) => message.role === 'tool')).toBe(false)
+    expect(JSON.stringify(messages)).not.toContain('"tool_calls"')
+    expect(JSON.stringify(messages)).not.toContain('Tool bash failed')
+    expect(JSON.stringify(messages)).not.toContain('Arguments:')
+    expect(messages.some((message) =>
+      message.role === 'system' &&
+      String(message.content).includes('<qiongqi_internal_tool_context>') &&
+      String(message.content).includes('status: failed')
+    )).toBe(true)
+  })
+
+  it('folds GLM tool history that is kept after compaction into internal system context', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'glm-compacted-tool-history',
+      model: 'glm-5.2',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ]
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.history = [
+      makeCompactionItem({
+        id: 'compaction_1',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        summary: 'Older tool work was summarized.',
+        replacedTokens: 123,
+        pinnedConstraints: []
+      }),
+      makeToolResultItem({
+        id: 'orphan_result',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_read',
+        toolName: 'read',
+        output: { path: 'README.md', content: 'earlier output' }
+      }),
+      makeToolCallItem({
+        id: 'call_bash',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_bash',
+        toolName: 'bash',
+        arguments: { command: 'sed -n 1,20p README.md' }
+      }),
+      makeAssistantTextItem({
+        id: 'bridge_text',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'Checking the final file shape.',
+        status: 'completed'
+      }),
+      makeToolResultItem({
+        id: 'result_bash',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_bash',
+        toolName: 'bash',
+        output: {
+          command: 'sed -n 1,20p README.md',
+          exit_code: 0,
+          output: '# README'
+        }
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    expect(messages.some((message) => message.role === 'tool')).toBe(false)
+    expect(JSON.stringify(messages)).not.toContain('"tool_calls"')
+    expect(String(messages[0]?.content)).toContain('Older tool work was summarized')
+    expect(JSON.stringify(messages)).not.toContain('Tool bash returned')
+    expect(JSON.stringify(messages)).not.toContain('Arguments:')
+    expect(JSON.stringify(messages)).toContain('<qiongqi_internal_tool_context>')
+    expect(JSON.stringify(messages)).toContain('assistant_preface:')
+    expect(JSON.stringify(messages)).toContain('Checking the final file shape.')
+    expect(messages.at(-1)).toMatchObject({ role: 'user', content: 'Continue.' })
+  })
+
+  it('strips persisted legacy folded GLM tool history from assistant text before sending context', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'glm-persisted-tool-leak',
+      model: 'glm-5.2',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ]
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'k',
+      model: 'glm-5.2',
+      endpointFormat: 'chat_completions',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.history = [
+      makeAssistantTextItem({
+        id: 'leaked_assistant_text',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: [
+          'I checked the repository.',
+          '',
+          'Tool bash returned.',
+          'Arguments: {"command":"ls"}',
+          'Result:',
+          '```',
+          '{"output":"README.md"}',
+          '```',
+          '',
+          'The project has a README.'
+        ].join('\n'),
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const body = JSON.stringify(sentBodies[0]?.messages ?? [])
+    expect(body).toContain('I checked the repository.')
+    expect(body).toContain('The project has a README.')
+    expect(body).not.toContain('Tool bash returned')
+    expect(body).not.toContain('Arguments:')
+    expect(body).not.toContain('"command":"ls"')
+    expect(body).not.toContain('"output":"README.md"')
+  })
+
   it('folds mutable system history into the initial system message for GLM OpenAI-compatible requests', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {

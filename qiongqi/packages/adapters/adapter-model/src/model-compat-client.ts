@@ -521,7 +521,8 @@ export class ModelCompatClient implements ModelClient {
     )
     out.push(...this.itemsToMessages(
       repairedItems,
-      thinkingMode
+      thinkingMode,
+      { foldToolHistory: isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) }
     ))
     if (request.attachments?.length) {
       attachImagesToLatestUserMessage(out, request.attachments)
@@ -535,7 +536,11 @@ export class ModelCompatClient implements ModelClient {
       : normalized
   }
 
-  private itemsToMessages(items: TurnItem[], thinkingMode: boolean): ChatMessage[] {
+  private itemsToMessages(
+    items: TurnItem[],
+    thinkingMode: boolean,
+    options: { foldToolHistory?: boolean } = {}
+  ): ChatMessage[] {
     const out: ChatMessage[] = []
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index]
@@ -556,7 +561,7 @@ export class ModelCompatClient implements ModelClient {
         continue
       }
       if (item?.kind === 'tool_call') {
-        const block = this.toolCallBlockToMessages(items, index, thinkingMode)
+        const block = this.toolCallBlockToMessages(items, index, thinkingMode, options)
         if (block) {
           out.push(...block.messages)
           index = block.nextIndex - 1
@@ -564,7 +569,7 @@ export class ModelCompatClient implements ModelClient {
         continue
       }
       if (item?.kind === 'tool_result') continue
-      const message = this.itemToMessage(item, thinkingMode)
+      const message = this.itemToMessage(item, thinkingMode, options)
       if (message) out.push(message)
     }
     return out
@@ -573,7 +578,8 @@ export class ModelCompatClient implements ModelClient {
   private toolCallBlockToMessages(
     items: TurnItem[],
     startIndex: number,
-    thinkingMode: boolean
+    thinkingMode: boolean,
+    options: { foldToolHistory?: boolean } = {}
   ): { messages: ChatMessage[]; nextIndex: number } | null {
     const calls: Extract<TurnItem, { kind: 'tool_call' }>[] = []
     let index = startIndex
@@ -587,6 +593,7 @@ export class ModelCompatClient implements ModelClient {
     const expectedCallIds = new Set(calls.map((call) => call.callId))
     const seenResultIds = new Set<string>()
     const resultMessages: ChatMessage[] = []
+    const resultItems: Extract<TurnItem, { kind: 'tool_result' }>[] = []
     const assistantText: string[] = []
     const reasoningText: string[] = []
     let bridgeIndex = startIndex - 1
@@ -608,6 +615,7 @@ export class ModelCompatClient implements ModelClient {
         sawResult = true
         if (expectedCallIds.has(item.callId) && !seenResultIds.has(item.callId)) {
           seenResultIds.add(item.callId)
+          resultItems.push(item)
           resultMessages.push(this.toolResultToMessage(item))
         }
         index += 1
@@ -629,6 +637,17 @@ export class ModelCompatClient implements ModelClient {
 
     if (![...expectedCallIds].every((callId) => seenResultIds.has(callId))) {
       return null
+    }
+    if (options.foldToolHistory) {
+      return {
+        messages: [
+          {
+            role: 'system',
+            content: formatFoldedToolHistoryMessage(calls, resultItems, assistantText)
+          }
+        ],
+        nextIndex: index
+      }
     }
     return {
       messages: [
@@ -661,14 +680,18 @@ export class ModelCompatClient implements ModelClient {
     }
   }
 
-  private itemToMessage(item: TurnItem, thinkingMode: boolean): ChatMessage | null {
+  private itemToMessage(
+    item: TurnItem,
+    thinkingMode: boolean,
+    options: { foldToolHistory?: boolean } = {}
+  ): ChatMessage | null {
     switch (item.kind) {
       case 'user_message':
         return { role: 'user', content: item.text }
       case 'assistant_text':
         return {
           role: 'assistant',
-          content: item.text,
+          content: options.foldToolHistory ? stripLegacyFoldedToolHistory(item.text) : item.text,
           ...(thinkingMode ? { reasoning_content: ' ' } : {})
         }
       case 'assistant_reasoning':
@@ -1955,6 +1978,81 @@ function toolResultContent(output: unknown): string {
   return JSON.stringify(output) ?? ''
 }
 
+function formatFoldedToolHistoryMessage(
+  calls: Extract<TurnItem, { kind: 'tool_call' }>[],
+  results: Extract<TurnItem, { kind: 'tool_result' }>[],
+  assistantText: string[]
+): string {
+  const sections: string[] = []
+  const intro = assistantText.map((text) => text.trim()).filter(Boolean).join('\n')
+  sections.push('<qiongqi_internal_tool_context>')
+  sections.push('purpose: historical tool result for model context only')
+  sections.push('instruction: do not quote, summarize, or repeat this block in the user-facing answer')
+  if (intro) sections.push(['assistant_preface:', intro].join('\n'))
+  for (const call of calls) {
+    const result = results.find((item) => item.callId === call.callId)
+    const status = result?.isError ? 'failed' : 'returned'
+    const args = JSON.stringify(call.arguments) ?? '{}'
+    const output = result ? toolResultContent(result.output) : ''
+    sections.push([
+      'tool_result:',
+      `tool: ${call.toolName}`,
+      `call_id: ${call.callId}`,
+      `status: ${status}`,
+      `arguments_json: ${args}`,
+      output ? `result:\n${output}` : 'result:'
+    ].join('\n'))
+  }
+  sections.push('</qiongqi_internal_tool_context>')
+  return sections.join('\n\n')
+}
+
+function stripLegacyFoldedToolHistory(text: string): string {
+  if (!text.includes('Tool ') || !text.includes('Arguments:') || !text.includes('Result:')) return text
+  const lines = text.split('\n')
+  const out: string[] = []
+  let index = 0
+  while (index < lines.length) {
+    const line = lines[index] ?? ''
+    const next = lines[index + 1] ?? ''
+    if (isLegacyFoldedToolHeader(line) && next.trimStart().startsWith('Arguments:')) {
+      index += 2
+      if ((lines[index] ?? '').trim() === 'Result:') {
+        index += 1
+        if ((lines[index] ?? '').trim() === '```') {
+          index += 1
+          while (index < lines.length && (lines[index] ?? '').trim() !== '```') {
+            index += 1
+          }
+          if (index < lines.length) index += 1
+        } else {
+          while (index < lines.length) {
+            const current = lines[index] ?? ''
+            const following = lines[index + 1] ?? ''
+            if (!current.trim()) break
+            if (isLegacyFoldedToolHeader(current) && following.trimStart().startsWith('Arguments:')) break
+            index += 1
+          }
+        }
+      }
+      while (index < lines.length && !(lines[index] ?? '').trim()) {
+        index += 1
+      }
+      if (out.length > 0 && out[out.length - 1]?.trim() && index < lines.length) {
+        out.push('')
+      }
+      continue
+    }
+    out.push(line)
+    index += 1
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function isLegacyFoldedToolHeader(line: string): boolean {
+  return /^Tool [A-Za-z0-9_.-]+ (returned|failed)\.$/.test(line.trim())
+}
+
 function reasoningFromMessage(message: ChatCompletionResponse['choices'][number]['message'] | undefined): string {
   if (!message) return ''
   const value = message.reasoning_content ??
@@ -2035,13 +2133,17 @@ function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
   }
 
   if (systemContent.length === 0) return nonSystemMessages
-  return [
-    {
-      role: 'system',
-      content: systemContent.join('\n\n')
-    },
-    ...nonSystemMessages
-  ]
+  const systemMessage: ChatMessage = {
+    role: 'system',
+    content: systemContent.join('\n\n')
+  }
+  if (nonSystemMessages.length === 0) {
+    return [
+      systemMessage,
+      { role: 'user', content: 'Continue.' }
+    ]
+  }
+  return [systemMessage, ...nonSystemMessages]
 }
 
 function chatMessageTextContent(content: ChatMessage['content']): string {
