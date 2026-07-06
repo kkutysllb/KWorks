@@ -353,8 +353,9 @@ function ArtifactContentState({
         : "文件内容加载失败";
   const detail =
     state === "error"
-      ? error?.message || "请确认文件仍在当前任务工作区内。"
+      ? (error?.message ?? "请确认文件仍在当前任务工作区内。")
       : filename;
+  const hasAction = Boolean(onOpen ?? onDownload);
 
   return (
     <div className="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -369,7 +370,7 @@ function ArtifactContentState({
         <p className="text-foreground text-sm font-medium">{message}</p>
         <p className="max-w-md text-xs [overflow-wrap:anywhere]">{detail}</p>
       </div>
-      {state === "error" && (onOpen || onDownload) && (
+      {state === "error" && hasAction && (
         <div className="flex flex-wrap items-center justify-center gap-2">
           {onOpen && (
             <Button size="sm" variant="outline" onClick={onOpen}>

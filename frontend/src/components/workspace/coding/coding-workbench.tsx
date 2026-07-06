@@ -16,7 +16,6 @@ import {
   GitBranchIcon,
   GitCompareIcon,
   GitCommitHorizontalIcon,
-  PackageOpenIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PanelRightCloseIcon,
@@ -103,7 +102,6 @@ import { AgentPanel } from "./agent-panel";
 import { CodeViewer } from "./code-viewer";
 import { CodingDiffPanel } from "./coding-diff-panel";
 import { CodingErrorBoundary } from "./coding-error-boundary";
-import { CodingResultsPanel } from "./coding-results-panel";
 import { CodingTaskChangesPanel } from "./coding-task-changes-panel";
 import { FileExplorer } from "./file-explorer";
 import { ReviewPanel } from "./review-panel";
@@ -192,7 +190,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
     }
   }, [agentThreadId, threadIdStorageKey]);
   const codingThreadId = agentThreadId ?? "";
-  const resultsThreadId = codingThreadId;
   const { changes: historicalChanges } =
     useCodingSessionChanges(codingThreadId);
   const { review } = useLatestCodingReview(codingThreadId);
@@ -234,10 +231,10 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   };
 
   const [activeCodeTab, setActiveCodeTab] = useState<
-    "code" | "task-changes" | "diff" | "results" | "review"
+    "code" | "task-changes" | "diff" | "review"
   >("code");
   const [workbenchView, setWorkbenchView] = useState<
-    "code" | "task-changes" | "diff" | "results" | "review"
+    "code" | "task-changes" | "diff" | "review"
   >("code");
   const [activeInspectorTab, setActiveInspectorTab] = useState<
     "agent" | "events" | "session" | "workflow" | "skills"
@@ -261,6 +258,11 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   const [terminalTabs, setTerminalTabs] = useState<EmbeddedTerminalTab[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const terminalWritersRef = useRef(new Map<string, (data: string) => void>());
+  const [terminalHeight, setTerminalHeight] = useState(
+    typeof window !== "undefined"
+      ? Math.max(220, Math.round(window.innerHeight * 0.3))
+      : 280,
+  );
 
   useEffect(() => {
     const unsubscribeData = onEmbeddedTerminalData((event) => {
@@ -357,6 +359,37 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
     };
 
     document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize, { once: true });
+  };
+
+  const startTerminalResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = terminalHeight;
+    const minHeight = 160;
+    const maxHeight = Math.max(minHeight, Math.round(window.innerHeight * 0.8));
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      // Dragging the handle up grows the terminal: delta is negative when
+      // moving toward the top of the viewport.
+      const delta = startY - moveEvent.clientY;
+      const nextHeight = Math.min(
+        maxHeight,
+        Math.max(minHeight, startHeight + delta),
+      );
+      setTerminalHeight(nextHeight);
+    };
+
+    const stopResize = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", stopResize, { once: true });
@@ -463,13 +496,11 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   };
 
   const handleSelectWorkbenchTab = (
-    tab: "code" | "task-changes" | "diff" | "results" | "review",
+    tab: "code" | "task-changes" | "diff" | "review",
   ) => {
     setActiveCodeTab(tab);
     setWorkbenchView(tab);
-    if (tab !== "results") {
-      openWorkbenchPane();
-    }
+    openWorkbenchPane();
   };
 
   const handleCommit = async () => {
@@ -538,8 +569,8 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
     <ArtifactsProvider>
       <div className="flex size-full min-h-0 flex-col">
         {/* Header bar */}
-        <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-1.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             <Link
               href="/workspace/coding"
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
@@ -558,26 +589,15 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
               </div>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="text-muted-foreground hidden max-w-xs truncate font-mono text-xs sm:inline">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+            <span className="text-muted-foreground hidden max-w-[18ch] truncate font-mono text-xs xl:inline 2xl:max-w-[28ch]">
               {project.path}
             </span>
-            <span className="text-muted-foreground hidden text-xs lg:inline">
-              Ctrl+B 切换侧边栏
-            </span>
-          </div>
-        </div>
-
-        {/* Three-panel resizable layout */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div
-            className="flex h-11 shrink-0 items-center gap-3 overflow-x-auto border-b px-3"
-            data-testid="coding-workbench-toolbar"
-          >
             <div
-              className="bg-muted text-muted-foreground mr-auto inline-flex h-8 w-fit shrink-0 items-center justify-center rounded-md p-1"
+              className="bg-muted text-muted-foreground inline-flex h-7 w-fit max-w-full shrink-0 items-center justify-center rounded-md p-0.5"
               role="tablist"
               aria-label="代码区视图"
+              data-testid="coding-workbench-toolbar"
             >
               <WorkbenchToolbarButton
                 active={activeCodeTab === "code"}
@@ -589,24 +609,21 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 active={activeCodeTab === "task-changes"}
                 icon={<GitCompareIcon className="h-3 w-3" />}
                 label="任务变更"
+                shortLabel="变更"
                 onClick={() => handleSelectWorkbenchTab("task-changes")}
               />
               <WorkbenchToolbarButton
                 active={activeCodeTab === "diff"}
                 icon={<GitCompareIcon className="h-3 w-3" />}
                 label="项目 Diff"
+                shortLabel="Diff"
                 onClick={() => handleSelectWorkbenchTab("diff")}
-              />
-              <WorkbenchToolbarButton
-                active={activeCodeTab === "results"}
-                icon={<PackageOpenIcon className="h-3 w-3" />}
-                label="结果"
-                onClick={() => handleSelectWorkbenchTab("results")}
               />
               <WorkbenchToolbarButton
                 active={activeCodeTab === "review"}
                 icon={<ClipboardCheckIcon className="h-3 w-3" />}
                 label="Code Review"
+                shortLabel="Review"
                 onClick={() => handleSelectWorkbenchTab("review")}
               />
             </div>
@@ -634,6 +651,10 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
               <PlusIcon className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+
+        {/* Three-panel resizable layout */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="mt-0 flex min-h-0 flex-1 overflow-hidden">
             <div className="relative flex size-full min-w-0 overflow-hidden">
               {showFloatingPanels && (
@@ -790,9 +811,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                                 onFocusFile={focusWorkbenchFile}
                               />
                             )}
-                          {workbenchView === "results" && showWorkbenchPane && (
-                            <CodingResultsPanel threadId={resultsThreadId} />
-                          )}
                           {workbenchView === "review" && showWorkbenchPane && (
                             <ReviewPanel
                               projectId={projectId}
@@ -819,27 +837,41 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
             </div>
           </div>
           {terminalOpen && (
-            <EmbeddedTerminalTabsPanel
-              activeId={activeTerminalId}
-              tabs={terminalTabs}
-              onActivate={setActiveTerminalId}
-              onAdd={() => void handleOpenTerminal()}
-              onClose={() => void handleCloseTerminalPanel()}
-              onCloseTab={(sessionId) => void handleCloseTerminalTab(sessionId)}
-              onCopyPath={() => void handleCopyTerminalPath()}
-              onRegisterWriter={(sessionId, writer) => {
-                terminalWritersRef.current.set(sessionId, writer);
-              }}
-              onResize={(sessionId, cols, rows) =>
-                void resizeEmbeddedTerminal(sessionId, cols, rows)
-              }
-              onUnregisterWriter={(sessionId) => {
-                terminalWritersRef.current.delete(sessionId);
-              }}
-              onWrite={(sessionId, data) =>
-                void writeEmbeddedTerminal(sessionId, data)
-              }
-            />
+            <>
+              <div
+                onPointerDown={startTerminalResize}
+                className="group bg-border/40 hover:bg-border relative h-1.5 shrink-0 cursor-row-resize transition-colors"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="调整终端高度"
+              >
+                <div className="bg-border/60 absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
+              <EmbeddedTerminalTabsPanel
+                activeId={activeTerminalId}
+                tabs={terminalTabs}
+                onActivate={setActiveTerminalId}
+                onAdd={() => void handleOpenTerminal()}
+                onClose={() => void handleCloseTerminalPanel()}
+                onCloseTab={(sessionId) =>
+                  void handleCloseTerminalTab(sessionId)
+                }
+                onCopyPath={() => void handleCopyTerminalPath()}
+                onRegisterWriter={(sessionId, writer) => {
+                  terminalWritersRef.current.set(sessionId, writer);
+                }}
+                onResize={(sessionId, cols, rows) =>
+                  void resizeEmbeddedTerminal(sessionId, cols, rows)
+                }
+                onUnregisterWriter={(sessionId) => {
+                  terminalWritersRef.current.delete(sessionId);
+                }}
+                onWrite={(sessionId, data) =>
+                  void writeEmbeddedTerminal(sessionId, data)
+                }
+                height={terminalHeight}
+              />
+            </>
           )}
         </div>
       </div>
@@ -911,17 +943,20 @@ function WorkbenchToolbarButton({
   icon,
   label,
   onClick,
+  shortLabel,
 }: {
   active: boolean;
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  shortLabel?: string;
 }) {
   return (
     <button
+      aria-label={label}
       aria-selected={active}
       className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-sm px-2 text-xs font-medium whitespace-nowrap transition-colors",
+        "inline-flex h-6 min-w-6 items-center justify-center gap-1 rounded-sm px-1.5 text-xs font-medium whitespace-nowrap transition-colors",
         active
           ? "bg-background text-foreground shadow-sm"
           : "hover:bg-background/60 hover:text-foreground",
@@ -932,7 +967,7 @@ function WorkbenchToolbarButton({
       onClick={onClick}
     >
       {icon}
-      {label}
+      <span className="hidden lg:inline">{shortLabel ?? label}</span>
     </button>
   );
 }
@@ -991,15 +1026,13 @@ function CollapsedSidePanelRail({
 }
 
 function workbenchPanelTitle(
-  view: "code" | "task-changes" | "diff" | "results" | "review",
+  view: "code" | "task-changes" | "diff" | "review",
 ): string {
   switch (view) {
     case "task-changes":
       return "任务变更";
     case "diff":
       return "项目 Diff";
-    case "results":
-      return "结果";
     case "review":
       return "Code Review";
     case "code":
@@ -1020,6 +1053,7 @@ function EmbeddedTerminalTabsPanel({
   onResize,
   onUnregisterWriter,
   onWrite,
+  height,
 }: {
   activeId: string | null;
   tabs: EmbeddedTerminalTab[];
@@ -1032,13 +1066,15 @@ function EmbeddedTerminalTabsPanel({
   onResize: (sessionId: string, cols: number, rows: number) => void;
   onUnregisterWriter: (sessionId: string) => void;
   onWrite: (sessionId: string, data: string) => void;
+  height: number;
 }) {
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0] ?? null;
 
   return (
     <section
       aria-label="项目终端"
-      className="bg-background flex h-[30vh] min-h-[220px] shrink-0 flex-col border-t"
+      className="bg-background flex shrink-0 flex-col border-t"
+      style={{ height }}
       data-testid="embedded-project-terminal"
     >
       <div className="bg-muted/40 flex h-10 shrink-0 items-center gap-1 border-b px-2">
@@ -1292,6 +1328,28 @@ function PanelResizeHandle({
   );
 }
 
+function AgentInspectorTabTrigger({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: "agent" | "events" | "session" | "workflow" | "skills";
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      aria-label={label}
+      className="size-[26px] flex-none rounded-sm p-0"
+      title={label}
+    >
+      {icon}
+      <span className="sr-only">{label}</span>
+    </TabsTrigger>
+  );
+}
+
 function AgentInspector({
   activeTab,
   avoidRightFloatingPanels,
@@ -1322,13 +1380,6 @@ function AgentInspector({
       className="bg-background flex h-full min-h-0 flex-col border-l"
       data-testid="coding-agent-inspector"
     >
-      <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-semibold tracking-wide uppercase">
-            穷奇引擎 / QiongQi Engine
-          </p>
-        </div>
-      </div>
       <Tabs
         value={activeTab}
         onValueChange={(value) =>
@@ -1336,33 +1387,37 @@ function AgentInspector({
             value as "agent" | "events" | "session" | "workflow" | "skills",
           )
         }
-        className="flex min-h-0 flex-1 flex-col"
+        className="relative flex min-h-0 flex-1 flex-col gap-0"
       >
-        <TabsList className="mx-2 mt-2 grid h-8 shrink-0 grid-cols-5">
-          <TabsTrigger value="agent" className="px-2 text-xs" title="对话">
-            <MessageSquareIcon className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">对话</span>
-          </TabsTrigger>
-          <TabsTrigger value="events" className="px-2 text-xs" title="事件">
-            <ActivityIcon className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">事件</span>
-          </TabsTrigger>
-          <TabsTrigger value="session" className="px-2 text-xs" title="Session">
-            <InfoIcon className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">Session</span>
-          </TabsTrigger>
-          <TabsTrigger
+        <TabsList
+          className="bg-background/90 absolute top-1.5 left-2 z-30 flex h-7 w-auto shrink-0 gap-0.5 rounded-md border p-0.5 shadow-sm backdrop-blur"
+          aria-label="Agent 检查器视图"
+        >
+          <AgentInspectorTabTrigger
+            value="agent"
+            label="对话"
+            icon={<MessageSquareIcon className="h-3.5 w-3.5" />}
+          />
+          <AgentInspectorTabTrigger
+            value="events"
+            label="事件"
+            icon={<ActivityIcon className="h-3.5 w-3.5" />}
+          />
+          <AgentInspectorTabTrigger
+            value="session"
+            label="Session"
+            icon={<InfoIcon className="h-3.5 w-3.5" />}
+          />
+          <AgentInspectorTabTrigger
             value="workflow"
-            className="px-2 text-xs"
-            title="Workflow"
-          >
-            <GitCompareIcon className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">流程</span>
-          </TabsTrigger>
-          <TabsTrigger value="skills" className="px-2 text-xs" title="Skills">
-            <SparklesIcon className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">Skills</span>
-          </TabsTrigger>
+            label="流程"
+            icon={<GitCompareIcon className="h-3.5 w-3.5" />}
+          />
+          <AgentInspectorTabTrigger
+            value="skills"
+            label="Skills"
+            icon={<SparklesIcon className="h-3.5 w-3.5" />}
+          />
         </TabsList>
         <div className="relative mt-0 min-h-0 flex-1 overflow-hidden">
           <PersistentInspectorPanel active={activeTab === "agent"} keepMounted>

@@ -2,13 +2,10 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  CheckCircle2Icon,
   FileDiffIcon,
-  Loader2Icon,
   SearchCodeIcon,
   TerminalIcon,
   Undo2Icon,
-  XCircleIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -73,15 +70,8 @@ interface AgentPanelProps {
   ) => void;
 }
 
-type CodingAgentStatus =
-  | "idle"
-  | "thinking"
-  | "running_tool"
-  | "syncing_files"
-  | "completed"
-  | "error";
-
 const MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM = 92;
+const CODING_AGENT_CONTENT_WIDTH_CLASS = "max-w-4xl";
 
 /**
  * Right-hand Coding Agent chat panel.
@@ -154,8 +144,6 @@ function AgentPanelInner({
   const uiThreadId = threadId ?? projectId;
   const { changes } = useCodingSessionChanges(uiThreadId);
   const [settings, setSettings] = useThreadSettings(`coding:${projectId}`);
-  const [agentStatus, setAgentStatus] = useState<CodingAgentStatus>("idle");
-  const [lastToolLabel, setLastToolLabel] = useState<string | null>(null);
   const { textInput } = usePromptInputController();
   const [draggingCodingPath, setDraggingCodingPath] = useState(false);
   const activeThreadIdForQueries = threadId;
@@ -180,7 +168,6 @@ function AgentPanelInner({
   }, [syncCodingProjectContext]);
 
   const refreshProjectFiles = useCallback(() => {
-    setAgentStatus("syncing_files");
     void queryClient.invalidateQueries({
       queryKey: ["projects", projectId, "files"],
     });
@@ -207,14 +194,10 @@ function AgentPanelInner({
     });
   }, [queryClient]);
 
-  // Silent refresh: invalidates stage + files + sessions queries WITHOUT
-  // touching agentStatus.  Used by the polling mechanism below so the UI
-  // doesn't flicker between "syncing_files" and "running_tool" every poll.
-  //
-  // This exists because the gateway does not support the ``events`` stream
-  // mode, so ``onToolEnd`` never fires, and the backend does not push
-  // ``adispatch_custom_event`` so ``onCustomEvent`` never fires either.
-  // The ONLY reliable signal during a run is ``thread.isLoading``.
+  // Silent refresh: invalidates stage + files + sessions queries. Used by the
+  // polling mechanism below during a run. The ONLY reliable signal during a run
+  // is ``thread.isLoading`` (the gateway does not support the ``events`` stream
+  // mode, so ``onToolEnd`` never fires).
   const silentRefreshAll = useCallback(() => {
     void queryClient.invalidateQueries({
       queryKey: ["projects", projectId, "files"],
@@ -247,12 +230,8 @@ function AgentPanelInner({
     onStart: (createdThreadId) => {
       setThreadId(createdThreadId);
       onThreadIdChange?.(createdThreadId);
-      setAgentStatus("thinking");
-      setLastToolLabel(null);
     },
     onToolEnd: (event) => {
-      setLastToolLabel(labelOfTool(event.name));
-      setAgentStatus("running_tool");
       if (isFileMutationTool(event.name)) {
         refreshProjectFiles();
       }
@@ -280,7 +259,6 @@ function AgentPanelInner({
       // so any transitions that happened during the run are reflected even
       // if individual onToolEnd events were missed.
       refreshStageState();
-      setAgentStatus("completed");
       // Final refresh of all coding session data after the run completes.
       if (activeThreadIdForQueries) {
         void queryClient.invalidateQueries({
@@ -462,14 +440,6 @@ function AgentPanelInner({
       ? "streaming"
       : "ready";
 
-  const visibleAgentStatus: CodingAgentStatus = thread.error
-    ? "error"
-    : thread.isLoading
-      ? agentStatus === "idle" || agentStatus === "completed"
-        ? "thinking"
-        : agentStatus
-      : agentStatus;
-
   return (
     <ThreadContext.Provider value={{ thread }}>
       <ChatBox threadId={uiThreadId} artifactsMode="disabled">
@@ -478,31 +448,17 @@ function AgentPanelInner({
             "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden",
             draggingCodingPath && "ring-2 ring-emerald-500/50 ring-inset",
           )}
+          data-floating-panels={avoidRightFloatingPanels ? "visible" : "hidden"}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          {/* Status bar */}
-          <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
-            <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-              Coding Agent
-            </span>
-            <AgentStatusBadge
-              status={visibleAgentStatus}
-              lastToolLabel={lastToolLabel}
-            />
-          </div>
-
           {/* Messages */}
           <main className="relative flex min-h-0 min-w-0 grow flex-col overflow-hidden">
-            <div
-              className={cn(
-                "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-                avoidRightFloatingPanels && "xl:mr-[22rem]",
-              )}
-            >
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <MessageList
                 className="size-full min-w-0"
+                contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}
                 threadId={uiThreadId}
                 thread={thread}
                 paddingBottom={messageListPaddingBottom}
@@ -514,8 +470,13 @@ function AgentPanelInner({
                 }
               />
               {/* Input */}
-              <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-4 pb-4 sm:px-6 sm:pb-5">
-                <div className="relative flex w-full max-w-4xl min-w-0 flex-col items-center gap-2">
+              <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4">
+                <div
+                  className={cn(
+                    "relative flex w-full min-w-0 flex-col items-center gap-2",
+                    CODING_AGENT_CONTENT_WIDTH_CLASS,
+                  )}
+                >
                   <CodingChangeSummaryCard
                     changes={changes}
                     projectId={projectId}
@@ -526,7 +487,7 @@ function AgentPanelInner({
                     data-testid="coding-agent-input-shell"
                   >
                     <InputBox
-                      className="bg-background/5 min-h-32 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-20 [&_[data-slot=input-group]]:min-h-32"
+                      className="bg-background/5 min-h-28 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-16 [&_[data-slot=input-group]]:min-h-28"
                       threadId={uiThreadId}
                       autoFocus={false}
                       status={status}
@@ -536,6 +497,9 @@ function AgentPanelInner({
                       }
                       onSubmit={handleSubmit}
                       onStop={handleStop}
+                      onPreviewResultFile={(filePath) =>
+                        onFocusFile?.(filePath, "code")
+                      }
                     />
                   </div>
                 </div>
@@ -545,15 +509,27 @@ function AgentPanelInner({
 
           {/* Empty-state hint shown before any messages */}
           {thread.messages.length === 0 && !thread.isLoading && (
-            <div className="pointer-events-none absolute inset-0 top-9 flex flex-col items-center justify-center gap-2 px-6 text-center">
-              <div className="bg-muted/50 flex h-12 w-12 items-center justify-center rounded-xl">
-                <TerminalIcon className="text-muted-foreground h-6 w-6" />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-9 flex justify-center px-3 text-center sm:px-5",
+                hasCodingChanges ? "bottom-60" : "bottom-40",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex w-full min-w-0 flex-col items-center justify-center gap-2",
+                  CODING_AGENT_CONTENT_WIDTH_CLASS,
+                )}
+              >
+                <div className="bg-muted/50 flex h-12 w-12 items-center justify-center rounded-xl">
+                  <TerminalIcon className="text-muted-foreground h-6 w-6" />
+                </div>
+                <p className="text-sm font-medium">与 Coding Agent 对话</p>
+                <p className="text-muted-foreground max-w-[16rem] text-xs">
+                  描述你的编程需求，Agent 可以读写文件、执行 Git
+                  操作、运行测试等。
+                </p>
               </div>
-              <p className="text-sm font-medium">与 Coding Agent 对话</p>
-              <p className="text-muted-foreground max-w-[16rem] text-xs">
-                描述你的编程需求，Agent 可以读写文件、执行 Git
-                操作、运行测试等。
-              </p>
             </div>
           )}
           {draggingCodingPath && (
@@ -725,7 +701,7 @@ function CodingChangeSummaryCard({
   if (changedFiles.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto w-full max-w-3xl">
+    <div className="pointer-events-auto w-full max-w-4xl">
       <div className="bg-background/95 overflow-hidden rounded-lg border shadow-sm backdrop-blur">
         <div className="hover:bg-muted/40 flex w-full items-center justify-between gap-3 px-2.5 py-2 text-left transition-colors">
           <div className="flex min-w-0 items-center gap-2">
@@ -904,81 +880,6 @@ function CodingChangeSummaryCard({
       </Dialog>
     </div>
   );
-}
-
-function AgentStatusBadge({
-  status,
-  lastToolLabel,
-}: {
-  status: CodingAgentStatus;
-  lastToolLabel: string | null;
-}) {
-  const isActive =
-    status === "thinking" ||
-    status === "running_tool" ||
-    status === "syncing_files";
-  const Icon =
-    status === "completed"
-      ? CheckCircle2Icon
-      : status === "error"
-        ? XCircleIcon
-        : isActive
-          ? Loader2Icon
-          : null;
-
-  return (
-    <div
-      className={cn(
-        "text-muted-foreground inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs",
-        status === "completed" && "text-emerald-600 dark:text-emerald-400",
-        status === "error" && "text-destructive",
-        isActive && "text-foreground",
-      )}
-    >
-      {Icon ? (
-        <Icon
-          className={cn("h-3.5 w-3.5 shrink-0", isActive && "animate-spin")}
-        />
-      ) : (
-        <span className="bg-muted-foreground/40 inline-flex size-2 shrink-0 rounded-full" />
-      )}
-      <span className="truncate">{statusLabel(status, lastToolLabel)}</span>
-    </div>
-  );
-}
-
-function statusLabel(status: CodingAgentStatus, lastToolLabel: string | null) {
-  switch (status) {
-    case "thinking":
-      return "正在思考";
-    case "running_tool":
-      return lastToolLabel ?? "正在执行工具";
-    case "syncing_files":
-      return "正在更新文件";
-    case "completed":
-      return "已完成";
-    case "error":
-      return "执行失败";
-    case "idle":
-    default:
-      return "空闲";
-  }
-}
-
-function labelOfTool(name: string) {
-  switch (name) {
-    case "bash":
-      return "正在运行命令";
-    case "write_file":
-    case "str_replace":
-      return "正在更新文件";
-    case "read_file":
-      return "正在读取文件";
-    case "ls":
-      return "正在浏览文件";
-    default:
-      return "正在执行工具";
-  }
 }
 
 function isFileMutationTool(name: string) {

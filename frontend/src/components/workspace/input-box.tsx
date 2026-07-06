@@ -230,6 +230,7 @@ export function InputBox({
   pendingQueue,
   onSteerPending,
   onRemovePending,
+  onPreviewResultFile,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
   status?: ChatStatus;
@@ -248,6 +249,10 @@ export function InputBox({
   pendingQueue?: Array<{ id: string; text: string; createdAt: number }>;
   onSteerPending?: (id: string) => void;
   onRemovePending?: (id: string) => void;
+  /** When provided, clicking preview on a result file routes here instead of
+   *  the shared ArtifactsContext (used by the coding workbench to open the
+   *  file in its own results panel). */
+  onPreviewResultFile?: (filepath: string) => void;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -555,7 +560,11 @@ export function InputBox({
           </span>
         </div>
       )}
-      <ArtifactResultStrip status={status} threadId={threadId} />
+      <ArtifactResultStrip
+        status={status}
+        threadId={threadId}
+        onPreview={onPreviewResultFile}
+      />
       {pendingQueue && pendingQueue.length > 0 && onSteerPending && onRemovePending && (
         <PendingQueueStrip
           entries={pendingQueue}

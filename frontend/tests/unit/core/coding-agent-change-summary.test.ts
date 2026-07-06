@@ -41,16 +41,29 @@ describe("coding agent change summary card", () => {
     expect(agentPanel).toContain("slice(0, 4)");
     expect(agentPanel).toContain("max-h-[172px]");
     expect(agentPanel).toContain("更多");
-    expect(agentPanel).toContain("max-w-3xl");
+    expect(agentPanel).toContain("max-w-4xl");
     expect(agentPanel).toContain("handleReviewChanges");
     expect(agentPanel).toContain("handleDiscardChanges");
     expect(agentPanel).toContain("Promise.all");
-    expect(agentPanel).toContain("relative flex w-full max-w-4xl min-w-0 flex-col");
-    expect(agentPanel).toContain('<div\n                    className="w-full min-w-0"');
-    expect(agentPanel).toContain("min-h-32 w-full");
-    expect(agentPanel).toContain("[&_[data-slot=input-group]]:min-h-32");
+    expect(agentPanel).toContain("CODING_AGENT_CONTENT_WIDTH_CLASS");
     expect(agentPanel).toContain(
-      "[&_[data-slot=input-group-control]]:min-h-20",
+      "contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}",
+    );
+    expect(agentPanel).toContain(
+      "relative flex w-full min-w-0 flex-col items-center",
+    );
+    expect(agentPanel).toContain(
+      '<div\n                    className="w-full min-w-0"',
+    );
+    expect(agentPanel).toContain("min-h-28 w-full");
+    expect(agentPanel).toContain("[&_[data-slot=input-group]]:min-h-28");
+    expect(agentPanel).toContain(
+      "[&_[data-slot=input-group-control]]:min-h-16",
+    );
+    expect(agentPanel).toContain("data-floating-panels");
+    expect(agentPanel).not.toContain("xl:mr-[22rem]");
+    expect(agentPanel).toContain(
+      'hasCodingChanges ? "bottom-60" : "bottom-40"',
     );
     expect(agentPanel).not.toContain("bottom-[104px]");
     expect(agentPanel).not.toContain("bottom-24");

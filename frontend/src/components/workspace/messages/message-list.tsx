@@ -144,6 +144,7 @@ function LoadMoreHistoryIndicator({
 
 export function MessageList({
   className,
+  contentClassName,
   threadId,
   thread,
   paddingBottom = MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
@@ -153,6 +154,7 @@ export function MessageList({
   onOpenFileChange,
 }: {
   className?: string;
+  contentClassName?: string;
   threadId: string;
   thread: BaseStream<AgentThreadState>;
   paddingBottom?: number;
@@ -174,7 +176,10 @@ export function MessageList({
       className={cn("flex size-full flex-col justify-center", className)}
     >
       <ConversationContent
-        className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-8"
+        className={cn(
+          "mx-auto w-full max-w-(--container-width-md) gap-8 pt-8",
+          contentClassName,
+        )}
         data-testid="message-list-content"
       >
         <LoadMoreHistoryIndicator

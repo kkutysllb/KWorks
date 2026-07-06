@@ -29,7 +29,9 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("left-panel-toggle");
     expect(workbench).not.toContain("left-panel-toggle-expanded");
     expect(workbench).not.toContain("right-panel-toggle-expanded");
-    expect(workbench).toContain("穷奇引擎 / QiongQi Engine");
+    // The decorative "穷奇引擎" header row was removed to reclaim vertical
+    // space; the inspector tab switcher is now an overlaid icon toolbar.
+    expect(workbench).not.toContain("穷奇引擎 / QiongQi Engine");
     expect(workbench).not.toContain("QiongQi Engine Agent Inspector");
     expect(workbench).not.toContain("穷奇引擎智能体检查器");
     expect(workbench).toContain("showFileExplorer");
@@ -73,6 +75,13 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("todos={agentTodos}");
     expect(workbench).toContain('data-testid="coding-workbench-right-panel"');
     expect(workbench).toContain("const [workbenchView, setWorkbenchView]");
+    expect(workbench).toContain("AgentInspectorTabTrigger");
+    expect(workbench).toContain("Agent 检查器视图");
+    expect(workbench).toContain("absolute top-1.5 left-2 z-30");
+    expect(workbench).toContain("size-[26px] flex-none");
+    expect(workbench).toContain('<span className="sr-only">{label}</span>');
+    expect(workbench).not.toContain("grid-cols-5");
+    expect(workbench).not.toContain("sm:mr-1");
     expect(workbench).toContain('value="agent"');
     expect(workbench).toContain("PersistentInspectorPanel");
     expect(workbench).toContain(
@@ -171,16 +180,21 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("{/* Panel collapse toggles */}");
   });
 
-  test("coding workbench keeps code-view and review controls in one toolbar row", () => {
+  test("coding workbench keeps code-view and review controls in the header", () => {
     const workbench = readFileSync(
       resolve(repoRoot, "src/components/workspace/coding/coding-workbench.tsx"),
       "utf8",
     );
 
+    // The tab group + environment + terminal buttons live in the header row
+    // (moved out of a separate toolbar row to reclaim vertical space).
     expect(workbench).toContain('data-testid="coding-workbench-toolbar"');
-    expect(workbench).toContain("overflow-x-auto border-b");
     expect(workbench).toContain('aria-label="代码区视图"');
-    expect(workbench).toContain("mr-auto inline-flex");
+    expect(workbench).toContain("inline-flex h-7 w-fit max-w-full shrink-0");
+    expect(workbench).toContain('shortLabel="变更"');
+    expect(workbench).toContain('shortLabel="Diff"');
+    expect(workbench).toContain('shortLabel="Review"');
+    expect(workbench).toContain('<span className="hidden lg:inline">');
     expect(workbench).toContain('aria-label="切换环境信息面板"');
     expect(workbench).toContain(
       "setEnvironmentCardCollapsed((value) => !value)",

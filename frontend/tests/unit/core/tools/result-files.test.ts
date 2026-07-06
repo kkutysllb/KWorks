@@ -1,15 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { collectResultFiles } from "@/core/tools/result-files";
 import type { Message } from "@/core/threads/qiongqi-types";
+import { collectResultFiles } from "@/core/tools/result-files";
 
-function aiMessage(toolCalls: Array<{ name: string; args: Record<string, unknown>; id?: string }>): Message {
+function aiMessage(
+  toolCalls: Array<{
+    name: string;
+    args: Record<string, unknown>;
+    id?: string;
+  }>,
+): Message {
   return {
     id: "msg_1",
     type: "ai",
     role: "assistant",
     content: "",
-    tool_calls: toolCalls.map((tc, i) => ({ id: tc.id ?? `call_${i}`, name: tc.name, args: tc.args, type: "tool_call" })),
+    tool_calls: toolCalls.map((tc, i) => ({
+      id: tc.id ?? `call_${i}`,
+      name: tc.name,
+      args: tc.args,
+      type: "tool_call",
+    })),
   } as Message;
 }
 
@@ -22,9 +33,18 @@ describe("collectResultFiles", () => {
     const messages: Message[] = [
       userMessage("build it"),
       aiMessage([
-        { name: "write", args: { path: "/workspace/src/index.ts", content: "..." } },
-        { name: "edit", args: { file_path: "/workspace/README.md", old: "a", new: "b" } },
-        { name: "str_replace", args: { filepath: "/workspace/config.json", find: "x", replace: "y" } },
+        {
+          name: "write",
+          args: { path: "/workspace/src/index.ts", content: "..." },
+        },
+        {
+          name: "edit",
+          args: { file_path: "/workspace/README.md", old: "a", new: "b" },
+        },
+        {
+          name: "str_replace",
+          args: { filepath: "/workspace/config.json", find: "x", replace: "y" },
+        },
       ]),
     ];
     expect(collectResultFiles(messages)).toEqual([
@@ -49,7 +69,10 @@ describe("collectResultFiles", () => {
     const messages: Message[] = [
       aiMessage([
         { name: "write", args: { path: "/workspace/a.txt", content: "1" } },
-        { name: "edit", args: { path: "/workspace/a.txt", old: "1", new: "2" } },
+        {
+          name: "edit",
+          args: { path: "/workspace/a.txt", old: "1", new: "2" },
+        },
       ]),
     ];
     expect(collectResultFiles(messages)).toEqual(["/workspace/a.txt"]);
