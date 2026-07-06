@@ -23,6 +23,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 import { useProjects } from "@/core/projects";
 import {
   codingProjectNewTaskPath,
@@ -42,7 +43,8 @@ import {
 } from "./project-tasks";
 
 export function WorkspaceSpacesSection() {
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname) ?? "";
   return (
     <SidebarGroup className="pt-1">
       <SidebarGroupLabel>功能区</SidebarGroupLabel>
@@ -108,7 +110,8 @@ export function WorkspaceSpacesSection() {
 }
 
 export function WorkspaceTasksSection() {
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname);
   const { projects, isLoading: projectsLoading } = useProjects();
   const { data: threads = [], isLoading: threadsLoading } = useThreads();
   const [isCollapsed, setIsCollapsed] = useState(false);

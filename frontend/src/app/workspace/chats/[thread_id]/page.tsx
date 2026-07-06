@@ -25,6 +25,7 @@ import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
 import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
+import { replaceWorkspaceRouteInPlace } from "@/core/navigation/workspace-route";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
@@ -138,7 +139,7 @@ export default function ChatPage() {
       setIsNewThread(false);
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       const nextPath = `/workspace/chats/${createdThreadId}`;
-      history.replaceState(null, "", nextPath);
+      replaceWorkspaceRouteInPlace(nextPath);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {

@@ -36,6 +36,16 @@ describe("workspace workbench layout", () => {
     expect(nav).toContain('href="/workspace/coding"');
   });
 
+  test("history task switching avoids browser-level reloads inside an existing workspace shell", () => {
+    const historyTaskList = readFileSync(
+      resolve(repoRoot, "src/components/workspace/history-task-list.tsx"),
+      "utf8",
+    );
+
+    expect(historyTaskList).toContain("navigateWorkspaceInPlace");
+    expect(historyTaskList).not.toContain("window.location.assign");
+  });
+
   test("workspace root redirects to the new task surface instead of rendering a workbench", () => {
     const workspacePage = readFileSync(
       resolve(repoRoot, "src/app/workspace/page.tsx"),

@@ -47,6 +47,10 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/core/i18n/hooks";
+import {
+  navigateWorkspaceInPlace,
+  useWorkspacePathname,
+} from "@/core/navigation/workspace-route";
 import type { Project } from "@/core/projects";
 import { useProjects } from "@/core/projects";
 import { useWorkModes } from "@/core/skills/hooks";
@@ -120,7 +124,8 @@ function normalizeWorkspacePath(path: string): string {
 export function HistoryTaskList() {
   const { t } = useI18n();
   const router = useRouter();
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname);
   // In the Electron desktop build, useParams() returns stale values from the
   // pre-rendered new.html RSC payload. Parse thread_id from the real URL
   // pathname instead.
@@ -140,6 +145,14 @@ export function HistoryTaskList() {
     Record<string, boolean>
   >({});
 
+  const navigateToWorkspacePath = useCallback(
+    (path: string) => {
+      if (navigateWorkspaceInPlace(path)) return;
+      router.push(path);
+    },
+    [router],
+  );
+
   const handleDelete = useCallback(
     (threadId: string) => {
       deleteThread({ threadId });
@@ -155,12 +168,12 @@ export function HistoryTaskList() {
             nextThreadPath = pathOfThread(routableThreads[threadIndex - 1]!);
           }
         }
-        void router.push(nextThreadPath);
+        navigateToWorkspacePath(nextThreadPath);
       }
     },
     [
       deleteThread,
-      router,
+      navigateToWorkspacePath,
       routableThreads,
       threadIdFromPath,
     ],
@@ -261,7 +274,7 @@ export function HistoryTaskList() {
                   onRename={handleRenameClick}
                   onShare={handleShare}
                   onToggle={() => handleToggleGroup(group.id)}
-                  onNavigate={(path) => void router.push(path)}
+                  onNavigate={navigateToWorkspacePath}
                 />
               ))}
             </div>
@@ -381,10 +394,6 @@ function HistoryTaskGroupSection({
                   title={titleOfThread(thread)}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
-                    if (historyTaskWorkModeId(thread) === "coding") {
-                      window.location.assign(threadPath);
-                      return;
-                    }
                     onNavigate(threadPath);
                   }}
                 >

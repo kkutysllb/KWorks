@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 import { uuid } from "@/core/utils/uuid";
 
 /**
@@ -37,7 +38,8 @@ function parseThreadIdFromPath(pathname: string | null): string {
 }
 
 export function useThreadChat() {
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname);
 
   const searchParams = useSearchParams();
   const threadIdFromPath = parseThreadIdFromPath(pathname);

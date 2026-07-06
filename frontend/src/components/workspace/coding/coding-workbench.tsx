@@ -84,6 +84,7 @@ import {
   useProject,
   useWorktrees,
 } from "@/core/projects";
+import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
 import type {
   CodingSkill,
   DeliveryStage,
@@ -136,7 +137,8 @@ const RIGHT_PANEL_MAX_WIDTH = 1120;
 
 export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const routerSearchParams = useSearchParams();
+  const searchParams = useWorkspaceSearchParams(routerSearchParams);
   const { project, isLoading, error } = useProject(projectId);
   const { worktrees } = useWorktrees(projectId);
   const { diff } = useProjectDiff(projectId);

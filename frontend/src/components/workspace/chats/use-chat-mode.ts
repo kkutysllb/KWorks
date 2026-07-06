@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { useI18n } from "@/core/i18n/hooks";
+import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 
 /**
  * Extract the thread_id segment from a workspace chat URL.
@@ -27,7 +28,8 @@ function parseThreadIdFromPath(pathname: string | null): string {
  */
 export function useSpecificChatMode() {
   const { t } = useI18n();
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname);
   const threadIdFromPath = parseThreadIdFromPath(pathname);
   const searchParams = useSearchParams();
   const promptInputController = usePromptInputController();

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 import { CodingWorkbench } from "@/components/workspace/coding/coding-workbench";
+import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 
 /**
  * Parse the projectId segment from the URL path.
@@ -31,7 +32,8 @@ function parseProjectIdFromPath(pathname: string | null): string {
 }
 
 export default function CodingProjectPage() {
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname);
   const projectId = parseProjectIdFromPath(pathname);
   return <CodingWorkbench projectId={projectId} />;
 }

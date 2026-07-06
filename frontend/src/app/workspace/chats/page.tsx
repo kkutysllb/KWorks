@@ -2,6 +2,7 @@
 
 import { MessageSquareIcon, PlusIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   WorkspaceHeader,
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
+import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { useWorkModes } from "@/core/skills/hooks";
 import { useThreads } from "@/core/threads/hooks";
 import {
@@ -24,6 +26,7 @@ import { formatTimeAgo } from "@/core/utils/datetime";
 
 export default function ChatsPage() {
   const { t } = useI18n();
+  const router = useRouter();
   const { data: threads, isLoading } = useThreads();
   const { workModes } = useWorkModes();
   const [search, setSearch] = useState("");
@@ -74,7 +77,8 @@ export default function ChatsPage() {
                 )}
                 <Button
                   onClick={() => {
-                    window.location.href = "/workspace/chats/new";
+                    if (navigateWorkspaceInPlace("/workspace/chats/new")) return;
+                    router.push("/workspace/chats/new");
                   }}
                   className="bg-gradient-to-r from-sky-500 to-cyan-500 text-white hover:from-sky-600 hover:to-cyan-600 shadow-md shadow-sky-500/25 transition-all duration-200 hover:shadow-lg hover:shadow-sky-500/30"
                 >

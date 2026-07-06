@@ -10,6 +10,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 import { collectResultFiles } from "@/core/tools/result-files";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   artifactsMode = "side-panel",
 }) => {
   const { thread } = useThread();
-  const pathname = usePathname();
+  const routerPathname = usePathname();
+  const pathname = useWorkspacePathname(routerPathname) ?? "";
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
 

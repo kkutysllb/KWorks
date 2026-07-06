@@ -47,6 +47,7 @@ import {
   useDiscardProjectFileChange,
   useProject,
 } from "@/core/projects";
+import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
 import type { QiongqiChange } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
@@ -113,7 +114,8 @@ function AgentPanelInner({
 }: AgentPanelProps) {
   const { project } = useProject(projectId);
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams();
+  const routerSearchParams = useSearchParams();
+  const searchParams = useWorkspaceSearchParams(routerSearchParams);
   // Persist the coding agent thread ID per-project so switching workspace tabs
   // (which unmounts this component) and coming back can rejoin the same run.
   // Without this, the backend keeps the run alive (onDisconnect:"continue") but
