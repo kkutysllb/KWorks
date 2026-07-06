@@ -49,6 +49,11 @@ describe("coding agent change summary card", () => {
     expect(agentPanel).toContain(
       "contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}",
     );
+    expect(agentPanel).toContain("CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS");
+    expect(agentPanel).toContain("xl:pr-[356px]");
+    expect(agentPanel).toContain(
+      "avoidRightFloatingPanels &&\n                    CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS",
+    );
     expect(agentPanel).toContain(
       "relative flex w-full min-w-0 flex-col items-center",
     );
@@ -78,6 +83,9 @@ describe("coding agent change summary card", () => {
     expect(agentPanel).toContain("onFocusFile={onFocusFile}");
     expect(messageList).toContain("onOpenFileChange?: MessageFileFocusHandler");
     expect(messageList).toContain("onOpenFileChange={onOpenFileChange}");
+    expect(messageList).toContain(
+      'contentClassName ?? "max-w-(--container-width-md)"',
+    );
     expect(messageGroup).toContain("MessageFileFocusHandler");
     expect(messageGroup).toContain('return "task-changes"');
     expect(messageGroup).toContain('return "code"');

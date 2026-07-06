@@ -45,7 +45,10 @@ test.describe("Coding workbench layout", () => {
     await expect(page.getByTestId("coding-workbench-toolbar")).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page.getByTestId("agent-inspector-toolbar")).toBeVisible();
 
+    const codeToolbar = page.getByTestId("coding-workbench-toolbar");
+    const inspectorToolbar = page.getByTestId("agent-inspector-toolbar");
     const environmentCard = page.getByTestId("coding-environment-card");
     const floatingStack = page.getByTestId("coding-floating-panel-stack");
     const todoPanel = page.locator(".todo-floating-panel");
@@ -56,6 +59,8 @@ test.describe("Coding workbench layout", () => {
     await expect(environmentCard).toBeVisible();
     await expect(todoPanel).toBeVisible();
 
+    const codeToolbarBox = await codeToolbar.boundingBox();
+    const inspectorToolbarBox = await inspectorToolbar.boundingBox();
     const environmentBox = await environmentCard.boundingBox();
     const todoBox = await todoPanel.boundingBox();
     const floatingStackBox = await floatingStack.boundingBox();
@@ -68,6 +73,8 @@ test.describe("Coding workbench layout", () => {
       !todoBox ||
       !floatingStackBox ||
       !inspectorBox ||
+      !codeToolbarBox ||
+      !inspectorToolbarBox ||
       !messageContentBox ||
       !inputBox
     ) {
@@ -76,6 +83,13 @@ test.describe("Coding workbench layout", () => {
       );
     }
 
+    expect(inspectorToolbarBox.y).toBeCloseTo(codeToolbarBox.y, 1);
+    expect(inspectorToolbarBox.x).toBeGreaterThan(
+      codeToolbarBox.x + codeToolbarBox.width,
+    );
+    expect(inspectorToolbarBox.y + inspectorToolbarBox.height).toBeLessThan(
+      inspectorBox.y,
+    );
     expect(todoBox.y).toBeGreaterThan(environmentBox.y + environmentBox.height);
     expect(messageContentBox.x + messageContentBox.width).toBeLessThanOrEqual(
       floatingStackBox.x - 1,

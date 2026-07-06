@@ -72,6 +72,7 @@ interface AgentPanelProps {
 
 const MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM = 92;
 const CODING_AGENT_CONTENT_WIDTH_CLASS = "max-w-4xl";
+const CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS = "xl:pr-[356px]";
 
 /**
  * Right-hand Coding Agent chat panel.
@@ -457,7 +458,11 @@ function AgentPanelInner({
           <main className="relative flex min-h-0 min-w-0 grow flex-col overflow-hidden">
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <MessageList
-                className="size-full min-w-0"
+                className={cn(
+                  "size-full min-w-0",
+                  avoidRightFloatingPanels &&
+                    CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                )}
                 contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}
                 threadId={uiThreadId}
                 thread={thread}
@@ -470,7 +475,13 @@ function AgentPanelInner({
                 }
               />
               {/* Input */}
-              <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4">
+              <div
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4",
+                  avoidRightFloatingPanels &&
+                    CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                )}
+              >
                 <div
                   className={cn(
                     "relative flex w-full min-w-0 flex-col items-center gap-2",
@@ -512,6 +523,8 @@ function AgentPanelInner({
             <div
               className={cn(
                 "pointer-events-none absolute inset-x-0 top-9 flex justify-center px-3 text-center sm:px-5",
+                avoidRightFloatingPanels &&
+                  CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS,
                 hasCodingChanges ? "bottom-60" : "bottom-40",
               )}
             >

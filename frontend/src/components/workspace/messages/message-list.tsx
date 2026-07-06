@@ -177,8 +177,8 @@ export function MessageList({
     >
       <ConversationContent
         className={cn(
-          "mx-auto w-full max-w-(--container-width-md) gap-8 pt-8",
-          contentClassName,
+          "mx-auto w-full gap-8 pt-8",
+          contentClassName ?? "max-w-(--container-width-md)",
         )}
         data-testid="message-list-content"
       >
