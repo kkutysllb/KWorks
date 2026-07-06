@@ -52,13 +52,15 @@ describe("desktop dev restart flow", () => {
     expect(source).toContain('destination: `${gatewayURL}/v1/:path*`');
   });
 
-  test("desktop backend splash does not poll unmanaged desktop dev backend status", () => {
-    const source = read("src/components/desktop/backend-splash.tsx");
+  test("desktop startup splash has been removed from desktop providers", () => {
+    const providersSource = read("src/components/desktop/providers.tsx");
+    const desktopIndexSource = read("src/components/desktop/index.ts");
 
-    expect(source).toContain("isDesktopBackendManagedMode");
-    expect(source).toContain("if (!isDesktopBackendManagedMode()) return");
-    expect(source).toContain("const isManaged = isDesktopBackendManagedMode()");
-    expect(source).toContain('if (!isManaged || phase === "hidden") return null');
+    expect(providersSource).toContain("DesktopInit");
+    expect(providersSource).not.toContain("BackendSplashScreen");
+    expect(providersSource).not.toContain("backend-splash");
+    expect(desktopIndexSource).not.toContain("BackendSplashScreen");
+    expect(desktopIndexSource).not.toContain("backend-splash");
   });
 
   test("Electron-managed backend rebuilds stale QiongQi dist before launching", () => {
