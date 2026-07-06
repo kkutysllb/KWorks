@@ -2390,9 +2390,10 @@ describe('DeepseekCompatModelClient', () => {
     expect(assistantToolMessage?.reasoning_content).toBe(
       'I need to inspect the current changes before writing the commit message.'
     )
-    // Tool-call-only assistant messages have their empty content coerced to a
-    // short placeholder for chat_completions (strict providers reject empty content).
-    expect(assistantToolMessage?.content).toBe('.')
+    // Tool-call-only assistant messages omit the content key entirely for
+    // chat_completions (strict providers reject empty content, and a visible
+    // placeholder would pollute the conversation the model sees).
+    expect(!('content' in (assistantToolMessage ?? {}))).toBe(true)
     expect((assistantToolMessage?.tool_calls as Array<{ id?: string }> | undefined)?.map((call) => call.id))
       .toEqual(['call_a', 'call_b'])
     expect(messages.filter((message) => message.role === 'tool').map((message) => message.tool_call_id))
@@ -2465,7 +2466,8 @@ describe('DeepseekCompatModelClient', () => {
 
     expect(assistantTextMessage?.reasoning_content).toBe(' ')
     expect(assistantToolMessage?.reasoning_content).toBe(' ')
-    expect(assistantToolMessage?.content).toBe('.')
+    // Tool-call-only assistant: content key omitted entirely.
+    expect(!('content' in (assistantToolMessage ?? {}))).toBe(true)
   })
 
   it('treats fixed DeepSeek v4 models as thinking producers without content-block thinking in chat completions', async () => {
@@ -3137,10 +3139,11 @@ describe('DeepseekCompatModelClient', () => {
     const toolMessage = messages.find((message) => message.role === 'tool')
 
     // Strict providers (e.g. MiniMax error 2013 "chat content is empty") reject
-    // empty content, so the tool-call-only assistant message is coerced to '.'
-    // and the empty tool result to '(no output)' rather than ''.
-    expect(assistantMessage?.content).toBe('.')
-    expect(toolMessage?.content).toBe('(no output)')
+    // empty content. The tool-call-only assistant message omits the content key
+    // entirely (a visible placeholder would pollute the conversation), and the
+    // empty tool result gets an unambiguous placeholder string.
+    expect(!('content' in (assistantMessage ?? {}))).toBe(true)
+    expect(toolMessage?.content).toBe('(tool returned no output)')
   })
 
   it('sends compaction summaries as mutable system messages', async () => {

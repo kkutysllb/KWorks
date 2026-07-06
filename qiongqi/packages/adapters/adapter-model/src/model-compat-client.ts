@@ -251,6 +251,7 @@ export class ModelCompatClient implements ModelClient {
           continue
         }
         const retryClassified = await this.classifyHttpError(response.status, text)
+        diagnoseRejectedRequest(url, retryBody, response.status, text)
         yield {
           kind: 'error',
           message: retryClassified.message,
@@ -262,6 +263,7 @@ export class ModelCompatClient implements ModelClient {
         if (!finalErrorText) {
           finalErrorText = await response.text()
         }
+        diagnoseRejectedRequest(url, retryBody, response.status, finalErrorText)
         const classified = await this.classifyHttpError(response.status, finalErrorText)
         yield {
           kind: 'error',
@@ -373,6 +375,16 @@ export class ModelCompatClient implements ModelClient {
       stream,
       messages
     }
+    // Final defense: ensure no message reaches the wire with empty content.
+    // Strict providers (MiniMax error 2013 "chat content is empty") reject
+    // null/empty/whitespace/empty-array content. sanitizeEmptyMessageContent
+    // already ran in collectMessages, but we re-run here as a belt-and-braces
+    // guard against any transformation between collect and build.
+    const finalMessages = sanitizeEmptyMessageContent(messages)
+    body.messages = finalMessages
+    // Diagnostic: surface any message that STILL looks empty after sanitization
+    // (should never happen, but if it does we want to know the exact shape).
+    diagnoseEmptyContent(finalMessages, this.config.baseUrl)
     if (request.maxTokens !== undefined) {
       body.max_tokens = request.maxTokens
     }
@@ -2009,21 +2021,125 @@ function reasoningContentOrSpace(text: string): string {
  */
 function sanitizeEmptyMessageContent(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((message) => {
-    if (message.content !== '' && message.content !== null && message.content !== undefined) {
-      return message
-    }
+    if (!isEmptyContent(message.content)) return message
     if (message.role === 'assistant') {
-      // Tool-call-only assistant message; the placeholder text is never shown
-      // to the model as conversation — it just satisfies the non-empty check.
-      return { ...message, content: '.' }
+      // Tool-call-only assistant message. We MUST NOT put a visible placeholder
+      // string here — the model treats it as real conversation content and
+      // starts echoing it (observed: assistant replying "." repeatedly). The
+      // OpenAI chat-completions spec allows an assistant message to carry only
+      // `tool_calls` with content omitted, and most providers (including
+      // MiniMax) accept the absent field. We rebuild the object without the
+      // content key so it does not appear in the serialized JSON.
+      const sanitized: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(message)) {
+        if (key !== 'content') sanitized[key] = value
+      }
+      return sanitized as unknown as ChatMessage
     }
     if (message.role === 'tool') {
-      return { ...message, content: '(no output)' }
+      // Tool messages require a non-empty content string; use a placeholder
+      // that is unambiguous to the model but not conversation-like.
+      return { ...message, content: '(tool returned no output)' }
     }
     // user/system should never reach here with empty content; leave as-is so
     // any upstream bug surfaces instead of being masked.
     return message
   })
+}
+
+function isEmptyContent(content: unknown): boolean {
+  if (content === null || content === undefined) return true
+  if (typeof content === 'string') return content.trim().length === 0
+  if (Array.isArray(content)) {
+    // An array is "empty" if it has no parts, or all parts are empty text.
+    if (content.length === 0) return true
+    return content.every((part) => {
+      if (part && typeof part === 'object' && 'type' in part && part.type === 'text') {
+        return typeof (part as { text?: unknown }).text === 'string'
+          && (part as { text: string }).text.trim().length === 0
+      }
+      return false
+    })
+  }
+  return false
+}
+
+/**
+ * Diagnostic helper: logs any message that still has empty content AFTER
+ * sanitization, plus a compact dump of the whole messages array. Runs on every
+ * chat_completions request so we can pinpoint which message shape triggers
+ * strict-provider 2013 errors. If this logs, sanitization missed a case.
+ */
+function diagnoseEmptyContent(messages: ChatMessage[], baseUrl: string): void {
+  const offenders = messages
+    .map((message, index) => ({ index, message }))
+    .filter((entry) => {
+      const msg = entry.message as ChatMessage & { content?: unknown }
+      // An assistant message with tool_calls whose content was omitted (the
+      // intended sanitized state) is not an offender. After sanitization the
+      // content key is absent; treat that as valid for tool-carrying assistants.
+      const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0
+      if (msg.role === 'assistant' && hasToolCalls && msg.content === undefined) {
+        return false
+      }
+      return isEmptyContent(msg.content)
+    })
+  if (offenders.length === 0) return
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[diagnoseEmptyContent] ${offenders.length} empty-content message(s) STILL PRESENT after sanitization for ${baseUrl}:`,
+    JSON.stringify(
+      messages.map((m, i) => ({
+        i,
+        role: m.role,
+        content: m.content,
+        contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
+        hasContentKey: 'content' in m,
+        hasToolCalls: Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+        reasoningContent: (m as ChatMessage & { reasoning_content?: unknown }).reasoning_content
+      })),
+      null,
+      0
+    )
+  )
+}
+
+/**
+ * Diagnostic helper: when a provider rejects a request with a content/shape
+ * error (e.g. MiniMax 2013 "chat content is empty"), dump the full request
+ * body so we can see exactly what was sent. Only fires for bad-request-style
+ * rejections to avoid noise on normal errors (auth, rate limit, etc.).
+ */
+function diagnoseRejectedRequest(
+  url: string,
+  body: Record<string, unknown>,
+  status: number,
+  errorText: string
+): void {
+  if (status !== 400 && !/content is empty|empty.*content|2013/i.test(errorText)) return
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[diagnoseRejectedRequest] ${status} from ${sanitizeEndpointUrl(url)} — provider rejected request body:`,
+    '\nerror:', errorText.slice(0, 500),
+    '\nmessages:', JSON.stringify(
+      messages.map((m: Record<string, unknown>, i: number) => ({
+        i,
+        role: m.role,
+        content: m.content,
+        contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
+        hasToolCalls: Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+        toolCallIds: Array.isArray(m.tool_calls)
+          ? m.tool_calls.map((c: Record<string, unknown>) => (c as { id?: string })?.id)
+          : undefined,
+        toolCallId: m.tool_call_id,
+        reasoningContent: m.reasoning_content
+      })),
+      null,
+      0
+    ),
+    '\nbody keys:', Object.keys(body)
+  )
 }
 
 function toolResultContent(output: unknown): string {

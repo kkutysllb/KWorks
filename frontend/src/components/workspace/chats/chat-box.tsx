@@ -11,7 +11,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { env } from "@/env";
-import { qiongqiClient } from "@/core/threads/qiongqi-client";
+import { collectResultFiles } from "@/core/tools/result-files";
 import { cn } from "@/lib/utils";
 
 import {
@@ -64,27 +64,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
     prevLoadingRef.current = thread.isLoading;
 
-    // Fetch the real result-file list from the backend (GET /v1/threads/:id/
-    // artifacts enumerates the thread's outputs/ directory). Done on thread
-    // switch, initial mount, and whenever a turn finishes (isLoading flips to
-    // false, which re-runs this effect).
-    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true") {
-      let cancelled = false;
-      qiongqiClient
-        .listThreadArtifacts(threadId)
-        .then((virtualPaths) => {
-          if (!cancelled) setArtifacts(virtualPaths);
-        })
-        .catch(() => {
-          // Best-effort: leave the previous list on failure.
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    // Static-website (mock) path keeps the legacy thread.values fallback.
-    setArtifacts(thread.values.artifacts ?? []);
+    // Derive the result-file list from the write/edit/str_replace tool calls
+    // in the displayed messages. These are the files the model actually
+    // produced in the workspace — unlike the thread outputs/ directory, which
+    // write tools never target. Recomputed on every render-relevant change
+    // (thread switch, new messages, turn completion).
+    const resultFiles = collectResultFiles(thread.messages);
+    setArtifacts(resultFiles);
 
     if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
@@ -96,6 +82,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
   }, [
     threadId,
+    thread.messages,
     thread.isLoading,
     thread.values.artifacts,
     autoSelectFirstArtifact,

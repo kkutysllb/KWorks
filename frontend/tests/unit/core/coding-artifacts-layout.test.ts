@@ -108,7 +108,11 @@ describe("coding artifacts layout", () => {
       "utf8",
     );
 
-    expect(chatBox).toContain("setArtifacts(thread.values.artifacts ?? []);");
+    // The result-file list is derived from write/edit tool calls (always a
+    // string[]), never undefined. Guard against regressions that reintroduce
+    // an unguarded thread.values.artifacts write.
+    expect(chatBox).toContain("collectResultFiles(thread.messages)");
+    expect(chatBox).not.toContain("setArtifacts(thread.values.artifacts)");
   });
 
   test("input box surfaces result files above the composer with preview and download actions", () => {
