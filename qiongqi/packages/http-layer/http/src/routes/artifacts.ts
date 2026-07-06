@@ -74,11 +74,18 @@ async function resolveWorkspaceArtifactPath(
   threadId: string,
   path: string
 ): Promise<string> {
-  if (!isAbsolute(path)) throw new Error(`unsupported artifact path: ${path}`)
   const thread = await runtime.threadService.get(threadId)
   if (!thread?.workspace) throw new Error(`thread ${threadId} workspace not found`)
   const workspaceRoot = await realpath(thread.workspace)
-  const requestedPath = await realpath(resolve(path))
+  // Resolve relative paths against the workspace root, mirroring how the
+  // write/edit tools resolve the same paths. Without this, a file the model
+  // wrote to a relative path (e.g. "report.md") cannot be read back for
+  // preview/download — the original absolute-only check returned 403.
+  const candidate = isAbsolute(path) ? resolve(path) : resolve(workspaceRoot, path)
+  // realpath() fails for non-existent files; fall back to the lexical resolve
+  // so the isInside containment check still applies, then let readFile surface
+  // a 404 if the file truly doesn't exist.
+  const requestedPath = await realpath(candidate).catch(() => candidate)
   if (!isInside(workspaceRoot, requestedPath)) {
     throw new Error('artifact path escapes thread workspace')
   }

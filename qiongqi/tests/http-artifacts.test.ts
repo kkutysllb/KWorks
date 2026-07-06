@@ -135,6 +135,33 @@ describe('HTTP artifacts routes', () => {
     expect(await download.text()).toBe('# Workspace Report')
   })
 
+  it('resolves relative artifact paths against the thread workspace', async () => {
+    // The write/edit tools accept relative paths (resolved against the
+    // workspace root); the read endpoint must do the same so files the model
+    // wrote to a relative path can be previewed/downloaded.
+    const h = buildHarness()
+    const workspaceDir = join(dir, 'workspace-rel')
+    const reportPath = join(workspaceDir, 'reports', 'summary.md')
+    await mkdir(join(workspaceDir, 'reports'), { recursive: true })
+    await writeFile(reportPath, '# Relative Report', 'utf8')
+    await h.threadService.create(
+      { workspace: workspaceDir, model: 'deepseek-chat', mode: 'agent' },
+      { id: 'thr_workspace_rel' }
+    )
+
+    const url = new URL('http://localhost/v1/threads/thr_workspace_rel/artifacts/content')
+    url.searchParams.set('path', 'reports/summary.md')
+    const response = await dispatchRequest(
+      h.router,
+      new Request(url, {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('# Relative Report')
+  })
+
   it('rejects absolute artifact paths outside the thread workspace', async () => {
     const h = buildHarness()
     const workspaceDir = join(dir, 'workspace-project')
