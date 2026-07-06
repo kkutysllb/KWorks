@@ -60,14 +60,11 @@ export function WorkspaceUserInfo() {
 
   const userInfoLabel = (
     <DropdownMenuLabel className="font-normal">
-      <div className="flex flex-col gap-1">
-        <p className="truncate text-sm font-medium">{user.email}</p>
-        <div className="flex items-center gap-1.5">
-          <ShieldCheckIcon className={user.system_role === "admin" ? "size-3.5 text-amber-500" : "size-3.5 text-slate-400"} />
-          <span className="text-muted-foreground text-xs">
-            {getRoleLabel(user.system_role, t)}
-          </span>
-        </div>
+      <div className="flex items-center gap-1.5">
+        <ShieldCheckIcon className={user.system_role === "admin" ? "size-3.5 text-amber-500" : "size-3.5 text-slate-400"} />
+        <span className="text-muted-foreground text-xs">
+          {getRoleLabel(user.system_role, t)}
+        </span>
       </div>
     </DropdownMenuLabel>
   );
@@ -107,16 +104,11 @@ export function WorkspaceUserInfo() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <span className="block w-full">
-            <button type="button" className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+            <button type="button" className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
               {avatar}
-              <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium leading-tight">
-                  {user.email}
-                </p>
-                <p className="text-muted-foreground truncate text-xs leading-tight">
-                  {getRoleLabel(user.system_role, t)}
-                </p>
-              </div>
+              <span className="text-muted-foreground truncate text-xs leading-tight">
+                {getRoleLabel(user.system_role, t)}
+              </span>
             </button>
           </span>
         </DropdownMenuTrigger>

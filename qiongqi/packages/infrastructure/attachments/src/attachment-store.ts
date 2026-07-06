@@ -72,9 +72,15 @@ export class FileAttachmentStore implements AttachmentStore {
         throw new Error(`image exceeds ${this.options.config.maxImageDimension}px dimension limit`)
       }
       if (input.textFallback) validateTextFallback(input.textFallback, this.options.config)
-      const textFallback = input.textFallback ?? await this.maybeGenerateImageFallback({ data: input.data, sourceMimeType: image.mimeType })
       const hash = createHash('sha256').update(input.data).digest('hex')
       const id = `att_${hash.slice(0, 24)}`
+      // Check for an existing copy BEFORE generating a fallback: re-uploading
+      // the same image bytes should not re-run sharp. If the image already
+      // exists with a fallback, reuse it; otherwise generate one now.
+      const existing = await this.get(id)
+      const textFallback = input.textFallback
+        ?? existing?.textFallback
+        ?? await this.maybeGenerateImageFallback({ data: input.data, sourceMimeType: image.mimeType })
       return this.persistAttachment({ id, hash, payload: input, mimeType: image.mimeType, image, textFallback })
     }
 

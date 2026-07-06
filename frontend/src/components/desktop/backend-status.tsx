@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { isDesktopBackendManagedMode } from "@/core/config";
 import {
-  getBackendLogs,
   getBackendStatus,
   restartBackend,
   type BackendStatus,
@@ -13,14 +12,11 @@ import {
 /**
  * Backend status indicator for the desktop app.
  *
- * Shows a small pill in the bottom-left corner indicating whether the
- * embedded Node gateway is running, starting, stopped, or errored.
- * Only rendered when running inside Electron.
+ * Shows a small pill indicating whether the embedded Node gateway is running,
+ * starting, stopped, or errored. Only rendered when running inside Electron.
  */
 export function BackendStatusIndicator() {
   const [status, setStatus] = useState<BackendStatus | null>(null);
-  const [showLogs, setShowLogs] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
     if (!isDesktopBackendManagedMode()) return;
@@ -36,17 +32,6 @@ export function BackendStatusIndicator() {
     const interval = setInterval(() => void refresh(), 3000);
     return () => clearInterval(interval);
   }, [refresh]);
-
-  useEffect(() => {
-    if (!showLogs || !isDesktopBackendManagedMode()) return;
-    let alive = true;
-    void getBackendLogs().then((l) => {
-      if (alive) setLogs(l);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [showLogs, status?.status]);
 
   const handleRestart = async () => {
     await restartBackend();
@@ -75,36 +60,8 @@ export function BackendStatusIndicator() {
           : "Stopped";
 
   return (
-    <div className="relative flex items-center">
-      {/* Log panel — opens downward from the bar */}
-      {showLogs && (
-        <div className="absolute top-full right-0 z-[100] mt-1 w-[560px] overflow-hidden rounded-md border bg-zinc-950/95 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
-            <span className="text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
-              Backend Logs
-            </span>
-            <button
-              onClick={() => setShowLogs(false)}
-              className="text-zinc-600 transition-colors hover:text-zinc-300"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="max-h-56 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed text-green-400">
-            {logs.length === 0 ? (
-              <div className="text-zinc-600">No logs available</div>
-            ) : (
-              logs.map((line, i) => (
-                <div key={i} className="whitespace-pre-wrap">
-                  {line}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Status bar — long horizontal strip */}
+    <div className="flex items-center">
+      {/* Status bar — compact pill */}
       <div className="flex h-7 items-center gap-2 rounded-md border bg-background/80 px-2.5 text-xs shadow-sm backdrop-blur-sm">
         <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
         <span className="whitespace-nowrap text-muted-foreground">
@@ -119,13 +76,6 @@ export function BackendStatusIndicator() {
             Restart
           </button>
         )}
-        <span className="mx-0.5 h-3 w-px shrink-0 bg-border" />
-        <button
-          onClick={() => setShowLogs(!showLogs)}
-          className="whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {showLogs ? "Hide" : "Logs"}
-        </button>
       </div>
     </div>
   );

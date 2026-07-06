@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
+import { type PromptInputMessage, PromptInputProvider } from "@/components/ai-elements/prompt-input";
 import { BackendStatusIndicator } from "@/components/desktop";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import {
@@ -11,7 +11,6 @@ import {
   useSpecificChatMode,
   useThreadChat,
 } from "@/components/workspace/chats";
-import { ExportTrigger } from "@/components/workspace/export-trigger";
 import {
   InputBox,
   type InputBoxSubmitContext,
@@ -21,7 +20,6 @@ import {
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
-import { RefreshButton } from "@/components/workspace/refresh-button";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
@@ -175,8 +173,9 @@ export default function ChatPage() {
       : "";
 
   return (
-    <ThreadContext.Provider value={{ thread, isMock }}>
-      <ChatBox threadId={threadId}>
+    <PromptInputProvider>
+      <ThreadContext.Provider value={{ thread, isMock }}>
+        <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
           <header
             className={cn(
@@ -191,8 +190,6 @@ export default function ChatPage() {
             </div>
             <div className="flex items-center gap-2">
               <BackendStatusIndicator />
-              <RefreshButton />
-              <ExportTrigger threadId={threadId} />
               <ArtifactTrigger />
             </div>
           </header>
@@ -293,7 +290,8 @@ export default function ChatPage() {
             </div>
           </main>
         </div>
-      </ChatBox>
-    </ThreadContext.Provider>
+        </ChatBox>
+      </ThreadContext.Provider>
+    </PromptInputProvider>
   );
 }

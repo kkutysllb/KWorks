@@ -43,6 +43,11 @@ export const defaultSharpImageTransform: ImageTransform = {
   async generateImageFallback({ data, sourceMimeType, policy }) {
     // Lazy require keeps sharp out of modules that never touch images.
     const sharp = (await import('sharp')).default
+    // Constrain sharp's resource footprint: the embedded runtime is a
+    // long-lived process, and libvips defaults to a per-CPU-core thread pool
+    // plus an operation cache that never releases. Disabling the cache and
+    // capping concurrency keeps the baseline memory/CPU low between uploads.
+    configureSharpFootprint(sharp)
     const pipeline = sharp(data, { failOn: 'error' })
     const metadata = await pipeline.metadata().catch(() => null)
     if (!metadata) return null
@@ -82,5 +87,25 @@ function preferredSharpFormat(preferredMimeType: string): {
     case 'image/webp':
     default:
       return { format: 'webp', mimeType: 'image/webp', options: { quality: 80 } }
+  }
+}
+
+/**
+ * Cap sharp's resource usage for long-lived embedded processes. Called once
+ * after the first lazy import. Idempotent — re-configuring is cheap.
+ */
+let sharpFootprintConfigured = false
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function configureSharpFootprint(sharp: any): void {
+  if (sharpFootprintConfigured) return
+  sharpFootprintConfigured = true
+  try {
+    // Disable libvips' operation cache so decoded images are freed promptly.
+    sharp.cache(false)
+    // Single-threaded processing: fallback generation is a one-shot resize +
+    // encode, not latency-sensitive; avoid spinning up a per-core worker pool.
+    sharp.concurrency(1)
+  } catch {
+    // sharp versions/builds may reject these calls; best-effort.
   }
 }

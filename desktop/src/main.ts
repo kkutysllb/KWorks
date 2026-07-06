@@ -552,14 +552,6 @@ function buildTrayMenu(status: BackendStatus): Menu {
 
   return Menu.buildFromTemplate([
     { label: "显示 KWorks", click: () => showLastActiveWindow() },
-    {
-      label: "新建聊天窗口",
-      click: () => createNewTaskWindow("/workspace/chats/new"),
-    },
-    {
-      label: "新建 Coding 窗口",
-      click: () => createNewTaskWindow("/workspace/coding"),
-    },
     { type: "separator" },
     { label: statusLabel, enabled: false },
     {

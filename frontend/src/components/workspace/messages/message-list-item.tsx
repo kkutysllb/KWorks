@@ -1,6 +1,7 @@
-import { FileIcon, Loader2Icon } from "lucide-react";
+import { FileIcon, Loader2Icon, PencilIcon } from "lucide-react";
 import {
   memo,
+  useCallback,
   useMemo,
   type AnchorHTMLAttributes,
   type ImgHTMLAttributes,
@@ -20,7 +21,9 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { Task, TaskTrigger } from "@/components/ai-elements/task";
+import { useOptionalPromptInputController } from "@/components/ai-elements/prompt-input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuthenticatedArtifactObjectUrl } from "@/core/artifacts/authenticated-url";
 import { resolveArtifactURL } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
@@ -38,6 +41,7 @@ import type { Message, UserInputTurnItem } from "@/core/threads/qiongqi-types";
 import { cn } from "@/lib/utils";
 
 import { CopyButton } from "../copy-button";
+import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
 import { UserInputCard } from "./user-input-card";
@@ -54,6 +58,12 @@ export function MessageListItem({
   threadId: string;
 }) {
   const isHuman = message.type === "human";
+  const promptController = useOptionalPromptInputController();
+  const handleEdit = useCallback(() => {
+    const rawContent = extractContentFromMessage(message) ?? "";
+    const text = stripUploadedFilesTag(rawContent);
+    promptController?.textInput.setInput(text);
+  }, [message, promptController]);
   return (
     <AIElementMessage
       className={cn("group/conversation-message relative w-full", className)}
@@ -80,6 +90,19 @@ export function MessageListItem({
                 ""
               }
             />
+            {isHuman && promptController && (
+              <Tooltip content="编辑">
+                <Button
+                  aria-label="编辑"
+                  size="icon-sm"
+                  variant="ghost"
+                  type="button"
+                  onClick={handleEdit}
+                >
+                  <PencilIcon className="size-3.5" />
+                </Button>
+              </Tooltip>
+            )}
           </div>
         </MessageToolbar>
       )}

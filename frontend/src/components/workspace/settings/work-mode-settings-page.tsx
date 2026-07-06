@@ -1,22 +1,28 @@
 "use client";
 
 import {
+  Edit3Icon,
   Layers3Icon,
+  LoaderIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  Trash2Icon,
   WorkflowIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Item,
+  ItemActions,
   ItemContent,
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
 import { WorkModeDialog } from "@/components/workspace/skills/work-mode-dialog";
-import { useWorkModes } from "@/core/skills/hooks";
+import { useDeleteWorkMode, useWorkModes } from "@/core/skills/hooks";
 import {
   orderedWorkModes,
   visibleWorkModeSkills,
@@ -27,10 +33,31 @@ import { SettingsSection } from "./settings-section";
 
 export function WorkModeSettingsPage() {
   const { workModes, isLoading, error } = useWorkModes();
+  const { mutate: deleteWorkMode, isPending: isDeleting } = useDeleteWorkMode();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editRequest, setEditRequest] = useState<{ modeId: string; nonce: number } | null>(null);
   const sortedWorkModes = useMemo(
     () => orderedWorkModes(workModes),
     [workModes],
   );
+
+  const handleDelete = (modeId: string, modeName: string) => {
+    if (deletingId) return;
+    const ok = window.confirm(
+      `确定删除工作模式「${modeName}」吗？\n该模式独有的技能（不含内置技能和工具）也会一并删除。`,
+    );
+    if (!ok) return;
+    setDeletingId(modeId);
+    deleteWorkMode(modeId, {
+      onSuccess: () => {
+        toast.success(`已删除工作模式「${modeName}」`);
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "删除工作模式失败");
+      },
+      onSettled: () => setDeletingId(null),
+    });
+  };
 
   return (
     <SettingsSection
@@ -44,7 +71,9 @@ export function WorkModeSettingsPage() {
             工作模式会进入对话运行上下文，用来区分日常办公、Coding
             和用户自定义任务。
           </div>
-          {!isLoading && !error && <WorkModeDialog workModes={workModes} />}
+          {!isLoading && !error && (
+            <WorkModeDialog workModes={workModes} editRequest={editRequest} />
+          )}
         </header>
 
         {isLoading ? (
@@ -58,6 +87,8 @@ export function WorkModeSettingsPage() {
             {sortedWorkModes.map((mode) => {
               const enabledSkills = visibleWorkModeSkills(mode.skills).length;
               const totalSkills = mode.skills.length;
+              const mutable = !mode.builtin && mode.editable !== false;
+              const isModeDeleting = deletingId === mode.id;
               return (
                 <Item
                   key={mode.id}
@@ -91,6 +122,37 @@ export function WorkModeSettingsPage() {
                       </p>
                     </ItemDescription>
                   </ItemContent>
+                  {mutable && (
+                    <ItemActions className="shrink-0">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        type="button"
+                        title="编辑"
+                        aria-label="编辑工作模式"
+                        onClick={() =>
+                          setEditRequest({ modeId: mode.id, nonce: Date.now() })
+                        }
+                      >
+                        <Edit3Icon className="size-4" />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        type="button"
+                        title="删除"
+                        aria-label="删除工作模式"
+                        disabled={isModeDeleting || isDeleting}
+                        onClick={() => handleDelete(mode.id, workModeDisplayName(mode))}
+                      >
+                        {isModeDeleting ? (
+                          <LoaderIcon className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2Icon className="size-4" />
+                        )}
+                      </Button>
+                    </ItemActions>
+                  )}
                 </Item>
               );
             })}

@@ -682,19 +682,26 @@ export async function kworksWorkModes(
     if (mode.builtin || mode.editable === false || skillsConfig.workModes.defaultModeId === modeId) {
       return jsonResponse({ detail: `Work mode ${modeId} is built in and cannot be deleted` }, 403)
     }
-    const modes = { ...skillsConfig.workModes.modes }
+    // Find and physically delete skills exclusive to this mode BEFORE removing
+    // the mode config (so findExclusiveSkillIds can still read its overrides).
+    const exclusiveIds = findExclusiveSkillIds(skillsConfig, modeId)
+    let cleanedSkills = skillsConfig
+    for (const skillId of exclusiveIds) {
+      cleanedSkills = await purgeExclusiveSkill(runtime, cleanedSkills, skillId)
+    }
+    const modes = { ...cleanedSkills.workModes.modes }
     delete modes[modeId]
     const nextSkills = {
-      ...skillsConfig,
-      workModes: { ...skillsConfig.workModes, modes },
+      ...cleanedSkills,
+      workModes: { ...cleanedSkills.workModes, modes },
       modeSkillOverrides: Object.fromEntries(
-        Object.entries(skillsConfig.modeSkillOverrides ?? {}).filter(([id]) => id !== modeId)
+        Object.entries(cleanedSkills.modeSkillOverrides ?? {}).filter(([id]) => id !== modeId)
       )
     }
     const synced = await syncSkillsCapabilityToRuntimeConfig(runtime, owner, nextSkills)
     if (!synced.ok) return synced.response
     await refreshRuntimeTools(runtime)
-    return jsonResponse({ success: true })
+    return jsonResponse({ success: true, deletedSkillIds: exclusiveIds })
   }
 
   if (request?.method === 'PUT' && modeId && skillId) {
@@ -3526,6 +3533,51 @@ function slugifySkillId(value: string | undefined): string | undefined {
 
 function userSkillInstallRoot(runtime: ServerRuntime, skillId: string): string {
   return join(customSharedSkillRoot(runtime), skillId)
+}
+
+/**
+ * Compute the set of skill IDs that are EXCLUSIVE to `modeId`: present in that
+ * mode's `addedSkillIds` but NOT in any locked skill, any other mode's defaults,
+ * or any other mode's added overrides. These are safe to physically delete when
+ * the mode is removed — nothing else references them.
+ */
+function findExclusiveSkillIds(skillsConfig: SkillsConfig, modeId: string): string[] {
+  const overrides = skillsConfig.modeSkillOverrides[modeId]
+  if (!overrides) return []
+  const candidates = new Set(overrides.addedSkillIds)
+  if (candidates.size === 0) return []
+
+  // Exclude locked skills (always retained).
+  for (const id of skillsConfig.lockedSkillIds) candidates.delete(id)
+
+  // Exclude skills referenced by any OTHER mode (defaults or adds).
+  for (const otherModeId of Object.keys(skillsConfig.workModes.modes)) {
+    if (otherModeId === modeId) continue
+    for (const id of resolveWorkModeDefaultSkillIds(skillsConfig, otherModeId)) candidates.delete(id)
+    const otherOverrides = skillsConfig.modeSkillOverrides[otherModeId]
+    for (const id of otherOverrides?.addedSkillIds ?? []) candidates.delete(id)
+  }
+
+  return [...candidates]
+}
+
+/**
+ * Physically delete a user-installed skill: remove its folder from disk and
+ * drop it from `enabledSkills`. Mirrors what enableUserSkillForActor does in
+ * reverse. Best-effort — a missing folder is not an error.
+ */
+async function purgeExclusiveSkill(
+  runtime: ServerRuntime,
+  skillsConfig: SkillsConfig,
+  skillId: string
+): Promise<SkillsConfig> {
+  // Remove the skill folder on disk.
+  await rm(userSkillInstallRoot(runtime, skillId), { recursive: true, force: true }).catch(() => {})
+  // Remove from enabledSkills.
+  if (!skillsConfig.enabledSkills || !(skillId in skillsConfig.enabledSkills)) return skillsConfig
+  const nextEnabled = { ...skillsConfig.enabledSkills }
+  delete nextEnabled[skillId]
+  return { ...skillsConfig, enabledSkills: nextEnabled }
 }
 
 function customSharedSkillRoot(runtime: ServerRuntime): string {

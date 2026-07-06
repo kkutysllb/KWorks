@@ -56,6 +56,8 @@ import { cn } from "@/lib/utils";
 type WorkModeDialogProps = {
   workModes: WorkMode[];
   onSelectWorkMode?: (workModeId: string) => void;
+  /** When set, opens the dialog and enters edit mode for this mode id. */
+  editRequest?: { modeId: string; nonce: number } | null;
 };
 
 type WorkModeFormState = {
@@ -103,6 +105,7 @@ const EMPTY_FORM: WorkModeFormState = {
 export function WorkModeDialog({
   workModes,
   onSelectWorkMode,
+  editRequest,
 }: WorkModeDialogProps) {
   const [open, setOpen] = useState(false);
   const [editingModeId, setEditingModeId] = useState<string | null>(null);
@@ -125,6 +128,17 @@ export function WorkModeDialog({
       setForm(EMPTY_FORM);
     }
   }, [open]);
+
+  // External edit trigger: when editRequest changes, open the dialog and
+  // pre-select the mode for editing.
+  useEffect(() => {
+    if (!editRequest) return;
+    const mode = workModes.find((m) => m.id === editRequest.modeId);
+    if (!mode) return;
+    startEdit(mode);
+    setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest?.nonce]);
 
   const startCreate = () => {
     setEditingModeId(null);
