@@ -2,13 +2,43 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { fetch } from "@/core/api/fetcher";
 import { clearDesktopSessionToken } from "@/core/auth/session";
-import { getBackendBaseURL } from "@/core/config";
+import { getBackendBaseURL, isDesktopBackendManagedMode } from "@/core/config";
+import { getBackendStatus } from "@/core/desktop";
+
+const GATEWAY_UNAVAILABLE_AUTO_RELOAD_KEY =
+  "kworks.gatewayUnavailable.autoReloaded";
 
 export function GatewayUnavailable() {
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isDesktopBackendManagedMode()) return;
+
+    let cancelled = false;
+    const reloadWhenReady = async () => {
+      const status = await getBackendStatus();
+      if (
+        !cancelled &&
+        status?.status === "running" &&
+        window.sessionStorage.getItem(GATEWAY_UNAVAILABLE_AUTO_RELOAD_KEY) !==
+          "1"
+      ) {
+        window.sessionStorage.setItem(GATEWAY_UNAVAILABLE_AUTO_RELOAD_KEY, "1");
+        window.location.reload();
+      }
+    };
+
+    void reloadWhenReady();
+    const interval = window.setInterval(() => void reloadWhenReady(), 800);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const handleLogout = async () => {
     clearDesktopSessionToken();
@@ -26,9 +56,7 @@ export function GatewayUnavailable() {
 
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-4">
-      <p className="text-muted-foreground">
-        Service temporarily unavailable.
-      </p>
+      <p className="text-muted-foreground">Service temporarily unavailable.</p>
       <p className="text-muted-foreground text-xs">
         The backend may be restarting. Please wait a moment and try again.
       </p>

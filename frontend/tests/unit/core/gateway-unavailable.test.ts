@@ -15,4 +15,20 @@ describe("gateway unavailable desktop logout", () => {
     expect(source).toContain("clearDesktopSessionToken");
     expect(source).toContain('import { fetch } from "@/core/api/fetcher";');
   });
+
+  test("retries the workspace guard when the managed desktop backend becomes ready", () => {
+    const source = readFileSync(
+      resolve(repoRoot, "src/app/workspace/gateway-unavailable.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("isDesktopBackendManagedMode");
+    expect(source).toContain("getBackendStatus");
+    expect(source).toContain('status?.status === "running"');
+    expect(source).toContain("GATEWAY_UNAVAILABLE_AUTO_RELOAD_KEY");
+    expect(source).toContain("window.sessionStorage.getItem");
+    expect(source).toContain("window.sessionStorage.setItem");
+    expect(source).toContain("window.location.reload()");
+    expect(source).toContain("setInterval");
+  });
 });

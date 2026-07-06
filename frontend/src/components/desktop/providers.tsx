@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 
+import { BackendSplashScreen } from "@/components/desktop/backend-splash";
+import { DesktopInit } from "@/components/desktop/desktop-init";
 import { UpdateChecker } from "@/components/desktop/update-checker";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/core/i18n/context";
@@ -34,7 +36,9 @@ export function DesktopProviders({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
       <I18nProvider initialLocale={DEFAULT_LOCALE}>
+        <DesktopInit />
         {children}
+        <BackendSplashScreen />
         <UpdateChecker />
       </I18nProvider>
     </ThemeProvider>
