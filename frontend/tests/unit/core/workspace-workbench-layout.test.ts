@@ -153,6 +153,16 @@ describe("workspace workbench layout", () => {
     expect(chatPage).not.toContain("xl:pr-[24rem]");
   });
 
+  test("chat header does not expose desktop backend status diagnostics", () => {
+    const chatPage = readFileSync(
+      resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
+      "utf8",
+    );
+
+    expect(chatPage).not.toContain("BackendStatusIndicator");
+    expect(chatPage).not.toContain("@/components/desktop");
+  });
+
   test("welcome surface no longer advertises legacy KWorks or runtime copy", () => {
     const welcome = readFileSync(
       resolve(repoRoot, "src/components/workspace/welcome.tsx"),

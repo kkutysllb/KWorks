@@ -49,10 +49,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: searchParamsGet }),
 }));
 
-vi.mock("@/components/desktop", () => ({
-  BackendStatusIndicator: () => null,
-}));
-
 vi.mock("@/components/workspace/artifacts", () => ({
   ArtifactTrigger: () => null,
 }));

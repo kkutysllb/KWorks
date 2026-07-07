@@ -32,11 +32,11 @@ describe("desktop dev restart flow", () => {
     expect(source).toContain("if (isDesktopBackendManagedMode())");
   });
 
-  test("desktop backend status UI is hidden when the dev launcher owns the gateway", () => {
-    const source = read("src/components/desktop/backend-status.tsx");
+  test("desktop backend status UI is not exported to the renderer chrome", () => {
+    const source = read("src/components/desktop/index.ts");
 
-    expect(source).toContain("isDesktopBackendManagedMode");
-    expect(source).toContain("if (!isDesktopBackendManagedMode()) return null");
+    expect(source).not.toContain("BackendStatusIndicator");
+    expect(source).not.toContain("backend-status");
   });
 
   test("Next dev proxies gateway health checks, compat API, and native qiongqi API", () => {

@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type PromptInputMessage, PromptInputProvider } from "@/components/ai-elements/prompt-input";
-import { BackendStatusIndicator } from "@/components/desktop";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import {
   ChatBox,
@@ -190,7 +189,6 @@ export default function ChatPage() {
               <ThreadTitle threadId={threadId} thread={thread} />
             </div>
             <div className="flex items-center gap-2">
-              <BackendStatusIndicator />
               <ArtifactTrigger />
             </div>
           </header>
