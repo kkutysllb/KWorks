@@ -43,6 +43,9 @@ export interface ApprovalStore {
    * undefined when none remain pending.
    */
   claimForTool(toolName: string): PendingApproval | undefined;
+  /** Read the most recent pending approval for `toolName` without removing
+   *  it. Use this in render paths (idempotent under StrictMode). */
+  peekForTool(toolName: string): PendingApproval | undefined;
   /** Look up any approval (pending or resolved) by id. */
   get(approvalId: string): PendingApproval | undefined;
 }
@@ -70,6 +73,14 @@ export function createApprovalStore(): ApprovalStore {
           // Pop the claimed approval out of the store so the next call returns
           // the next pending match. The claiming tool card now owns it.
           map.delete(approvalId);
+          return approval;
+        }
+      }
+      return undefined;
+    },
+    peekForTool(toolName) {
+      for (const approval of [...map.values()].reverse()) {
+        if (approval.status === "pending" && approval.toolName === toolName) {
           return approval;
         }
       }

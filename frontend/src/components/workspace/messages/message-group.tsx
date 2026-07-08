@@ -384,7 +384,8 @@ function ToolCall({
     );
   } else if (name === "bash") {
     const display = describeToolCallDisplay(name, args, t);
-    const commandText = String(args.command ?? args.__raw ?? args.input ?? "");
+    const rawCommand = args.command ?? args.__raw ?? args.input;
+    const commandText = typeof rawCommand === "string" ? rawCommand : "";
     return (
       <ToolStep status={status} label={display.label}>
         {commandText ? (

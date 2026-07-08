@@ -157,14 +157,18 @@ export function convertToSteps(
     }
   }
 
-  // Attach any pending approvals claimed from the store. `claimForTool` pops
-  // each matched approval so it attaches to exactly one tool card (see
-  // ApprovalStore docs). Correlation is by toolName + recency, not callId — a
-  // known limitation noted in the store.
+  // Attach any pending approvals peeked from the store. `peekForTool` is
+  // read-only — it does NOT remove the approval — so this render path is
+  // idempotent (safe under React StrictMode, which double-invokes useMemo).
+  // When the user clicks Allow/Deny, `hooks.ts` calls
+  // `approvalStore.resolve(approvalId, decision)`, which updates the entry's
+  // status in place; the next render's peek then skips it (no longer pending)
+  // and the card re-renders without the buttons. Correlation is by toolName +
+  // recency, not callId — a known limitation noted in the store.
   if (approvalStore) {
     for (const step of steps) {
       if (step.type !== "toolCall") continue;
-      const claimed = approvalStore.claimForTool(step.name);
+      const claimed = approvalStore.peekForTool(step.name);
       if (claimed) {
         (step as CoTToolCallStep).approval = {
           approvalId: claimed.approvalId,
