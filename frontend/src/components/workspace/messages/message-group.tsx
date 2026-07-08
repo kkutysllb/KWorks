@@ -26,11 +26,6 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { useI18n } from "@/core/i18n/hooks";
-import {
-  extractReasoningContentFromMessage,
-  findToolCallResult,
-  stripInternalContent,
-} from "@/core/messages/utils";
 import type { Message } from "@/core/threads/qiongqi-types";
 import type { ApprovalStore } from "@/core/threads/approval-store";
 import {
@@ -43,7 +38,13 @@ import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
+import { convertToSteps } from "./message-steps";
 import { Tooltip } from "../tooltip";
+
+// Re-export so existing import paths (`@/components/workspace/messages/message-group`)
+// continue to resolve, and so Task 9's renderer can consume the step types.
+export { convertToSteps } from "./message-steps";
+export type { CoTStep, CoTToolCallStep } from "./message-steps";
 
 export type MessageFileFocusTarget = "code" | "task-changes" | "diff";
 export type MessageFileFocusHandler = (
@@ -464,66 +465,4 @@ function fileFocusTargetForTool(name: string): MessageFileFocusTarget | null {
     return "code";
   }
   return null;
-}
-
-interface GenericCoTStep<T extends string = string> {
-  id?: string;
-  messageId?: string;
-  type: T;
-}
-
-interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
-  reasoning: string | null;
-}
-
-interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
-  name: string;
-  args: Record<string, unknown>;
-  result?: string;
-}
-
-type CoTStep = CoTReasoningStep | CoTToolCallStep;
-
-function convertToSteps(messages: Message[]): CoTStep[] {
-  const steps: CoTStep[] = [];
-  for (const message of messages) {
-    if (message.type === "ai") {
-      const reasoning = extractReasoningContentFromMessage(message);
-      if (reasoning) {
-        const step: CoTReasoningStep = {
-          id: message.id,
-          messageId: message.id,
-          type: "reasoning",
-          reasoning: stripInternalContent(reasoning),
-        };
-        steps.push(step);
-      }
-      for (const tool_call of message.tool_calls ?? []) {
-        if (tool_call.name === "task") {
-          continue;
-        }
-        const step: CoTToolCallStep = {
-          id: tool_call.id,
-          messageId: message.id,
-          type: "toolCall",
-          name: tool_call.name,
-          args: tool_call.args,
-        };
-        const toolCallId = tool_call.id;
-        if (toolCallId) {
-          const toolCallResult = findToolCallResult(toolCallId, messages);
-          if (toolCallResult) {
-            try {
-              const json = JSON.parse(toolCallResult);
-              step.result = json;
-            } catch {
-              step.result = toolCallResult;
-            }
-          }
-        }
-        steps.push(step);
-      }
-    }
-  }
-  return steps;
 }
