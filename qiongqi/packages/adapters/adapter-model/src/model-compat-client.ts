@@ -213,7 +213,10 @@ export class ModelCompatClient implements ModelClient {
       let stripStreamUsage = false
       let stripReasoning = false
       let finalErrorText = ''
-      while (endpointFormat === 'chat_completions') {
+      // Retry on 400/422 for both chat_completions and messages (Anthropic)
+      // formats. The messages path was previously excluded, so GLM/MiniMax
+      // on the Anthropic-compatible endpoint got zero retry on 400/1214.
+      while (endpointFormat === 'chat_completions' || endpointFormat === 'messages') {
         let text: string
         if (stripStreamUsage || stripReasoning) {
           const retry = await this.postChatCompletion(url, headers, retryBody, request.abortSignal, endpointFormat)
@@ -531,13 +534,13 @@ export class ModelCompatClient implements ModelClient {
       endpointFormat === 'messages'
         ? supportsMessagesThinkingBlocks(this.config.baseUrl) &&
           (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
-        : !isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) &&
+        : !isGlmProviderRequest(this.config.baseUrl, endpointFormat, model) &&
           requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
     )
     out.push(...this.itemsToMessages(
       repairedItems,
       thinkingMode,
-      { foldToolHistory: isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model) }
+      { foldToolHistory: isGlmProviderRequest(this.config.baseUrl, endpointFormat, model) }
     ))
     if (request.attachments?.length) {
       attachImagesToLatestUserMessage(out, request.attachments)
@@ -546,13 +549,14 @@ export class ModelCompatClient implements ModelClient {
       attachTextFallbacksToLatestUserMessage(out, request.attachmentTextFallbacks)
     }
     const healed = normalizeThinkingAssistantMessages(healToolMessagePairs(out), thinkingMode)
-    // chat_completions is the only path that sends messages verbatim; strict
-    // providers (MiniMax error 2013) reject empty content. The messages and
-    // responses paths re-parse content into blocks and already drop empty ones.
-    const sanitized = endpointFormat === 'chat_completions'
-      ? sanitizeEmptyMessageContent(healed)
-      : healed
-    return isGlmOpenAiCompatRequest(this.config.baseUrl, endpointFormat, model)
+    // All endpoint formats can hit providers that reject empty content
+    // (MiniMax error 2013 "chat content is empty"). Previously this only ran
+    // for chat_completions, leaving the messages/responses paths unprotected.
+    // messagesToAnthropic silently drops empty-block messages, which breaks
+    // user/assistant alternation (Zhipu 1214). Sanitizing here ensures every
+    // path gets a non-empty content shape before provider-specific conversion.
+    const sanitized = sanitizeEmptyMessageContent(healed)
+    return isGlmProviderRequest(this.config.baseUrl, endpointFormat, model)
       ? normalizeGlmMessages(sanitized)
       : sanitized
   }
@@ -1493,8 +1497,48 @@ function messagesToAnthropic(
       out.push({ role: message.role, content: blocks })
       continue
     }
+    // Empty user/assistant message: previously silently dropped, which breaks
+    // the strict user/assistant alternation that Anthropic (and Zhipu's
+    // Anthropic-compatible endpoint, error 1214) requires. Insert a minimal
+    // placeholder text block so the message survives and alternation holds.
+    // This mirrors normalizeThinkingAssistantMessages' ' ' placeholder strategy.
+    if (message.role === 'user' || message.role === 'assistant') {
+      out.push({ role: message.role, content: [{ type: 'text', text: ' ' }] })
+    }
   }
-  return { system: system.join('\n\n'), messages: out }
+  // Merge consecutive same-role messages (e.g. multiple tool_result user
+  // messages) into one. Anthropic allows batched tool_result blocks in a
+  // single user message, and Zhipu's compatible endpoint is stricter about
+  // alternation — merging guarantees no two adjacent messages share a role.
+  const merged = mergeConsecutiveSameRoleMessages(out)
+  return { system: system.join('\n\n'), messages: merged }
+}
+
+function mergeConsecutiveSameRoleMessages(
+  messages: AnthropicMessage[]
+): AnthropicMessage[] {
+  // Only merge consecutive USER messages — this handles the common case of
+  // multiple tool_result blocks (one per tool call) that were emitted as
+  // separate user messages. Anthropic allows batched tool_result blocks in
+  // a single user message, and Zhipu's compatible endpoint is stricter about
+  // alternation. Assistant messages are NOT merged: each represents a distinct
+  // model turn and merging would corrupt thinking/text/tool_use block ordering.
+  const result: AnthropicMessage[] = []
+  for (const message of messages) {
+    const prev = result[result.length - 1]
+    if (
+      prev &&
+      prev.role === 'user' &&
+      message.role === 'user' &&
+      Array.isArray(prev.content) &&
+      Array.isArray(message.content)
+    ) {
+      prev.content = [...prev.content, ...message.content]
+    } else {
+      result.push({ ...message })
+    }
+  }
+  return result
 }
 
 function anthropicThinkingFromReasoningContent(
@@ -1689,12 +1733,17 @@ function isGlmModel(model: string | undefined): boolean {
   return normalizeModelId(model).startsWith('glm-')
 }
 
-function isGlmOpenAiCompatRequest(
+function isGlmProviderRequest(
   _baseUrl: string,
-  endpointFormat: ModelEndpointFormat,
+  _endpointFormat: ModelEndpointFormat,
   model: string | undefined
 ): boolean {
-  return endpointFormat === 'chat_completions' && isGlmModel(model)
+  // GLM models need tool-history folding and message normalization on ALL
+  // endpoint formats, not just chat_completions. Previously this was gated on
+  // endpointFormat === 'chat_completions', so GLM on the Anthropic-compatible
+  // (messages) path sent raw tool_use/tool_result blocks that Zhipu rejected
+  // with 1214. Folding into a system text block avoids that on both paths.
+  return isGlmModel(model)
 }
 
 function supportsAnthropicThinkingBlocks(baseUrl: string): boolean {
