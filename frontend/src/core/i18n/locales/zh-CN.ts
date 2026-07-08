@@ -338,6 +338,15 @@ export const zhCN: Translations = {
     clickToViewContent: "点击查看文件内容",
     writeTodos: "更新 To-do 列表",
     skillInstallTooltip: "安装技能并使其可在 KWorks 中使用",
+    commandRunning: "运行中…",
+    commandCompleted: "完成",
+    commandFailed: "失败",
+    commandDenied: "已拒绝",
+    commandExitCode: (code) => `退出码 ${code}`,
+    commandOutputLines: (count) => `${count} 行输出`,
+    commandNoOutput: "无输出",
+    approveCommand: "允许",
+    denyCommand: "拒绝",
   },
 
   userInput: {

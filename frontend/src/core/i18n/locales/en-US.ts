@@ -345,6 +345,15 @@ export const enUS: Translations = {
     clickToViewContent: "Click to view file content",
     writeTodos: "Update to-do list",
     skillInstallTooltip: "Install skill and make it available to the agent",
+    commandRunning: "Running…",
+    commandCompleted: "Done",
+    commandFailed: "Failed",
+    commandDenied: "Denied",
+    commandExitCode: (code) => `Exit ${code}`,
+    commandOutputLines: (count) => `${count} line${count === 1 ? "" : "s"} of output`,
+    commandNoOutput: "No output",
+    approveCommand: "Allow",
+    denyCommand: "Deny",
   },
 
   userInput: {
