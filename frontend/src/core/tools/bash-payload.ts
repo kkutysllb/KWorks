@@ -29,7 +29,7 @@ export interface BashTruncation {
   output_lines: number;
   total_bytes: number;
   output_bytes: number;
-  truncated_by: string;
+  truncated_by: string | null;
   last_line_partial: boolean;
 }
 
@@ -101,7 +101,7 @@ export function extractBashOutput(output: unknown): BashOutputView {
     output: typeof output.output === "string" ? output.output : undefined,
     exitCode:
       output.exit_code === null || typeof output.exit_code === "number"
-        ? (output.exit_code as number | null)
+        ? output.exit_code
         : undefined,
     truncation,
     truncatedLines: resolveTruncatedLines(truncation),
