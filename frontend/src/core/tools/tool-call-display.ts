@@ -31,18 +31,35 @@ export function describeToolCallDisplay(
     const command = stringArg(args, "command");
     const action = stringArg(args, "action");
     const sessionId = stringArg(args, "session_id");
+    const input = stringArg(args, "input");
+    const rawFallback = stringArg(args, "__raw");
+
+    // Long-running bash sessions use action=poll/write/stop with no `command`.
+    // Give each a meaningful label instead of the generic "执行命令", so the
+    // user can tell what the agent is doing while a command runs.
+    const sessionLabel =
+      action === "poll"
+        ? t.toolCalls.bashPoll
+        : action === "write"
+          ? t.toolCalls.bashWrite
+          : action === "stop"
+            ? t.toolCalls.bashStop
+            : t.toolCalls.executeCommand;
+
+    const detail: ToolCallDisplayDetail | undefined = command
+      ? { kind: "code", language: "bash", value: command }
+      : action === "write" && input
+        ? { kind: "code", language: "bash", value: input }
+        : sessionId
+          ? { kind: "badge", value: sessionId }
+          : rawFallback
+            ? { kind: "code", language: "bash", value: rawFallback }
+            : undefined;
+
+    // `description` (model-supplied) still wins over our inferred label.
     return {
-      label: description ?? t.toolCalls.executeCommand,
-      ...(command
-        ? { detail: { kind: "code", language: "bash", value: command } }
-        : sessionId || action
-          ? {
-              detail: {
-                kind: "badge",
-                value: [action, sessionId].filter(Boolean).join(" "),
-              },
-            }
-          : {}),
+      label: description ?? (command ? t.toolCalls.executeCommand : sessionLabel),
+      ...(detail ? { detail } : {}),
     };
   }
 

@@ -27,6 +27,60 @@ describe("message group tool call display", () => {
     });
   });
 
+  test("shows a waiting label and session id for bash poll actions", () => {
+    expect(
+      describeToolCallDisplay(
+        "bash",
+        { action: "poll", session_id: "bash_abc123" },
+        zhCN,
+      ),
+    ).toMatchObject({
+      label: "等待命令输出",
+      detail: { kind: "badge", value: "bash_abc123" },
+    });
+  });
+
+  test("shows the sent input for bash write actions", () => {
+    expect(
+      describeToolCallDisplay(
+        "bash",
+        { action: "write", session_id: "bash_abc123", input: "y\n" },
+        zhCN,
+      ),
+    ).toMatchObject({
+      label: "向命令发送输入",
+      detail: { kind: "code", language: "bash", value: "y\n" },
+    });
+  });
+
+  test("shows a stopping label and session id for bash stop actions", () => {
+    expect(
+      describeToolCallDisplay(
+        "bash",
+        { action: "stop", session_id: "bash_abc123" },
+        zhCN,
+      ),
+    ).toMatchObject({
+      label: "终止命令",
+      detail: { kind: "badge", value: "bash_abc123" },
+    });
+  });
+
+  test("falls back to raw argument text when command parsing failed", () => {
+    expect(
+      describeToolCallDisplay("bash", { __raw: "ls -la {broken" }, zhCN),
+    ).toMatchObject({
+      label: "执行命令",
+      detail: { kind: "code", language: "bash", value: "ls -la {broken" },
+    });
+  });
+
+  test("does not crash when bash arguments are completely empty", () => {
+    const result = describeToolCallDisplay("bash", {}, zhCN);
+    expect(result.label).toBe("执行命令");
+    expect(result.detail).toBeUndefined();
+  });
+
   test("shows qiongqi file tool paths", () => {
     expect(
       describeToolCallDisplay(

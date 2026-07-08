@@ -264,6 +264,10 @@ export interface Translations {
     moreSteps: (count: number) => string;
     lessSteps: string;
     executeCommand: string;
+    bashPoll: string;
+    bashWrite: string;
+    bashStop: string;
+    bashUnknown: string;
     presentFiles: string;
     needYourHelp: string;
     useTool: (toolName: string) => string;
