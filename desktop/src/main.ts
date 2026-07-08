@@ -33,6 +33,7 @@ import { registerIpc } from "./ipc.js";
 import { registerUpdater } from "./updater.js";
 import { getFrontendDistDir, getLogsDir, REPO_ROOT } from "./paths.js";
 import { stopBackendWithTimeout } from "./shutdown.js";
+import { isUpdateInstallRequested } from "./update-install-state.js";
 import { appendRendererLog, log } from "./logger.js";
 import {
   APP_ORIGIN,
@@ -716,6 +717,21 @@ app.on("activate", () => {
 let isShuttingDown = false;
 app.on("before-quit", async (e) => {
   if (isShuttingDown) return;
+  // An update install was requested via autoUpdater.quitAndInstall(). That
+  // call internally does app.quit() and relies on the quit sequence reaching
+  // will-quit so Squirrel (macOS) / the forked installer (Win/Linux) can
+  // install and relaunch. If we preventDefault + app.exit(0) here, those
+  // hooks are skipped and the app quits without restarting — which is the
+  // "must manually reopen after clicking restart-update" bug. So for an
+  // update install we stand aside: set isQuitting so windows actually close
+  // instead of hiding to tray, drop the tray, and let app.quit() proceed.
+  // The backend child is spawned non-detached and exits with this process;
+  // the relaunched app re-spawns it, so there is no port conflict.
+  if (isUpdateInstallRequested()) {
+    isQuitting = true;
+    destroyTray();
+    return;
+  }
   if (backend?.getStatus().status === "stopped") return;
   e.preventDefault();
   await forceQuitApp();

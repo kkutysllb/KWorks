@@ -17,6 +17,10 @@
 import { app, ipcMain, session, BrowserWindow } from "electron";
 
 import { log } from "./logger.js";
+import {
+  clearUpdateInstallRequested,
+  markUpdateInstallRequested,
+} from "./update-install-state.js";
 
 export interface UpdateInfo {
   available: boolean;
@@ -347,12 +351,21 @@ export async function registerUpdater(): Promise<void> {
       // background download finished.
       await autoUpdater.downloadUpdate();
       log.info("[updater] install requested — quitting and installing");
+      // Mark the install as in-flight BEFORE quitAndInstall(). quitAndInstall()
+      // calls app.quit(), which fires before-quit. The main process's
+      // before-quit handler checks this flag so it does NOT call app.exit(0)
+      // (which would skip will-quit/quit and prevent Squirrel / the forked
+      // installer from relaunching the app). See update-install-state.ts.
+      markUpdateInstallRequested();
       // quitAndInstall() restarts the app and installs the update. On macOS
       // it's a synchronous relaunch; on Windows/Linux the app quits and
       // the installer runs on next launch.
       autoUpdater.quitAndInstall();
       return true;
     } catch (e) {
+      // quitAndInstall() never ran (or will not relaunch) — clear the flag so
+      // later normal quits still go through the usual forceQuitApp path.
+      clearUpdateInstallRequested();
       log.error(`[updater] install failed: ${formatMsg(e)}`);
       return false;
     }
