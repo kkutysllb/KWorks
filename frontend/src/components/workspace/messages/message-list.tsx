@@ -21,6 +21,7 @@ import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
 import { useUpdateSubtask } from "@/core/tasks/context";
 import type { AgentThreadState } from "@/core/threads";
+import type { ApprovalStore } from "@/core/threads/approval-store";
 import type { BaseStream } from "@/core/threads/qiongqi-types";
 import { cn } from "@/lib/utils";
 
@@ -152,6 +153,9 @@ export function MessageList({
   loadMoreHistory,
   isHistoryLoading,
   onOpenFileChange,
+  approvalStore,
+  onApprove,
+  onDeny,
 }: {
   className?: string;
   contentClassName?: string;
@@ -162,6 +166,13 @@ export function MessageList({
   loadMoreHistory?: () => void;
   isHistoryLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
+  /** Pending/resolved tool approvals, forwarded to MessageGroup for inline
+   *  rendering in command cards. Consumed by `convertToSteps` in Task 8. */
+  approvalStore?: ApprovalStore;
+  /** Inline approval decision handlers, forwarded to MessageGroup →
+   *  BashCommandCard (Task 9). */
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
   const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
@@ -299,6 +310,9 @@ export function MessageList({
                     messages={[message]}
                     isLoading={thread.isLoading}
                     onOpenFileChange={onOpenFileChange}
+                    approvalStore={approvalStore}
+                    onApprove={onApprove}
+                    onDeny={onDeny}
                   />,
                 );
               }
@@ -338,6 +352,9 @@ export function MessageList({
                 messages={group.messages}
                 isLoading={thread.isLoading}
                 onOpenFileChange={onOpenFileChange}
+                approvalStore={approvalStore}
+                onApprove={onApprove}
+                onDeny={onDeny}
               />
             </div>
           );

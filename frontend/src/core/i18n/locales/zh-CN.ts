@@ -315,6 +315,8 @@ export const zhCN: Translations = {
   toolCalls: {
     moreSteps: (count: number) => `查看其他 ${count} 个步骤`,
     lessSteps: "隐藏步骤",
+    executedSteps: (count: number) =>
+      `执行了 ${count} 个步骤${count === 1 ? "" : ""}`,
     executeCommand: "执行命令",
     bashPoll: "等待命令输出",
     bashWrite: "向命令发送输入",
@@ -338,6 +340,15 @@ export const zhCN: Translations = {
     clickToViewContent: "点击查看文件内容",
     writeTodos: "更新 To-do 列表",
     skillInstallTooltip: "安装技能并使其可在 KWorks 中使用",
+    commandRunning: "运行中…",
+    commandCompleted: "完成",
+    commandFailed: "失败",
+    commandDenied: "已拒绝",
+    commandExitCode: (code) => `退出码 ${code}`,
+    commandOutputLines: (count) => `${count} 行输出`,
+    commandNoOutput: "无输出",
+    approveCommand: "允许",
+    denyCommand: "拒绝",
   },
 
   userInput: {

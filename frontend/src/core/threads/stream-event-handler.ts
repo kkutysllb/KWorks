@@ -10,6 +10,7 @@
 
 import { toast } from "sonner";
 
+import type { ApprovalStore } from "./approval-store";
 import type { AIMessage } from "./qiongqi-types";
 
 /** Shape of the desktop bridge's `authorizePath` IPC method. */
@@ -40,6 +41,9 @@ export interface StreamEventDependencies {
   authorizePath?: AuthorizePathFn;
   /** Resolves a pending QiongQi tool approval. */
   decideApproval?: DecideApprovalFn;
+  /** When provided, approvals are routed here for inline rendering instead
+   *  of a global toast. */
+  approvalStore?: ApprovalStore;
   /** Current thread id, forwarded to the desktop authorization dialog. */
   threadId?: string;
 }
@@ -60,10 +64,20 @@ export function handleStreamEvent(
   event: unknown,
   deps: StreamEventDependencies,
 ): void {
-  const { updateSubtask, authorizePath, decideApproval, threadId } = deps;
+  const { updateSubtask, authorizePath, decideApproval, approvalStore, threadId } = deps;
 
   if (isRuntimeApprovalRequestedEvent(event)) {
     const summary = event.summary ?? `Run ${event.toolName}`;
+    // Route to the inline approval store when available; fall back to the
+    // global toast only when no store was wired (back-compat).
+    if (approvalStore) {
+      approvalStore.addPending({
+        approvalId: event.approvalId,
+        toolName: event.toolName,
+        summary,
+      });
+      return;
+    }
     toast.info(`Agent 请求执行工具：${event.toolName}\n${summary}`, {
       action: {
         label: "允许",

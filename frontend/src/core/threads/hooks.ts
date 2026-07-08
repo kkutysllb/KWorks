@@ -24,6 +24,7 @@ import {
 } from "./qiongqi-client";
 import { useQiongqiStream } from "./qiongqi-stream";
 import type { Message, Run } from "./qiongqi-types";
+import { createApprovalStore, type ApprovalStore } from "./approval-store";
 import { handleStreamEvent } from "./stream-event-handler";
 import {
   getCachedThreadState,
@@ -359,6 +360,11 @@ export function useThreadStream({
   // Ref to track current thread ID across async callbacks without causing re-renders,
   // and to allow access to the current thread id in onUpdateEvent
   const threadIdRef = useRef<string | null>(threadId ?? null);
+  // Stable in-memory registry of pending/resolved tool approvals. Using a ref
+  // (not a bare const) is REQUIRED: `claimForTool` mutates (deletes) entries,
+  // so a fresh store each render would lose the claimed-approval state and
+  // break inline approval rendering (Task 9).
+  const approvalStoreRef = useRef<ApprovalStore>(createApprovalStore());
   const startedRef = useRef(false);
   const listeners = useRef({
     onSend,
@@ -436,6 +442,7 @@ export function useThreadStream({
             : undefined,
         decideApproval: (approvalId, decision, reason) =>
           qiongqiClient.decideApproval(approvalId, decision, reason),
+        approvalStore: approvalStoreRef.current,
         threadId: threadIdRef.current ?? undefined,
       });
       listeners.current.onQiongqiEvent?.(event);
@@ -958,6 +965,22 @@ export function useThreadStream({
     }
   }, [displayIsLoading, pendingQueue, onStreamThreadId, sendMessage]);
 
+  // Inline approval decision callbacks. These call the backend
+  // `decideApproval` endpoint and also resolve the approval in the store so
+  // any still-registered approvals reflect the decision. (Once an approval is
+  // claimed by a tool card via `claimForTool` it is popped from the store, so
+  // `resolve` is a no-op for it — the card's snapshot updates on the next
+  // stream re-render instead.) Forwarded down to MessageGroup →
+  // BashCommandCard in Task 9.
+  const onApprove = useCallback((approvalId: string) => {
+    approvalStoreRef.current.resolve(approvalId, "allowed");
+    void qiongqiClient.decideApproval(approvalId, "allow");
+  }, []);
+  const onDeny = useCallback((approvalId: string) => {
+    approvalStoreRef.current.resolve(approvalId, "denied");
+    void qiongqiClient.decideApproval(approvalId, "deny");
+  }, []);
+
   // Merge history, live stream, and optimistic messages for display
   // History messages may overlap with thread.messages; thread.messages take precedence
   const mergedThread = {
@@ -987,6 +1010,13 @@ export function useThreadStream({
     removePending,
     steerPending,
     clearPending,
+    // Pending/resolved tool approvals, for inline rendering in command cards.
+    approvalStore: approvalStoreRef.current,
+    // Inline approval decision handlers (Task 9): wired to the backend
+    // `decideApproval` endpoint and forwarded through MessageList →
+    // MessageGroup → BashCommandCard.
+    onApprove,
+    onDeny,
   } as const;
 }
 

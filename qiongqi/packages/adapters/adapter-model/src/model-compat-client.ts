@@ -3,6 +3,7 @@ import type { TurnItem } from '@qiongqi/contracts'
 import { emptyUsageSnapshot, type UsageSnapshot } from '@qiongqi/contracts'
 import { isToolResultBridgeItem, repairModelHistoryItems } from '@qiongqi/domain'
 import { repairToolArguments } from './tool-argument-repair.js'
+import { stripSpecialTokens } from './special-tokens.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
@@ -893,8 +894,11 @@ export class ModelCompatClient implements ModelClient {
       if (delta && typeof delta === 'object') {
         const content = delta.content
         if (typeof content === 'string' && content.length > 0) {
-          text += content
-          chunks.push({ kind: 'assistant_text_delta', text: content })
+          const cleaned = stripSpecialTokens(content)
+          if (cleaned) {
+            text += cleaned
+            chunks.push({ kind: 'assistant_text_delta', text: cleaned })
+          }
         }
         const reasoningContent = delta.reasoning_content ?? delta.reasoning
         if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
@@ -1005,8 +1009,11 @@ export class ModelCompatClient implements ModelClient {
     if (type === 'response.output_text.delta') {
       const delta = recordString(payload, 'delta')
       if (delta) {
-        text += delta
-        chunks.push({ kind: 'assistant_text_delta', text: delta })
+        const cleaned = stripSpecialTokens(delta)
+        if (cleaned) {
+          text += cleaned
+          chunks.push({ kind: 'assistant_text_delta', text: cleaned })
+        }
       }
     } else if (
       type === 'response.reasoning_text.delta' ||
@@ -1121,8 +1128,11 @@ export class ModelCompatClient implements ModelClient {
       if (deltaType === 'text_delta') {
         const value = recordString(delta, 'text')
         if (value) {
-          text += value
-          chunks.push({ kind: 'assistant_text_delta', text: value })
+          const cleaned = stripSpecialTokens(value)
+          if (cleaned) {
+            text += cleaned
+            chunks.push({ kind: 'assistant_text_delta', text: cleaned })
+          }
         }
       } else if (deltaType === 'thinking_delta') {
         const value = recordString(delta, 'thinking')
@@ -1207,7 +1217,8 @@ export class ModelCompatClient implements ModelClient {
       yield { kind: 'assistant_reasoning_delta', text: reasoning }
     }
     if (text) {
-      yield { kind: 'assistant_text_delta', text }
+      const cleaned = stripSpecialTokens(text)
+      if (cleaned) yield { kind: 'assistant_text_delta', text: cleaned }
     }
     if (Array.isArray(choice.message?.tool_calls)) {
       for (const call of choice.message.tool_calls) {
@@ -1264,7 +1275,8 @@ export class ModelCompatClient implements ModelClient {
         ? payload.output_text
         : responsesOutputText(payload.output)
       if (outputText) {
-        chunks.push({ kind: 'assistant_text_delta', text: outputText })
+        const cleaned = stripSpecialTokens(outputText)
+        if (cleaned) chunks.push({ kind: 'assistant_text_delta', text: cleaned })
       }
     }
     for (const item of payload.output ?? []) {
@@ -1304,7 +1316,10 @@ export class ModelCompatClient implements ModelClient {
       const type = recordString(block, 'type')
       if (type === 'text') {
         const text = recordString(block, 'text')
-        if (text) yield { kind: 'assistant_text_delta', text }
+        if (text) {
+          const cleaned = stripSpecialTokens(text)
+          if (cleaned) yield { kind: 'assistant_text_delta', text: cleaned }
+        }
       } else if (type === 'thinking') {
         const thinking = recordString(block, 'thinking')
         const signature = recordString(block, 'signature')

@@ -29,6 +29,7 @@ vi.mock("sonner", () => ({
   toast: Object.assign(toastCallable, toastSpies),
 }));
 
+import type { ApprovalStore } from "@/core/threads/approval-store";
 import {
   handleStreamEvent,
   type StreamEventDependencies,
@@ -260,6 +261,52 @@ describe("handleStreamEvent", () => {
       await vi.waitFor(() => {
         expect(deps.decideApproval).toHaveBeenCalledWith("appr_2", "deny");
       });
+    });
+
+    test("routes to approvalStore.addPending and shows no toast when store is provided", () => {
+      const addPending = vi.fn();
+      const store = { addPending } as unknown as ApprovalStore;
+      const storeDeps = makeDeps({ approvalStore: store });
+
+      handleStreamEvent(
+        {
+          kind: "approval_requested",
+          approvalId: "ap_1",
+          toolName: "bash",
+          summary: "rm -rf",
+        },
+        storeDeps,
+      );
+
+      expect(addPending).toHaveBeenCalledWith({
+        approvalId: "ap_1",
+        toolName: "bash",
+        summary: "rm -rf",
+      });
+      expect(toastSpies.info).not.toHaveBeenCalled();
+      expect(deps.decideApproval).not.toHaveBeenCalled();
+    });
+
+    test("falls back to toast when summary is absent (default summary passed to store)", () => {
+      const addPending = vi.fn();
+      const store = { addPending } as unknown as ApprovalStore;
+      const storeDeps = makeDeps({ approvalStore: store });
+
+      handleStreamEvent(
+        {
+          kind: "approval_requested",
+          approvalId: "ap_2",
+          toolName: "bash",
+        },
+        storeDeps,
+      );
+
+      expect(addPending).toHaveBeenCalledWith({
+        approvalId: "ap_2",
+        toolName: "bash",
+        summary: "Run bash",
+      });
+      expect(toastSpies.info).not.toHaveBeenCalled();
     });
   });
 

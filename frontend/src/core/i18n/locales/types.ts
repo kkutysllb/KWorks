@@ -263,6 +263,7 @@ export interface Translations {
   toolCalls: {
     moreSteps: (count: number) => string;
     lessSteps: string;
+    executedSteps: (count: number) => string;
     executeCommand: string;
     bashPoll: string;
     bashWrite: string;
@@ -286,6 +287,15 @@ export interface Translations {
     clickToViewContent: string;
     writeTodos: string;
     skillInstallTooltip: string;
+    commandRunning: string;
+    commandCompleted: string;
+    commandFailed: string;
+    commandDenied: string;
+    commandExitCode: (code: number | null) => string;
+    commandOutputLines: (count: number) => string;
+    commandNoOutput: string;
+    approveCommand: string;
+    denyCommand: string;
   };
 
   userInput: {

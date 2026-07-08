@@ -1,20 +1,21 @@
 import {
-  BookOpenTextIcon,
+  ChevronDownIcon,
   FileTextIcon,
-  FolderOpenIcon,
   GlobeIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
-  NotebookPenIcon,
   SearchIcon,
-  SquareTerminalIcon,
-  WrenchIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import {
   ChainOfThought,
-  ChainOfThoughtContent,
   ChainOfThoughtSearchResult,
   ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
@@ -26,12 +27,8 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { useI18n } from "@/core/i18n/hooks";
-import {
-  extractReasoningContentFromMessage,
-  findToolCallResult,
-  stripInternalContent,
-} from "@/core/messages/utils";
 import type { Message } from "@/core/threads/qiongqi-types";
+import type { ApprovalStore } from "@/core/threads/approval-store";
 import {
   describeToolCallDisplay,
   type ToolCallDisplayDetail,
@@ -42,7 +39,16 @@ import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
+import { BashCommandCard } from "./bash-command-card";
+import { convertToSteps } from "./message-steps";
+import { ToolStep } from "./tool-step";
+import type { ToolCallStatus } from "./tool-step";
 import { Tooltip } from "../tooltip";
+
+// Re-export so existing import paths (`@/components/workspace/messages/message-group`)
+// continue to resolve, and so Task 9's renderer can consume the step types.
+export { convertToSteps } from "./message-steps";
+export type { CoTStep, CoTToolCallStep } from "./message-steps";
 
 export type MessageFileFocusTarget = "code" | "task-changes" | "diff";
 export type MessageFileFocusHandler = (
@@ -55,13 +61,23 @@ export function MessageGroup({
   messages,
   isLoading = false,
   onOpenFileChange,
+  approvalStore,
+  onApprove,
+  onDeny,
 }: {
   className?: string;
   messages: Message[];
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
+  approvalStore?: ApprovalStore;
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
-  const steps = useMemo(() => convertToSteps(messages), [messages]);
+  const { t } = useI18n();
+  const steps = useMemo(
+    () => convertToSteps(messages, approvalStore),
+    [messages, approvalStore],
+  );
 
   // Split into tool-call steps (rendered as action rows) and reasoning steps
   // (rendered as a collapsible "thinking" block). This enforces a clear visual
@@ -88,34 +104,68 @@ export function MessageGroup({
     [reasoningSteps],
   );
 
+  // Tool-call steps are collapsed by default. While a turn is streaming, auto-
+  // expand so the user sees live progress; once it settles, respect the user's
+  // manual toggle.
+  const [userToggled, setUserToggled] = useState(false);
+  const [stepsOpenState, setStepsOpenState] = useState(false);
+  const stepsOpen = userToggled
+    ? stepsOpenState
+    : isLoading || stepsOpenState;
+
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
-      open={true}
     >
       {toolCallSteps.length > 0 && (
-        <ChainOfThoughtContent className="px-4 pb-2">
-          {aboveLastToolCallSteps.map((step) => (
-            <ToolCall
-              key={step.id}
-              {...step}
-              isLoading={isLoading}
-              onOpenFileChange={onOpenFileChange}
-              isLast={false}
+        <Collapsible
+          open={stepsOpen}
+          onOpenChange={(open) => {
+            setUserToggled(true);
+            setStepsOpenState(open);
+          }}
+          className="px-4 pb-2"
+        >
+          <CollapsibleTrigger
+            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-2 text-sm transition-colors"
+          >
+            <span className="font-medium">
+              {t.toolCalls.executedSteps(toolCallSteps.length)}
+            </span>
+            <ChevronDownIcon
+              className={cn(
+                "size-4 transition-transform",
+                stepsOpen ? "rotate-180" : "rotate-0",
+              )}
             />
-          ))}
-          {lastToolCallStep && (
-            <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2">
+            {aboveLastToolCallSteps.map((step) => (
               <ToolCall
-                key={lastToolCallStep.id}
-                {...lastToolCallStep}
-                isLast={true}
+                key={step.id}
+                {...step}
                 isLoading={isLoading}
                 onOpenFileChange={onOpenFileChange}
+                isLast={false}
+                onApprove={onApprove}
+                onDeny={onDeny}
               />
-            </FlipDisplay>
-          )}
-        </ChainOfThoughtContent>
+            ))}
+            {lastToolCallStep && (
+              <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
+                <ToolCall
+                  key={lastToolCallStep.id}
+                  {...lastToolCallStep}
+                  isLast={true}
+                  isLoading={isLoading}
+                  onOpenFileChange={onOpenFileChange}
+                  onApprove={onApprove}
+                  onDeny={onDeny}
+                />
+              </FlipDisplay>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       )}
       {reasoningText && (
         <div className="px-4 pb-2">
@@ -135,18 +185,36 @@ function ToolCall({
   name,
   args,
   result,
+  status = "pending",
+  outputText,
+  exitCode,
+  lineCount,
+  approval,
   isLast = false,
   isLoading = false,
   onOpenFileChange,
+  onApprove,
+  onDeny,
 }: {
   id?: string;
   messageId?: string;
   name: string;
   args: Record<string, unknown>;
   result?: string | Record<string, unknown>;
+  status?: ToolCallStatus;
+  outputText?: string;
+  exitCode?: number | null;
+  lineCount?: number;
+  approval?: {
+    approvalId: string;
+    status: "pending" | "allowed" | "denied" | "expired";
+    summary: string;
+  };
   isLast?: boolean;
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
   const { t } = useI18n();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
@@ -249,26 +317,19 @@ function ToolCall({
   } else if (name === "ls" || name === "grep" || name === "find") {
     const display = describeToolCallDisplay(name, args, t);
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={display.label}
-        icon={name === "ls" ? FolderOpenIcon : SearchIcon}
-        isLast={isLast}
-      >
+      <ToolStep status={status} label={display.label}>
         <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (name === "read" || name === "read_file") {
     const display = describeToolCallDisplay(name, args, t);
     const path =
       display.detail?.kind === "badge" ? display.detail.value : undefined;
     return (
-      <ChainOfThoughtStep
-        key={id}
-        className={path && onOpenFileChange ? "cursor-pointer" : undefined}
+      <ToolStep
+        status={status}
         label={display.label}
-        icon={BookOpenTextIcon}
-        isLast={isLast}
+        className={path && onOpenFileChange ? "cursor-pointer" : undefined}
         onClick={() => {
           if (path && onOpenFileChange) {
             onOpenFileChange(path, "code");
@@ -284,7 +345,7 @@ function ToolCall({
               : undefined
           }
         />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (
     name === "write" ||
@@ -318,12 +379,10 @@ function ToolCall({
     }
 
     return (
-      <ChainOfThoughtStep
-        key={id}
-        className="cursor-pointer"
+      <ToolStep
+        status={status}
         label={display.label}
-        icon={NotebookPenIcon}
-        isLast={isLast}
+        className="cursor-pointer"
         onClick={() => {
           if (!path) return;
           if (fileFocusTarget && onOpenFileChange) {
@@ -358,19 +417,28 @@ function ToolCall({
               : undefined
           }
         />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (name === "bash") {
     const display = describeToolCallDisplay(name, args, t);
+    const rawCommand = args.command ?? args.__raw ?? args.input;
+    const commandText = typeof rawCommand === "string" ? rawCommand : "";
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={display.label}
-        icon={SquareTerminalIcon}
-        isLast={isLast}
-      >
-        <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      <ToolStep status={status} label={display.label}>
+        {commandText ? (
+          <BashCommandCard
+            command={commandText}
+            status={status}
+            output={outputText}
+            exitCode={exitCode}
+            lineCount={lineCount}
+            approval={approval}
+            t={t}
+            onApprove={onApprove}
+            onDeny={onDeny}
+          />
+        ) : null}
+      </ToolStep>
     );
   } else if (name === "ask_clarification") {
     return (
@@ -393,9 +461,9 @@ function ToolCall({
   } else {
     const display = describeToolCallDisplay(name, args, t);
     return (
-      <ChainOfThoughtStep key={id} label={display.label} icon={WrenchIcon} isLast={isLast}>
+      <ToolStep status={status} label={display.label}>
         <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   }
 }
@@ -459,66 +527,4 @@ function fileFocusTargetForTool(name: string): MessageFileFocusTarget | null {
     return "code";
   }
   return null;
-}
-
-interface GenericCoTStep<T extends string = string> {
-  id?: string;
-  messageId?: string;
-  type: T;
-}
-
-interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
-  reasoning: string | null;
-}
-
-interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
-  name: string;
-  args: Record<string, unknown>;
-  result?: string;
-}
-
-type CoTStep = CoTReasoningStep | CoTToolCallStep;
-
-function convertToSteps(messages: Message[]): CoTStep[] {
-  const steps: CoTStep[] = [];
-  for (const message of messages) {
-    if (message.type === "ai") {
-      const reasoning = extractReasoningContentFromMessage(message);
-      if (reasoning) {
-        const step: CoTReasoningStep = {
-          id: message.id,
-          messageId: message.id,
-          type: "reasoning",
-          reasoning: stripInternalContent(reasoning),
-        };
-        steps.push(step);
-      }
-      for (const tool_call of message.tool_calls ?? []) {
-        if (tool_call.name === "task") {
-          continue;
-        }
-        const step: CoTToolCallStep = {
-          id: tool_call.id,
-          messageId: message.id,
-          type: "toolCall",
-          name: tool_call.name,
-          args: tool_call.args,
-        };
-        const toolCallId = tool_call.id;
-        if (toolCallId) {
-          const toolCallResult = findToolCallResult(toolCallId, messages);
-          if (toolCallResult) {
-            try {
-              const json = JSON.parse(toolCallResult);
-              step.result = json;
-            } catch {
-              step.result = toolCallResult;
-            }
-          }
-        }
-        steps.push(step);
-      }
-    }
-  }
-  return steps;
 }

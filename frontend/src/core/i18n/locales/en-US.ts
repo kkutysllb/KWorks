@@ -321,6 +321,8 @@ export const enUS: Translations = {
   toolCalls: {
     moreSteps: (count: number) => `${count} more step${count === 1 ? "" : "s"}`,
     lessSteps: "Less steps",
+    executedSteps: (count: number) =>
+      `Ran ${count} step${count === 1 ? "" : "s"}`,
     executeCommand: "Execute command",
     bashPoll: "Waiting for command output",
     bashWrite: "Sending input to command",
@@ -345,6 +347,15 @@ export const enUS: Translations = {
     clickToViewContent: "Click to view file content",
     writeTodos: "Update to-do list",
     skillInstallTooltip: "Install skill and make it available to the agent",
+    commandRunning: "Running…",
+    commandCompleted: "Done",
+    commandFailed: "Failed",
+    commandDenied: "Denied",
+    commandExitCode: (code) => `Exit ${code}`,
+    commandOutputLines: (count) => `${count} line${count === 1 ? "" : "s"} of output`,
+    commandNoOutput: "No output",
+    approveCommand: "Allow",
+    denyCommand: "Deny",
   },
 
   userInput: {

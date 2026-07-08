@@ -123,6 +123,9 @@ export default function ChatPage() {
     pendingQueue,
     steerPending,
     removePending,
+    approvalStore,
+    onApprove,
+    onDeny,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: chatContext,
@@ -214,6 +217,9 @@ export default function ChatPage() {
                 hasMoreHistory={hasMoreHistory}
                 loadMoreHistory={loadMoreHistory}
                 isHistoryLoading={isHistoryLoading}
+                approvalStore={approvalStore}
+                onApprove={onApprove}
+                onDeny={onDeny}
               />
             </div>
             <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
