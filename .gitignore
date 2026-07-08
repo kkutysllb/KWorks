@@ -167,6 +167,7 @@ progress.md
 task_plan.md
 desktop-tauri/
 docs/superpowers/
+.superpowers/
 .qiongqi-data/
 .ruff_cache/
 .workbuddy/*
