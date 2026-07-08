@@ -315,6 +315,8 @@ export const zhCN: Translations = {
   toolCalls: {
     moreSteps: (count: number) => `查看其他 ${count} 个步骤`,
     lessSteps: "隐藏步骤",
+    executedSteps: (count: number) =>
+      `执行了 ${count} 个步骤${count === 1 ? "" : ""}`,
     executeCommand: "执行命令",
     bashPoll: "等待命令输出",
     bashWrite: "向命令发送输入",

@@ -1,15 +1,21 @@
 import {
+  ChevronDownIcon,
   FileTextIcon,
   GlobeIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
   SearchIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import {
   ChainOfThought,
-  ChainOfThoughtContent,
   ChainOfThoughtSearchResult,
   ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
@@ -67,6 +73,7 @@ export function MessageGroup({
   onApprove?: (approvalId: string) => void;
   onDeny?: (approvalId: string) => void;
 }) {
+  const { t } = useI18n();
   const steps = useMemo(
     () => convertToSteps(messages, approvalStore),
     [messages, approvalStore],
@@ -97,38 +104,68 @@ export function MessageGroup({
     [reasoningSteps],
   );
 
+  // Tool-call steps are collapsed by default. While a turn is streaming, auto-
+  // expand so the user sees live progress; once it settles, respect the user's
+  // manual toggle.
+  const [userToggled, setUserToggled] = useState(false);
+  const [stepsOpenState, setStepsOpenState] = useState(false);
+  const stepsOpen = userToggled
+    ? stepsOpenState
+    : isLoading || stepsOpenState;
+
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
-      open={true}
     >
       {toolCallSteps.length > 0 && (
-        <ChainOfThoughtContent className="px-4 pb-2">
-          {aboveLastToolCallSteps.map((step) => (
-            <ToolCall
-              key={step.id}
-              {...step}
-              isLoading={isLoading}
-              onOpenFileChange={onOpenFileChange}
-              isLast={false}
-              onApprove={onApprove}
-              onDeny={onDeny}
+        <Collapsible
+          open={stepsOpen}
+          onOpenChange={(open) => {
+            setUserToggled(true);
+            setStepsOpenState(open);
+          }}
+          className="px-4 pb-2"
+        >
+          <CollapsibleTrigger
+            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-2 text-sm transition-colors"
+          >
+            <span className="font-medium">
+              {t.toolCalls.executedSteps(toolCallSteps.length)}
+            </span>
+            <ChevronDownIcon
+              className={cn(
+                "size-4 transition-transform",
+                stepsOpen ? "rotate-180" : "rotate-0",
+              )}
             />
-          ))}
-          {lastToolCallStep && (
-            <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2">
+            {aboveLastToolCallSteps.map((step) => (
               <ToolCall
-                key={lastToolCallStep.id}
-                {...lastToolCallStep}
-                isLast={true}
+                key={step.id}
+                {...step}
                 isLoading={isLoading}
                 onOpenFileChange={onOpenFileChange}
+                isLast={false}
                 onApprove={onApprove}
                 onDeny={onDeny}
               />
-            </FlipDisplay>
-          )}
-        </ChainOfThoughtContent>
+            ))}
+            {lastToolCallStep && (
+              <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
+                <ToolCall
+                  key={lastToolCallStep.id}
+                  {...lastToolCallStep}
+                  isLast={true}
+                  isLoading={isLoading}
+                  onOpenFileChange={onOpenFileChange}
+                  onApprove={onApprove}
+                  onDeny={onDeny}
+                />
+              </FlipDisplay>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       )}
       {reasoningText && (
         <div className="px-4 pb-2">

@@ -263,6 +263,7 @@ export interface Translations {
   toolCalls: {
     moreSteps: (count: number) => string;
     lessSteps: string;
+    executedSteps: (count: number) => string;
     executeCommand: string;
     bashPoll: string;
     bashWrite: string;

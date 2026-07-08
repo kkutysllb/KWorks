@@ -321,6 +321,8 @@ export const enUS: Translations = {
   toolCalls: {
     moreSteps: (count: number) => `${count} more step${count === 1 ? "" : "s"}`,
     lessSteps: "Less steps",
+    executedSteps: (count: number) =>
+      `Ran ${count} step${count === 1 ? "" : "s"}`,
     executeCommand: "Execute command",
     bashPoll: "Waiting for command output",
     bashWrite: "Sending input to command",
