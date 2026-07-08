@@ -154,6 +154,8 @@ export function MessageList({
   isHistoryLoading,
   onOpenFileChange,
   approvalStore,
+  onApprove,
+  onDeny,
 }: {
   className?: string;
   contentClassName?: string;
@@ -167,6 +169,10 @@ export function MessageList({
   /** Pending/resolved tool approvals, forwarded to MessageGroup for inline
    *  rendering in command cards. Consumed by `convertToSteps` in Task 8. */
   approvalStore?: ApprovalStore;
+  /** Inline approval decision handlers, forwarded to MessageGroup →
+   *  BashCommandCard (Task 9). */
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
   const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
@@ -305,6 +311,8 @@ export function MessageList({
                     isLoading={thread.isLoading}
                     onOpenFileChange={onOpenFileChange}
                     approvalStore={approvalStore}
+                    onApprove={onApprove}
+                    onDeny={onDeny}
                   />,
                 );
               }
@@ -345,6 +353,8 @@ export function MessageList({
                 isLoading={thread.isLoading}
                 onOpenFileChange={onOpenFileChange}
                 approvalStore={approvalStore}
+                onApprove={onApprove}
+                onDeny={onDeny}
               />
             </div>
           );

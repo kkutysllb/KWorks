@@ -11,6 +11,10 @@ interface ToolStepProps {
   status: ToolCallStatus;
   label: ReactNode;
   children?: ReactNode;
+  /** Extra classes for the outer row (e.g. "cursor-pointer"). */
+  className?: string;
+  /** Optional click handler on the whole row (e.g. open a file). */
+  onClick?: () => void;
 }
 
 /**
@@ -18,7 +22,13 @@ interface ToolStepProps {
  * (command card / file badge). Replaces the vertical-rail ChainOfThoughtStep
  * for tool calls — flatter, denser, status-aware.
  */
-export function ToolStep({ status, label, children }: ToolStepProps) {
+export function ToolStep({
+  status,
+  label,
+  children,
+  className,
+  onClick,
+}: ToolStepProps) {
   const dotClass =
     status === "running"
       ? "bg-amber-500 animate-pulse"
@@ -28,7 +38,7 @@ export function ToolStep({ status, label, children }: ToolStepProps) {
           ? "bg-muted-foreground/50"
           : "bg-primary";
   return (
-    <div className="flex gap-2 text-sm">
+    <div className={cn("flex gap-2 text-sm", className)} onClick={onClick}>
       <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dotClass)} />
       <div className="min-w-0 flex-1 space-y-1.5">
         <span className="font-medium">{label}</span>

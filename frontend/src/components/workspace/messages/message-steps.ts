@@ -23,6 +23,7 @@ import {
   findToolCallResult,
   stripInternalContent,
 } from "@/core/messages/utils";
+import type { ApprovalStore } from "@/core/threads/approval-store";
 import type { Message } from "@/core/threads/qiongqi-types";
 import { extractBashOutput } from "@/core/tools/bash-payload";
 
@@ -47,12 +48,21 @@ interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
   outputText?: string;
   exitCode?: number | null;
   lineCount?: number;
+  /** Inline approval (claimed from the ApprovalStore) for this tool call. */
+  approval?: {
+    approvalId: string;
+    status: "pending" | "allowed" | "denied" | "expired";
+    summary: string;
+  };
 }
 
 export type CoTStep = CoTReasoningStep | CoTToolCallStep;
 export type { CoTToolCallStep, CoTReasoningStep, GenericCoTStep };
 
-export function convertToSteps(messages: Message[]): CoTStep[] {
+export function convertToSteps(
+  messages: Message[],
+  approvalStore?: ApprovalStore,
+): CoTStep[] {
   const steps: CoTStep[] = [];
   for (const message of messages) {
     if (message.type !== "ai") {
@@ -144,6 +154,24 @@ export function convertToSteps(messages: Message[]): CoTStep[] {
       }
 
       steps.push(step);
+    }
+  }
+
+  // Attach any pending approvals claimed from the store. `claimForTool` pops
+  // each matched approval so it attaches to exactly one tool card (see
+  // ApprovalStore docs). Correlation is by toolName + recency, not callId — a
+  // known limitation noted in the store.
+  if (approvalStore) {
+    for (const step of steps) {
+      if (step.type !== "toolCall") continue;
+      const claimed = approvalStore.claimForTool(step.name);
+      if (claimed) {
+        (step as CoTToolCallStep).approval = {
+          approvalId: claimed.approvalId,
+          status: claimed.status,
+          summary: claimed.summary,
+        };
+      }
     }
   }
   return steps;

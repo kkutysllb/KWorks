@@ -1,14 +1,9 @@
 import {
-  BookOpenTextIcon,
   FileTextIcon,
-  FolderOpenIcon,
   GlobeIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
-  NotebookPenIcon,
   SearchIcon,
-  SquareTerminalIcon,
-  WrenchIcon,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -38,7 +33,10 @@ import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
+import { BashCommandCard } from "./bash-command-card";
 import { convertToSteps } from "./message-steps";
+import { ToolStep } from "./tool-step";
+import type { ToolCallStatus } from "./tool-step";
 import { Tooltip } from "../tooltip";
 
 // Re-export so existing import paths (`@/components/workspace/messages/message-group`)
@@ -57,17 +55,22 @@ export function MessageGroup({
   messages,
   isLoading = false,
   onOpenFileChange,
-  // Accepted on the type so Task 9 can forward it into `convertToSteps`
-  // (which Task 8 extends to accept an ApprovalStore). Not consumed here yet.
-  approvalStore: _approvalStore,
+  approvalStore,
+  onApprove,
+  onDeny,
 }: {
   className?: string;
   messages: Message[];
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
   approvalStore?: ApprovalStore;
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
-  const steps = useMemo(() => convertToSteps(messages), [messages]);
+  const steps = useMemo(
+    () => convertToSteps(messages, approvalStore),
+    [messages, approvalStore],
+  );
 
   // Split into tool-call steps (rendered as action rows) and reasoning steps
   // (rendered as a collapsible "thinking" block). This enforces a clear visual
@@ -108,6 +111,8 @@ export function MessageGroup({
               isLoading={isLoading}
               onOpenFileChange={onOpenFileChange}
               isLast={false}
+              onApprove={onApprove}
+              onDeny={onDeny}
             />
           ))}
           {lastToolCallStep && (
@@ -118,6 +123,8 @@ export function MessageGroup({
                 isLast={true}
                 isLoading={isLoading}
                 onOpenFileChange={onOpenFileChange}
+                onApprove={onApprove}
+                onDeny={onDeny}
               />
             </FlipDisplay>
           )}
@@ -141,18 +148,36 @@ function ToolCall({
   name,
   args,
   result,
+  status = "pending",
+  outputText,
+  exitCode,
+  lineCount,
+  approval,
   isLast = false,
   isLoading = false,
   onOpenFileChange,
+  onApprove,
+  onDeny,
 }: {
   id?: string;
   messageId?: string;
   name: string;
   args: Record<string, unknown>;
   result?: string | Record<string, unknown>;
+  status?: ToolCallStatus;
+  outputText?: string;
+  exitCode?: number | null;
+  lineCount?: number;
+  approval?: {
+    approvalId: string;
+    status: "pending" | "allowed" | "denied" | "expired";
+    summary: string;
+  };
   isLast?: boolean;
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
 }) {
   const { t } = useI18n();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
@@ -255,26 +280,19 @@ function ToolCall({
   } else if (name === "ls" || name === "grep" || name === "find") {
     const display = describeToolCallDisplay(name, args, t);
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={display.label}
-        icon={name === "ls" ? FolderOpenIcon : SearchIcon}
-        isLast={isLast}
-      >
+      <ToolStep status={status} label={display.label}>
         <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (name === "read" || name === "read_file") {
     const display = describeToolCallDisplay(name, args, t);
     const path =
       display.detail?.kind === "badge" ? display.detail.value : undefined;
     return (
-      <ChainOfThoughtStep
-        key={id}
-        className={path && onOpenFileChange ? "cursor-pointer" : undefined}
+      <ToolStep
+        status={status}
         label={display.label}
-        icon={BookOpenTextIcon}
-        isLast={isLast}
+        className={path && onOpenFileChange ? "cursor-pointer" : undefined}
         onClick={() => {
           if (path && onOpenFileChange) {
             onOpenFileChange(path, "code");
@@ -290,7 +308,7 @@ function ToolCall({
               : undefined
           }
         />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (
     name === "write" ||
@@ -324,12 +342,10 @@ function ToolCall({
     }
 
     return (
-      <ChainOfThoughtStep
-        key={id}
-        className="cursor-pointer"
+      <ToolStep
+        status={status}
         label={display.label}
-        icon={NotebookPenIcon}
-        isLast={isLast}
+        className="cursor-pointer"
         onClick={() => {
           if (!path) return;
           if (fileFocusTarget && onOpenFileChange) {
@@ -364,19 +380,27 @@ function ToolCall({
               : undefined
           }
         />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   } else if (name === "bash") {
     const display = describeToolCallDisplay(name, args, t);
+    const commandText = String(args.command ?? args.__raw ?? args.input ?? "");
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={display.label}
-        icon={SquareTerminalIcon}
-        isLast={isLast}
-      >
-        <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      <ToolStep status={status} label={display.label}>
+        {commandText ? (
+          <BashCommandCard
+            command={commandText}
+            status={status}
+            output={outputText}
+            exitCode={exitCode}
+            lineCount={lineCount}
+            approval={approval}
+            t={t}
+            onApprove={onApprove}
+            onDeny={onDeny}
+          />
+        ) : null}
+      </ToolStep>
     );
   } else if (name === "ask_clarification") {
     return (
@@ -399,9 +423,9 @@ function ToolCall({
   } else {
     const display = describeToolCallDisplay(name, args, t);
     return (
-      <ChainOfThoughtStep key={id} label={display.label} icon={WrenchIcon} isLast={isLast}>
+      <ToolStep status={status} label={display.label}>
         <ToolCallDetail detail={display.detail} />
-      </ChainOfThoughtStep>
+      </ToolStep>
     );
   }
 }
