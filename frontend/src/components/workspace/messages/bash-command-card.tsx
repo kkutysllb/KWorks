@@ -138,10 +138,10 @@ export function BashCommandCard({
         )}
       </div>
 
-      {/* command body — `$ ` and command share one text node so the whole
-          line is a single queryable element (no split across child spans). */}
-      <pre className="overflow-x-auto px-3 py-2 font-mono text-[12px] leading-relaxed text-foreground">
-        <code>{`$ ${command}`}</code>
+      {/* command body — green `$` prompt + foreground command (terminal aesthetic). */}
+      <pre className="overflow-x-auto px-3 py-2 font-mono text-[12px] leading-relaxed">
+        <span className="text-green-500">$ </span>
+        <span className="text-foreground">{command}</span>
       </pre>
 
       {/* output (collapsed by default; auto-expand while running/failed).

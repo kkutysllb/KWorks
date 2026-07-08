@@ -20,7 +20,11 @@ describe("BashCommandCard", () => {
         output={"> building\n✓ done\n✓ done2\n✓ done3"}
       />,
     );
-    expect(screen.getByText("$ npm run build")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, node) =>
+        node?.tagName === "PRE" && node.textContent === "$ npm run build",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText(/4 行输出/)).toBeInTheDocument();
     // output body hidden when collapsed
     expect(screen.queryByText("> building")).not.toBeInTheDocument();
