@@ -118,6 +118,7 @@ export type ChainOfThoughtStepProps = ComponentProps<"div"> & {
   label: ReactNode;
   description?: ReactNode;
   status?: "complete" | "active" | "pending";
+  isLast?: boolean;
 };
 
 export const ChainOfThoughtStep = memo(
@@ -127,6 +128,7 @@ export const ChainOfThoughtStep = memo(
     label,
     description,
     status = "complete",
+    isLast = false,
     children,
     ...props
   }: ChainOfThoughtStepProps) => {
@@ -148,7 +150,9 @@ export const ChainOfThoughtStep = memo(
       >
         <div className="relative mt-0.5">
           {isValidElement(Icon) ? Icon : <Icon className="size-4" />}
-          <div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
+          {!isLast && (
+            <div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
+          )}
         </div>
         <div className="min-w-0 flex-1 space-y-2 overflow-visible break-words">
           <div>{label}</div>

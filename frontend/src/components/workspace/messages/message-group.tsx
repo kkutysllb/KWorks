@@ -1,10 +1,8 @@
 import {
   BookOpenTextIcon,
-  ChevronUp,
   FileTextIcon,
   FolderOpenIcon,
   GlobeIcon,
-  LightbulbIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
   NotebookPenIcon,
@@ -12,7 +10,7 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import {
   ChainOfThought,
@@ -22,14 +20,17 @@ import {
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 import { CodeBlock } from "@/components/ai-elements/code-block";
-import { Button } from "@/components/ui/button";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractReasoningContentFromMessage,
   findToolCallResult,
   stripInternalContent,
 } from "@/core/messages/utils";
-import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Message } from "@/core/threads/qiongqi-types";
 import {
   describeToolCallDisplay,
@@ -37,14 +38,11 @@ import {
 } from "@/core/tools/tool-call-display";
 import { isTodoWriteToolName } from "@/core/tools/utils";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
-
-import { MarkdownContent } from "./markdown-content";
 
 export type MessageFileFocusTarget = "code" | "task-changes" | "diff";
 export type MessageFileFocusHandler = (
@@ -63,89 +61,49 @@ export function MessageGroup({
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
 }) {
-  const { t } = useI18n();
-  const showReasoningByDefault = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true";
-  const [showAbove, setShowAbove] = useState(showReasoningByDefault);
-  const [showLastThinking, setShowLastThinking] = useState(
-    showReasoningByDefault,
-  );
   const steps = useMemo(() => convertToSteps(messages), [messages]);
-  const lastToolCallStep = useMemo(() => {
-    const filteredSteps = steps.filter((step) => step.type === "toolCall");
-    return filteredSteps[filteredSteps.length - 1];
-  }, [steps]);
-  const aboveLastToolCallSteps = useMemo(() => {
-    if (lastToolCallStep) {
-      const index = steps.indexOf(lastToolCallStep);
-      return steps.slice(0, index);
-    }
-    return [];
-  }, [lastToolCallStep, steps]);
-  const lastReasoningStep = useMemo(() => {
-    if (lastToolCallStep) {
-      const index = steps.indexOf(lastToolCallStep);
-      return steps.slice(index + 1).find((step) => step.type === "reasoning");
-    } else {
-      const filteredSteps = steps.filter((step) => step.type === "reasoning");
-      return filteredSteps[filteredSteps.length - 1];
-    }
-  }, [lastToolCallStep, steps]);
-  const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
+
+  // Split into tool-call steps (rendered as action rows) and reasoning steps
+  // (rendered as a collapsible "thinking" block). This enforces a clear visual
+  // hierarchy: actions are continuous step rows; thinking is a separate muted
+  // block — they no longer interleave with only an icon to distinguish them.
+  const toolCallSteps = useMemo(
+    () => steps.filter((step) => step.type === "toolCall"),
+    [steps],
+  );
+  const reasoningSteps = useMemo(
+    () => steps.filter((step) => step.type === "reasoning"),
+    [steps],
+  );
+  const lastToolCallStep = toolCallSteps[toolCallSteps.length - 1];
+  const aboveLastToolCallSteps = lastToolCallStep
+    ? toolCallSteps.slice(0, -1)
+    : toolCallSteps;
+  const reasoningText = useMemo(
+    () =>
+      reasoningSteps
+        .map((step) => step.reasoning ?? "")
+        .filter(Boolean)
+        .join("\n\n"),
+    [reasoningSteps],
+  );
+
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
       open={true}
     >
-      {aboveLastToolCallSteps.length > 0 && (
-        <Button
-          key="above"
-          className="w-full items-start justify-start text-left"
-          variant="ghost"
-          onClick={() => setShowAbove(!showAbove)}
-        >
-          <ChainOfThoughtStep
-            label={
-              <span className="opacity-60">
-                {showAbove
-                  ? t.toolCalls.lessSteps
-                  : t.toolCalls.moreSteps(aboveLastToolCallSteps.length)}
-              </span>
-            }
-            icon={
-              <ChevronUp
-                className={cn(
-                  "size-4 opacity-60 transition-transform duration-200",
-                  showAbove ? "rotate-180" : "",
-                )}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </Button>
-      )}
-      {lastToolCallStep && (
+      {toolCallSteps.length > 0 && (
         <ChainOfThoughtContent className="px-4 pb-2">
-          {showAbove &&
-            aboveLastToolCallSteps.map((step) =>
-              step.type === "reasoning" ? (
-                <ChainOfThoughtStep
-                  key={step.id}
-                  label={
-                    <MarkdownContent
-                      content={step.reasoning ?? ""}
-                      isLoading={isLoading}
-                      rehypePlugins={rehypePlugins}
-                    />
-                  }
-                ></ChainOfThoughtStep>
-              ) : (
-                <ToolCall
-                  key={step.id}
-                  {...step}
-                  isLoading={isLoading}
-                  onOpenFileChange={onOpenFileChange}
-                />
-              ),
-            )}
+          {aboveLastToolCallSteps.map((step) => (
+            <ToolCall
+              key={step.id}
+              {...step}
+              isLoading={isLoading}
+              onOpenFileChange={onOpenFileChange}
+              isLast={false}
+            />
+          ))}
           {lastToolCallStep && (
             <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
               <ToolCall
@@ -159,45 +117,13 @@ export function MessageGroup({
           )}
         </ChainOfThoughtContent>
       )}
-      {lastReasoningStep && (
-        <>
-          <Button
-            key={lastReasoningStep.id}
-            className="w-full items-start justify-start text-left"
-            variant="ghost"
-            onClick={() => setShowLastThinking(!showLastThinking)}
-          >
-            <div className="flex w-full items-center justify-between">
-              <ChainOfThoughtStep
-                className="font-normal"
-                label={t.common.thinking}
-                icon={LightbulbIcon}
-              ></ChainOfThoughtStep>
-              <div>
-                <ChevronUp
-                  className={cn(
-                    "text-muted-foreground size-4",
-                    showLastThinking ? "" : "rotate-180",
-                  )}
-                />
-              </div>
-            </div>
-          </Button>
-          {showLastThinking && (
-            <ChainOfThoughtContent className="px-4 pb-2">
-              <ChainOfThoughtStep
-                key={lastReasoningStep.id}
-                label={
-                  <MarkdownContent
-                    content={lastReasoningStep.reasoning ?? ""}
-                    isLoading={isLoading}
-                    rehypePlugins={rehypePlugins}
-                  />
-                }
-              ></ChainOfThoughtStep>
-            </ChainOfThoughtContent>
-          )}
-        </>
+      {reasoningText && (
+        <div className="px-4 pb-2">
+          <Reasoning isStreaming={isLoading} defaultOpen={false}>
+            <ReasoningTrigger />
+            <ReasoningContent>{reasoningText}</ReasoningContent>
+          </Reasoning>
+        </div>
       )}
     </ChainOfThought>
   );
@@ -232,7 +158,7 @@ function ToolCall({
       label = t.toolCalls.searchOnWebFor(args.query);
     }
     return (
-      <ChainOfThoughtStep key={id} label={label} icon={SearchIcon}>
+      <ChainOfThoughtStep key={id} label={label} icon={SearchIcon} isLast={isLast}>
         {Array.isArray(result) && (
           <ChainOfThoughtSearchResults>
             {result.map((item) => (
@@ -262,7 +188,7 @@ function ToolCall({
       }
     )?.results;
     return (
-      <ChainOfThoughtStep key={id} label={label} icon={SearchIcon}>
+      <ChainOfThoughtStep key={id} label={label} icon={SearchIcon} isLast={isLast}>
         {Array.isArray(results) && (
           <ChainOfThoughtSearchResults>
             {Array.isArray(results) &&
@@ -304,6 +230,7 @@ function ToolCall({
         key={id}
         label={t.toolCalls.viewWebPage}
         icon={GlobeIcon}
+        isLast={isLast}
       >
         <ChainOfThoughtSearchResult>
           {url && (
@@ -326,6 +253,7 @@ function ToolCall({
         key={id}
         label={display.label}
         icon={name === "ls" ? FolderOpenIcon : SearchIcon}
+        isLast={isLast}
       >
         <ToolCallDetail detail={display.detail} />
       </ChainOfThoughtStep>
@@ -340,6 +268,7 @@ function ToolCall({
         className={path && onOpenFileChange ? "cursor-pointer" : undefined}
         label={display.label}
         icon={BookOpenTextIcon}
+        isLast={isLast}
         onClick={() => {
           if (path && onOpenFileChange) {
             onOpenFileChange(path, "code");
@@ -394,6 +323,7 @@ function ToolCall({
         className="cursor-pointer"
         label={display.label}
         icon={NotebookPenIcon}
+        isLast={isLast}
         onClick={() => {
           if (!path) return;
           if (fileFocusTarget && onOpenFileChange) {
@@ -437,6 +367,7 @@ function ToolCall({
         key={id}
         label={display.label}
         icon={SquareTerminalIcon}
+        isLast={isLast}
       >
         <ToolCallDetail detail={display.detail} />
       </ChainOfThoughtStep>
@@ -447,6 +378,7 @@ function ToolCall({
         key={id}
         label={t.toolCalls.needYourHelp}
         icon={MessageCircleQuestionMarkIcon}
+        isLast={isLast}
       ></ChainOfThoughtStep>
     );
   } else if (isTodoWriteToolName(name)) {
@@ -455,12 +387,13 @@ function ToolCall({
         key={id}
         label={t.toolCalls.writeTodos}
         icon={ListTodoIcon}
+        isLast={isLast}
       ></ChainOfThoughtStep>
     );
   } else {
     const display = describeToolCallDisplay(name, args, t);
     return (
-      <ChainOfThoughtStep key={id} label={display.label} icon={WrenchIcon}>
+      <ChainOfThoughtStep key={id} label={display.label} icon={WrenchIcon} isLast={isLast}>
         <ToolCallDetail detail={display.detail} />
       </ChainOfThoughtStep>
     );
