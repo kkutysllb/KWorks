@@ -2,13 +2,10 @@
 
 import {
   BoxIcon,
-  BrainIcon,
   CpuIcon,
-  DatabaseIcon,
   GlobeIcon,
   NetworkIcon,
   PaletteIcon,
-  RadioTowerIcon,
   SparklesIcon,
   UserIcon,
   WorkflowIcon,
@@ -31,9 +28,6 @@ export type SettingsSection =
   | "account"
   | "appearance"
   | "qiongqi-models"
-  | "qiongqi-context"
-  | "qiongqi-storage"
-  | "qiongqi-observability"
   | "qiongqi-mcp"
   | "qiongqi-web"
   | "qiongqi-skills"
@@ -63,9 +57,6 @@ const KNOWN_SECTIONS: SettingsSection[] = [
   "account",
   "appearance",
   "qiongqi-models",
-  "qiongqi-context",
-  "qiongqi-storage",
-  "qiongqi-observability",
   "qiongqi-mcp",
   "qiongqi-web",
   "qiongqi-skills",
@@ -76,9 +67,6 @@ const KNOWN_SECTIONS: SettingsSection[] = [
 export const QIONGQI_SECTION_PAGE: Record<QiongqiSettingsSection, ConfigPage> =
   {
     "qiongqi-models": "models",
-    "qiongqi-context": "contextCompaction",
-    "qiongqi-storage": "storage",
-    "qiongqi-observability": "observability",
     "qiongqi-mcp": "mcp",
     "qiongqi-web": "web",
     "qiongqi-skills": "skills",
@@ -100,21 +88,6 @@ export const SETTINGS_SECTION_COLORS: Record<
     bg: "bg-violet-500/10",
   },
   "qiongqi-models": {
-    iconActive: "text-cyan-400",
-    bar: "from-cyan-400 to-blue-500",
-    bg: "bg-cyan-500/10",
-  },
-  "qiongqi-context": {
-    iconActive: "text-cyan-400",
-    bar: "from-cyan-400 to-blue-500",
-    bg: "bg-cyan-500/10",
-  },
-  "qiongqi-storage": {
-    iconActive: "text-cyan-400",
-    bar: "from-cyan-400 to-blue-500",
-    bg: "bg-cyan-500/10",
-  },
-  "qiongqi-observability": {
     iconActive: "text-cyan-400",
     bar: "from-cyan-400 to-blue-500",
     bg: "bg-cyan-500/10",
@@ -178,9 +151,6 @@ function useSettingsSections(): SettingsSectionItem[] {
         icon: PaletteIcon,
       },
       { id: "qiongqi-models", label: "模型 Profiles", icon: CpuIcon },
-      { id: "qiongqi-context", label: "上下文压缩", icon: BrainIcon },
-      { id: "qiongqi-storage", label: "存储", icon: DatabaseIcon },
-      { id: "qiongqi-observability", label: "观测", icon: RadioTowerIcon },
       { id: "qiongqi-mcp", label: "MCP", icon: NetworkIcon },
       { id: "qiongqi-web", label: "Web 能力", icon: GlobeIcon },
       { id: "qiongqi-skills", label: "技能", icon: SparklesIcon },

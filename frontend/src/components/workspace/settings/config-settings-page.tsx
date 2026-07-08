@@ -3,14 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BoxIcon,
-  BrainIcon,
   ChevronDownIcon,
   CpuIcon,
-  DatabaseIcon,
   GlobeIcon,
   Loader2Icon,
   NetworkIcon,
-  RadioTowerIcon,
   Settings2Icon,
   SparklesIcon,
 } from "lucide-react";
@@ -159,19 +156,6 @@ const nav: Array<{
     label: "模型 Profiles",
     path: "models.profiles",
     icon: CpuIcon,
-  },
-  {
-    id: "contextCompaction",
-    label: "上下文压缩",
-    path: "contextCompaction",
-    icon: BrainIcon,
-  },
-  { id: "storage", label: "存储", path: "serve.storage", icon: DatabaseIcon },
-  {
-    id: "observability",
-    label: "观测",
-    path: "serve.observability",
-    icon: RadioTowerIcon,
   },
   { id: "mcp", label: "MCP", path: "capabilities.mcp", icon: NetworkIcon },
   { id: "web", label: "Web 能力", path: "capabilities.web", icon: GlobeIcon },
