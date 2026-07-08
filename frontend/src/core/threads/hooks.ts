@@ -24,6 +24,7 @@ import {
 } from "./qiongqi-client";
 import { useQiongqiStream } from "./qiongqi-stream";
 import type { Message, Run } from "./qiongqi-types";
+import { createApprovalStore, type ApprovalStore } from "./approval-store";
 import { handleStreamEvent } from "./stream-event-handler";
 import {
   getCachedThreadState,
@@ -359,6 +360,11 @@ export function useThreadStream({
   // Ref to track current thread ID across async callbacks without causing re-renders,
   // and to allow access to the current thread id in onUpdateEvent
   const threadIdRef = useRef<string | null>(threadId ?? null);
+  // Stable in-memory registry of pending/resolved tool approvals. Using a ref
+  // (not a bare const) is REQUIRED: `claimForTool` mutates (deletes) entries,
+  // so a fresh store each render would lose the claimed-approval state and
+  // break inline approval rendering (Task 9).
+  const approvalStoreRef = useRef<ApprovalStore>(createApprovalStore());
   const startedRef = useRef(false);
   const listeners = useRef({
     onSend,
@@ -436,6 +442,7 @@ export function useThreadStream({
             : undefined,
         decideApproval: (approvalId, decision, reason) =>
           qiongqiClient.decideApproval(approvalId, decision, reason),
+        approvalStore: approvalStoreRef.current,
         threadId: threadIdRef.current ?? undefined,
       });
       listeners.current.onQiongqiEvent?.(event);
@@ -987,6 +994,8 @@ export function useThreadStream({
     removePending,
     steerPending,
     clearPending,
+    // Pending/resolved tool approvals, for inline rendering in command cards.
+    approvalStore: approvalStoreRef.current,
   } as const;
 }
 

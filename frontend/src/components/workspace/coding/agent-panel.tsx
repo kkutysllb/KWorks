@@ -227,6 +227,7 @@ function AgentPanelInner({
     hasMoreHistory,
     loadMoreHistory,
     streamThreadId,
+    approvalStore,
   } = useThreadStream({
     threadId,
     context: settings.context,
@@ -475,6 +476,7 @@ function AgentPanelInner({
                 onOpenFileChange={
                   onFocusFile ? handleOpenMessageFileChange : undefined
                 }
+                approvalStore={approvalStore}
               />
               {/* Input */}
               <div

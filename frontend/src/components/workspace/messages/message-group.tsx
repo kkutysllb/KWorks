@@ -32,6 +32,7 @@ import {
   stripInternalContent,
 } from "@/core/messages/utils";
 import type { Message } from "@/core/threads/qiongqi-types";
+import type { ApprovalStore } from "@/core/threads/approval-store";
 import {
   describeToolCallDisplay,
   type ToolCallDisplayDetail,
@@ -55,11 +56,15 @@ export function MessageGroup({
   messages,
   isLoading = false,
   onOpenFileChange,
+  // Accepted on the type so Task 9 can forward it into `convertToSteps`
+  // (which Task 8 extends to accept an ApprovalStore). Not consumed here yet.
+  approvalStore: _approvalStore,
 }: {
   className?: string;
   messages: Message[];
   isLoading?: boolean;
   onOpenFileChange?: MessageFileFocusHandler;
+  approvalStore?: ApprovalStore;
 }) {
   const steps = useMemo(() => convertToSteps(messages), [messages]);
 
