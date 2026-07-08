@@ -16,9 +16,19 @@
  *  newlines, no inner spaces so we don't swallow real prose). */
 const SPECIAL_TOKEN_PATTERN = /<\|[^|\n<]*\|>/g
 
+/** Known bracket-style markers some providers prepend to a completion (e.g.
+ *  GLM's `[gMASK]`). Enumerated explicitly to avoid stripping arbitrary
+ *  `[...]` prose (code, citations, footnotes). */
+const BRACKET_MARKERS: readonly string[] = ['[gMASK]', '[MASK]']
+const BRACKET_MARKER_PATTERN = new RegExp(
+  BRACKET_MARKERS.map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+  'g',
+)
+
 /**
  * Remove chat-template special tokens (e.g. `<|begin_of_sentence|>`,
- * `<|user|>`, `<|assistant|>`, `<|endoftext|>`) from `text`.
+ * `<|user|>`, `<|assistant|>`, `<|endoftext|>`) and known bracket markers
+ * (e.g. `[gMASK]`) from `text`.
  *
  * Returns the cleaned text. When every character is stripped (the model only
  * emitted tokens), returns an empty string so callers can skip emitting an
@@ -27,6 +37,8 @@ const SPECIAL_TOKEN_PATTERN = /<\|[^|\n<]*\|>/g
 export function stripSpecialTokens(text: string): string {
   if (!text) return text
   // Fast path: nothing to strip.
-  if (!text.includes('<|')) return text
-  return text.replace(SPECIAL_TOKEN_PATTERN, '')
+  if (!text.includes('<|') && !text.includes('[')) return text
+  let out = text.replace(SPECIAL_TOKEN_PATTERN, '')
+  out = out.replace(BRACKET_MARKER_PATTERN, '')
+  return out
 }

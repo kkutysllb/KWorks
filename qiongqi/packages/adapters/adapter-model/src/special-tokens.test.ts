@@ -52,4 +52,18 @@ describe('stripSpecialTokens', () => {
     // A token with a newline is not a real special token — leave it.
     expect(stripSpecialTokens('<|foo\nbar|>x')).toBe('<|foo\nbar|>x')
   })
+
+  test('strips the [gMASK] bracket marker', () => {
+    expect(stripSpecialTokens('[gMASK]Hello')).toBe('Hello')
+    expect(stripSpecialTokens('[gMASK]<|begin_of_sentence|>Hi')).toBe('Hi')
+  })
+
+  test('strips the [MASK] bracket marker', () => {
+    expect(stripSpecialTokens('[MASK]foo')).toBe('foo')
+  })
+
+  test('does not strip arbitrary square-bracket prose', () => {
+    expect(stripSpecialTokens('[note: see docs]')).toBe('[note: see docs]')
+    expect(stripSpecialTokens('array[0] = 1')).toBe('array[0] = 1')
+  })
 })
