@@ -847,6 +847,10 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       cancelScheduledSync();
       mirrorRef.current.reset();
       workModeIdRef.current = undefined;
+      // Clear the stale thread id so ensureThread() doesn't reuse the previous
+      // thread when creating/sending on a new-thread page. Without this, a
+      // "new task" send silently routes to the old thread.
+      threadIdRef.current = null;
       setMessages([]);
       setValues({} as StateType);
       setIsLoading(false);
