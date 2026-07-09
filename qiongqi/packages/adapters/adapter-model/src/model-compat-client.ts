@@ -3,7 +3,7 @@ import type { TurnItem } from '@qiongqi/contracts'
 import { emptyUsageSnapshot, type UsageSnapshot } from '@qiongqi/contracts'
 import { isToolResultBridgeItem, repairModelHistoryItems } from '@qiongqi/domain'
 import { repairToolArguments } from './tool-argument-repair.js'
-import { stripSpecialTokens } from './special-tokens.js'
+import { sanitizeModelText } from './special-tokens.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
@@ -894,7 +894,7 @@ export class ModelCompatClient implements ModelClient {
       if (delta && typeof delta === 'object') {
         const content = delta.content
         if (typeof content === 'string' && content.length > 0) {
-          const cleaned = stripSpecialTokens(content)
+          const cleaned = sanitizeModelText(content)
           if (cleaned) {
             text += cleaned
             chunks.push({ kind: 'assistant_text_delta', text: cleaned })
@@ -1009,7 +1009,7 @@ export class ModelCompatClient implements ModelClient {
     if (type === 'response.output_text.delta') {
       const delta = recordString(payload, 'delta')
       if (delta) {
-        const cleaned = stripSpecialTokens(delta)
+        const cleaned = sanitizeModelText(delta)
         if (cleaned) {
           text += cleaned
           chunks.push({ kind: 'assistant_text_delta', text: cleaned })
@@ -1128,7 +1128,7 @@ export class ModelCompatClient implements ModelClient {
       if (deltaType === 'text_delta') {
         const value = recordString(delta, 'text')
         if (value) {
-          const cleaned = stripSpecialTokens(value)
+          const cleaned = sanitizeModelText(value)
           if (cleaned) {
             text += cleaned
             chunks.push({ kind: 'assistant_text_delta', text: cleaned })
@@ -1217,7 +1217,7 @@ export class ModelCompatClient implements ModelClient {
       yield { kind: 'assistant_reasoning_delta', text: reasoning }
     }
     if (text) {
-      const cleaned = stripSpecialTokens(text)
+      const cleaned = sanitizeModelText(text)
       if (cleaned) yield { kind: 'assistant_text_delta', text: cleaned }
     }
     if (Array.isArray(choice.message?.tool_calls)) {
@@ -1275,7 +1275,7 @@ export class ModelCompatClient implements ModelClient {
         ? payload.output_text
         : responsesOutputText(payload.output)
       if (outputText) {
-        const cleaned = stripSpecialTokens(outputText)
+        const cleaned = sanitizeModelText(outputText)
         if (cleaned) chunks.push({ kind: 'assistant_text_delta', text: cleaned })
       }
     }
@@ -1317,7 +1317,7 @@ export class ModelCompatClient implements ModelClient {
       if (type === 'text') {
         const text = recordString(block, 'text')
         if (text) {
-          const cleaned = stripSpecialTokens(text)
+          const cleaned = sanitizeModelText(text)
           if (cleaned) yield { kind: 'assistant_text_delta', text: cleaned }
         }
       } else if (type === 'thinking') {

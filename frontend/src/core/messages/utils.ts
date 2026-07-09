@@ -175,19 +175,39 @@ export function extractTextFromMessage(message: Message) {
   return "";
 }
 
-const THINK_TAG_RE = /<think>\s*([\s\S]*?)\s*<\/think>/g;
+// Reasoning tag names some models emit inline (instead of via a dedicated
+// reasoning channel). Covers DeepSeek-R1 `<think>` and fine-tune variants.
+const REASONING_TAG_NAMES = ["think", "thinking", "reasoning", "reflection"];
+
+// Paired `<tag>...</tag>` — capture the inner reasoning to recover it.
+const THINK_TAG_RE = new RegExp(
+  `<(?:${REASONING_TAG_NAMES.join("|")})>\\s*([\\s\\S]*?)\\s*<\\/(?:${REASONING_TAG_NAMES.join("|")})>`,
+  "gi",
+);
+// Unclosed opener (streaming mid-block, or model forgot to close): drop to EOF.
+const THINK_UNCLOSED_RE = new RegExp(
+  `<(?:${REASONING_TAG_NAMES.join("|")})>[\\s\\S]*`,
+  "gi",
+);
+// Orphaned closer (opener was in an earlier chunk): just remove the tag.
+const THINK_ORPHANED_CLOSE_RE = new RegExp(
+  `<\\/(?:${REASONING_TAG_NAMES.join("|")})>`,
+  "gi",
+);
 
 function splitInlineReasoning(content: string) {
   const reasoningParts: string[] = [];
-  const cleaned = content
+  let cleaned = content
     .replace(THINK_TAG_RE, (_, reasoning: string) => {
       const normalized = reasoning.trim();
       if (normalized) {
         reasoningParts.push(normalized);
       }
       return "";
-    })
-    .trim();
+    });
+  // Drop unclosed openers and orphaned closers (no reasoning to recover).
+  cleaned = cleaned.replace(THINK_UNCLOSED_RE, "").replace(THINK_ORPHANED_CLOSE_RE, "");
+  cleaned = cleaned.trim();
 
   return {
     content: cleaned,

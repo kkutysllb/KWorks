@@ -12,6 +12,8 @@
  * left untouched — the pattern requires the `|` delimiters.
  */
 
+import { stripInlineReasoningTags } from './reasoning-tags.js'
+
 /** Matches a single `<|name|>`-style special token (name is non-greedy, no
  *  newlines, no inner spaces so we don't swallow real prose). */
 const SPECIAL_TOKEN_PATTERN = /<\|[^|\n<]*\|>/g
@@ -41,4 +43,14 @@ export function stripSpecialTokens(text: string): string {
   let out = text.replace(SPECIAL_TOKEN_PATTERN, '')
   out = out.replace(BRACKET_MARKER_PATTERN, '')
   return out
+}
+
+/**
+ * Full text sanitization applied at every model-text emission point:
+ * special tokens, bracket markers, AND inline reasoning/thinking tags.
+ * Use this (rather than calling the individual strippers) so new sanitization
+ * rules are picked up everywhere automatically.
+ */
+export function sanitizeModelText(text: string): string {
+  return stripInlineReasoningTags(stripSpecialTokens(text))
 }
