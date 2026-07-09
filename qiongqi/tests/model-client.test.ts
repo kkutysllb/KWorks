@@ -3205,6 +3205,50 @@ describe('DeepseekCompatModelClient', () => {
     expect(assistantMessage?.content).toBe('(tool call)')
   })
 
+  it('MiniMax injects a user message when the request has only system messages', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'r1',
+      model: 'MiniMax-M3',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl,
+      nonStreaming: true
+    })
+    // A request with no history — only the system prompt — simulates the
+    // post-compaction state where everything folded into system messages.
+    const request = buildRequest(new AbortController().signal)
+    request.history = []
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    // MiniMax rejects a request with only system messages ("chat content is
+    // empty"); a user message must be present.
+    const hasUser = messages.some((message) => message.role === 'user')
+    expect(hasUser).toBe(true)
+  })
+
   it('sends compaction summaries as mutable system messages', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {

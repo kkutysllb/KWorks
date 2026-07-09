@@ -557,9 +557,20 @@ export class ModelCompatClient implements ModelClient {
     // user/assistant alternation (Zhipu 1214). Sanitizing here ensures every
     // path gets a non-empty content shape before provider-specific conversion.
     const sanitized = sanitizeEmptyMessageContent(healed, this.config.baseUrl)
+    // MiniMax (chat_completions/responses) rejects a request that contains
+    // only system messages ("chat content is empty"). After aggressive
+    // compaction the conversation can be folded into a single system summary
+    // with no user/assistant turn. Inject a minimal user message so the model
+    // has content to respond to. The Anthropic messages path manages its own
+    // system/messages split and tolerates an empty messages array, so skip it
+    // there to avoid altering that shape.
+    const withUser =
+      endpointFormat === 'messages'
+        ? sanitized
+        : ensureUserMessagePresent(sanitized)
     return isGlmProviderRequest(this.config.baseUrl, endpointFormat, model)
-      ? normalizeGlmMessages(sanitized)
-      : sanitized
+      ? normalizeGlmMessages(withUser)
+      : withUser
   }
 
   private itemsToMessages(
@@ -2357,6 +2368,21 @@ function normalizeThinkingAssistantMessages(
     }
     return next
   })
+}
+
+/**
+ * Ensure the request has at least one non-system message. Some providers
+ * (notably MiniMax, error 2013 "chat content is empty") reject a request that
+ * contains ONLY system messages with no user/assistant turn to respond to.
+ * This happens after aggressive compaction folds the conversation into a
+ * single system summary and the recent tail is absent (e.g. a tool-call loop
+ * resumed with only the summary). Inject a minimal user message so the model
+ * has content to respond to.
+ */
+function ensureUserMessagePresent(messages: ChatMessage[]): ChatMessage[] {
+  const hasNonSystem = messages.some((m) => m.role !== 'system')
+  if (hasNonSystem) return messages
+  return [...messages, { role: 'user', content: 'Continue.' } as ChatMessage]
 }
 
 function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
