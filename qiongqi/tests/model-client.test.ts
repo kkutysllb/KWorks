@@ -3249,6 +3249,60 @@ describe('DeepseekCompatModelClient', () => {
     expect(hasUser).toBe(true)
   })
 
+  it('GLM injects a leading user message when the first conversational message is assistant (1214)', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'r1',
+      model: 'glm-4.6',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      apiKey: 'k',
+      model: 'glm-4.6',
+      fetchImpl,
+      nonStreaming: true
+    })
+    // Post-compaction: a system summary followed by an assistant turn with no
+    // preceding user message — Zhipu GLM rejects this (error 1214).
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'glm-5.2'
+    request.history = [
+      makeAssistantTextItem({
+        id: 'assistant_first',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        text: 'I will help with that.',
+        status: 'completed'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    // After normalization there must be a user message before the first
+    // assistant message so GLM accepts the conversation.
+    const firstNonSystem = messages.find((message) => message.role !== 'system')
+    expect(firstNonSystem?.role).toBe('user')
+    expect(messages.some((message) => message.role === 'assistant')).toBe(true)
+  })
+
   it('sends compaction summaries as mutable system messages', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {

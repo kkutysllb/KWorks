@@ -2409,6 +2409,13 @@ function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
       { role: 'user', content: 'Continue.' }
     ]
   }
+  // Zhipu GLM rejects (error 1214 "messages 参数非法") when the first
+  // conversational message is not a user message — e.g. after compaction
+  // folds history into a system summary whose following tail starts with an
+  // assistant turn. Insert a minimal user message to lead the conversation.
+  if (nonSystemMessages[0]?.role !== 'user') {
+    return [systemMessage, { role: 'user', content: 'Continue.' }, ...nonSystemMessages]
+  }
   return [systemMessage, ...nonSystemMessages]
 }
 
