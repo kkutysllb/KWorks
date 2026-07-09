@@ -3146,6 +3146,65 @@ describe('DeepseekCompatModelClient', () => {
     expect(toolMessage?.content).toBe('(tool returned no output)')
   })
 
+  it('MiniMax coerces empty tool-call assistant content to a placeholder', async () => {
+    const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
+    const response = {
+      id: 'r1',
+      model: 'MiniMax-M3',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'done' }
+        }
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimax.chat/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.history = [
+      makeToolCallItem({
+        id: 'call_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        arguments: { text: 'a' }
+      }),
+      makeToolResultItem({
+        id: 'result_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        output: 'a'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const messages = sentBodies[0]?.messages ?? []
+    const assistantMessage = messages.find((message) => message.role === 'assistant' && Array.isArray(message.tool_calls))
+    // MiniMax rejects a missing/empty content field (error 2013); we supply a
+    // minimal placeholder instead of omitting the content key.
+    expect(assistantMessage?.content).toBe('(tool call)')
+  })
+
   it('sends compaction summaries as mutable system messages', async () => {
     const sentBodies: Array<{ messages?: Array<Record<string, unknown>> }> = []
     const response = {

@@ -384,7 +384,7 @@ export class ModelCompatClient implements ModelClient {
     // null/empty/whitespace/empty-array content. sanitizeEmptyMessageContent
     // already ran in collectMessages, but we re-run here as a belt-and-braces
     // guard against any transformation between collect and build.
-    const finalMessages = sanitizeEmptyMessageContent(messages)
+    const finalMessages = sanitizeEmptyMessageContent(messages, this.config.baseUrl)
     body.messages = finalMessages
     // Diagnostic: surface any message that STILL looks empty after sanitization
     // (should never happen, but if it does we want to know the exact shape).
@@ -556,7 +556,7 @@ export class ModelCompatClient implements ModelClient {
     // messagesToAnthropic silently drops empty-block messages, which breaks
     // user/assistant alternation (Zhipu 1214). Sanitizing here ensures every
     // path gets a non-empty content shape before provider-specific conversion.
-    const sanitized = sanitizeEmptyMessageContent(healed)
+    const sanitized = sanitizeEmptyMessageContent(healed, this.config.baseUrl)
     return isGlmProviderRequest(this.config.baseUrl, endpointFormat, model)
       ? normalizeGlmMessages(sanitized)
       : sanitized
@@ -2083,17 +2083,23 @@ function reasoningContentOrSpace(text: string): string {
  * content before the emptiness check. Messages with real content are left
  * untouched.
  */
-function sanitizeEmptyMessageContent(messages: ChatMessage[]): ChatMessage[] {
+function sanitizeEmptyMessageContent(messages: ChatMessage[], baseUrl?: string): ChatMessage[] {
+  // Some providers (notably MiniMax, error 2013 "chat content is empty") reject
+  // a missing/empty content field on assistant messages even when tool_calls
+  // are present. For those providers we must supply a placeholder. For others,
+  // the OpenAI-spec-compliant shape (omit content) is preferred because a
+  // visible placeholder can pollute the conversation the model sees.
+  const requireAssistantContent = baseUrl ? isMiniMaxProvider(baseUrl, undefined) : false
   return messages.map((message) => {
     if (!isEmptyContent(message.content)) return message
     if (message.role === 'assistant') {
-      // Tool-call-only assistant message. We MUST NOT put a visible placeholder
-      // string here — the model treats it as real conversation content and
-      // starts echoing it (observed: assistant replying "." repeatedly). The
-      // OpenAI chat-completions spec allows an assistant message to carry only
-      // `tool_calls` with content omitted, and most providers (including
-      // MiniMax) accept the absent field. We rebuild the object without the
-      // content key so it does not appear in the serialized JSON.
+      if (requireAssistantContent) {
+        // Strict provider: supply a minimal non-whitespace placeholder that is
+        // unambiguous and unlikely to be echoed as conversation.
+        return { ...message, content: '(tool call)' }
+      }
+      // Spec-compliant: omit the content key entirely. Most providers accept an
+      // assistant message carrying only tool_calls with content omitted.
       const sanitized: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(message)) {
         if (key !== 'content') sanitized[key] = value
@@ -2139,13 +2145,9 @@ function diagnoseEmptyContent(messages: ChatMessage[], baseUrl: string): void {
     .map((message, index) => ({ index, message }))
     .filter((entry) => {
       const msg = entry.message as ChatMessage & { content?: unknown }
-      // An assistant message with tool_calls whose content was omitted (the
-      // intended sanitized state) is not an offender. After sanitization the
-      // content key is absent; treat that as valid for tool-carrying assistants.
-      const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0
-      if (msg.role === 'assistant' && hasToolCalls && msg.content === undefined) {
-        return false
-      }
+      // After sanitization, assistant tool-call messages carry a placeholder
+      // ('(tool call)') so they should never be empty. Any message that is
+      // STILL empty here means sanitization missed a case.
       return isEmptyContent(msg.content)
     })
   if (offenders.length === 0) return
