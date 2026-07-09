@@ -44,7 +44,12 @@ export function BashCommandCard({
   onDeny,
 }: BashCommandCardProps) {
   const denied = approval?.status === "denied";
-  const [expanded, setExpanded] = useState(false);
+  // Initialize expanded to match the initial status so a card that mounts
+  // already running/failed doesn't flip false→true on the first effect (which
+  // adds the output area in a second paint and visibly jumps the layout).
+  const [expanded, setExpanded] = useState(
+    status === "running" || status === "failed",
+  );
   const prevStatus = useRef<ToolCallStatus>(status);
 
   // Auto-expand while running/failed; collapse on first completion.
