@@ -2188,19 +2188,21 @@ function diagnoseRejectedRequest(
   console.warn(
     `[diagnoseRejectedRequest] ${status} from ${sanitizeEndpointUrl(url)} — provider rejected request body:`,
     '\nerror:', errorText.slice(0, 500),
-    '\nmessages:', JSON.stringify(
-      messages.map((m: Record<string, unknown>, i: number) => ({
-        i,
-        role: m.role,
-        content: m.content,
-        contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
-        hasToolCalls: Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
-        toolCallIds: Array.isArray(m.tool_calls)
-          ? m.tool_calls.map((c: Record<string, unknown>) => (c as { id?: string })?.id)
-          : undefined,
-        toolCallId: m.tool_call_id,
-        reasoningContent: m.reasoning_content
-      })),
+    '\nmessage overview (i/role/empty/len/hasToolCalls):',
+    messages.map((m: Record<string, unknown>, i: number) => {
+      const c = m.content
+      const len = typeof c === 'string' ? c.length : Array.isArray(c) ? JSON.stringify(c).length : -1
+      const empty = c == null || (typeof c === 'string' && c.trim() === '') || (Array.isArray(c) && c.length === 0)
+      return { i, role: m.role, empty, len, hasToolCalls: Array.isArray(m.tool_calls) && m.tool_calls.length > 0 }
+    }),
+    '\nempty messages full detail:',
+    JSON.stringify(
+      messages
+        .map((m: Record<string, unknown>, i: number) => ({ i, m }))
+        .filter((e) => {
+          const c = e.m.content
+          return c == null || (typeof c === 'string' && c.trim() === '') || (Array.isArray(c) && c.length === 0)
+        }),
       null,
       0
     ),
