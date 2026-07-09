@@ -104,14 +104,12 @@ export function MessageGroup({
     [reasoningSteps],
   );
 
-  // Tool-call steps are collapsed by default. While a turn is streaming, auto-
-  // expand so the user sees live progress; once it settles, respect the user's
-  // manual toggle.
-  const [userToggled, setUserToggled] = useState(false);
-  const [stepsOpenState, setStepsOpenState] = useState(false);
-  const stepsOpen = userToggled
-    ? stepsOpenState
-    : isLoading || stepsOpenState;
+  // Tool-call steps are collapsed by default and controlled only by the user.
+  // Previously this auto-expanded while streaming (isLoading), but isLoading
+  // toggles during a turn (tool start/result) caused the collapsible to flip
+  // open/closed repeatedly — visibly flashing the command execution ("一闪而逝")
+  // and jittering the layout. Keep it purely user-driven now.
+  const [stepsOpen, setStepsOpen] = useState(false);
 
   return (
     <ChainOfThought
@@ -120,10 +118,7 @@ export function MessageGroup({
       {toolCallSteps.length > 0 && (
         <Collapsible
           open={stepsOpen}
-          onOpenChange={(open) => {
-            setUserToggled(true);
-            setStepsOpenState(open);
-          }}
+          onOpenChange={setStepsOpen}
           className="px-4 pb-2"
         >
           <CollapsibleTrigger
