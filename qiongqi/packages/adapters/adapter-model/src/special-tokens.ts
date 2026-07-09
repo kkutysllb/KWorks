@@ -13,6 +13,7 @@
  */
 
 import { stripInlineReasoningTags } from './reasoning-tags.js'
+import { stripInlineToolCallMarkers } from './tool-call-markers.js'
 
 /** Matches a single `<|name|>`-style special token (name is non-greedy, no
  *  newlines, no inner spaces so we don't swallow real prose). */
@@ -47,10 +48,10 @@ export function stripSpecialTokens(text: string): string {
 
 /**
  * Full text sanitization applied at every model-text emission point:
- * special tokens, bracket markers, AND inline reasoning/thinking tags.
- * Use this (rather than calling the individual strippers) so new sanitization
- * rules are picked up everywhere automatically.
+ * special tokens, bracket markers, inline reasoning/thinking tags, AND inline
+ * tool/function-call markers. Use this (rather than calling the individual
+ * strippers) so new sanitization rules are picked up everywhere automatically.
  */
 export function sanitizeModelText(text: string): string {
-  return stripInlineReasoningTags(stripSpecialTokens(text))
+  return stripInlineToolCallMarkers(stripInlineReasoningTags(stripSpecialTokens(text)))
 }
