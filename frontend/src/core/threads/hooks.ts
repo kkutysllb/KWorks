@@ -532,9 +532,6 @@ export function useThreadStream({
     startedRef.current = false;
     messagesRef.current = [];
     summarizedRef.current = new Set<string>();
-    // Pending approvals belong to the previous thread; start fresh so they
-    // don't get claimed by the new thread's tool cards.
-    approvalStoreRef.current = createApprovalStore();
     if (!isActivatingPendingSubmit) {
       sendInFlightRef.current = false;
       setOptimisticMessages([]);
