@@ -508,8 +508,18 @@ function ToolCallDetail({
     );
   }
   return (
-    <ChainOfThoughtSearchResult className={interactive ? "cursor-pointer" : ""}>
-      {detail.value}
+    <ChainOfThoughtSearchResult
+      className={cn(
+        "max-w-full",
+        interactive ? "cursor-pointer" : "",
+      )}
+    >
+      <span
+        className="block truncate font-mono text-xs"
+        title={detail.value}
+      >
+        {detail.value}
+      </span>
     </ChainOfThoughtSearchResult>
   );
 }
