@@ -13,7 +13,13 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
     className={cn("relative flex-1 overflow-y-hidden", className)}
     initial="smooth"
-    resize="smooth"
+    // `resize` controls how the view re-follows the bottom when content grows.
+    // "instant" is required for streaming (e.g. bash output arriving every
+    // ~100ms): "smooth" starts a ~300ms scroll animation per resize event, and
+    // the next chunk arrives before it finishes, so the animations interrupt
+    // each other and the whole page visibly jitters. "instant" jumps to the
+    // new bottom with no animation, which is stable under rapid growth.
+    resize="instant"
     role="log"
     {...props}
   />
