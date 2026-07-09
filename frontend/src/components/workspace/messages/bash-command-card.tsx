@@ -62,12 +62,17 @@ export function BashCommandCard({
 
   // While running, keep the output pinned to the bottom so the newest line is
   // visible — UNLESS the user has scrolled up (then respect their view).
+  // Defer to an animation frame to avoid a synchronous forced reflow
+  // (scrollHeight read) on every streaming chunk.
   const outputRef = useRef<HTMLPreElement>(null);
   const stuckToBottom = useRef(true);
   useEffect(() => {
-    const el = outputRef.current;
-    if (!el || status !== "running" || !stuckToBottom.current) return;
-    el.scrollTop = el.scrollHeight;
+    if (status !== "running" || !stuckToBottom.current) return;
+    const raf = requestAnimationFrame(() => {
+      const el = outputRef.current;
+      if (el && stuckToBottom.current) el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [output, status, expanded]);
 
   const hasOutput = typeof output === "string" && output.length > 0;
@@ -145,7 +150,9 @@ export function BashCommandCard({
       </pre>
 
       {/* output (collapsed by default; auto-expand while running/failed).
-          Each line is its own element so individual lines stay queryable. */}
+          Each line is its own element so individual lines stay queryable.
+          While running, a min-height stabilizes the box so the card doesn't
+          visibly "breathe" as output grows line-by-line. */}
       {expanded && hasOutput && (
         <pre
           ref={outputRef}
@@ -154,7 +161,12 @@ export function BashCommandCard({
             stuckToBottom.current =
               el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
           }}
-          className="max-h-80 overflow-auto border-t border-border bg-background/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
+          className={cn(
+            "max-h-80 overflow-auto border-t border-border bg-background/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground",
+            // Reserve a stable height while running to prevent per-line height
+            // growth from jittering the card region.
+            isRunning && "min-h-40",
+          )}
         >
           {output!.split("\n").map((line, i, lines) => (
             <div key={i} className="whitespace-pre-wrap break-all">
