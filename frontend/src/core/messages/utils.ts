@@ -176,8 +176,16 @@ export function extractTextFromMessage(message: Message) {
 }
 
 // Reasoning tag names some models emit inline (instead of via a dedicated
-// reasoning channel). Covers DeepSeek-R1 `<think>` and fine-tune variants.
-const REASONING_TAG_NAMES = ["think", "thinking", "reasoning", "reflection"];
+// reasoning channel). Covers DeepSeek-R1 `<think>`, fine-tune variants, and
+// MiniMax M3 (`<mm:think>`, `<ask>`).
+const REASONING_TAG_NAMES = [
+  "think",
+  "thinking",
+  "reasoning",
+  "reflection",
+  "mm:think",
+  "ask",
+];
 
 // Paired `<tag>...</tag>` — capture the inner reasoning to recover it.
 const THINK_TAG_RE = new RegExp(

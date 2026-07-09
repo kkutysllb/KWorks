@@ -6,6 +6,7 @@
  * some GLM/DeepSeek proxies) can inline reasoning as tags like:
  *   - DeepSeek-R1:        `<think>...</think>`
  *   - Some fine-tunes:    `<thinking>...</thinking>`, `<reflection>...</reflection>`
+ *   - MiniMax M3:         `<mm:think>...</mm:think>` (colon-prefixed), `<ask>...</ask>`
  *
  * The content between the tags IS the reasoning; we drop it entirely here
  * (the engine's reasoning channel is populated separately via
@@ -14,24 +15,39 @@
  * message body.
  *
  * Handles the full lifecycle robustly:
- *   1. Paired tags:        `<think>...</think>`           → removed (inner dropped)
- *   2. Unclosed opener:    `<think>reasoning still going` → removed to end of text
+ *   1. Paired tags:        `<tag>...</tag>`           → removed (inner dropped)
+ *   2. Unclosed opener:    `<tag>reasoning still going` → removed to end of text
  *                          (streaming mid-block, or model forgot to close)
- *   3. Orphaned closer:    `actual answer</think>`        → the `</think>` removed
+ *   3. Orphaned closer:    `actual answer</tag>`        → the `</tag>` removed
  *                          (opener was in an earlier chunk)
- *   4. Variant tag names:  `<thinking>`, `<reasoning>`, `<reflection>`
+ *   4. Variant tag names:  `<thinking>`, `<reasoning>`, `<reflection>`,
+ *                          `<mm:think>` (MiniMax M3), `<ask>`
  *
  * Order matters: paired removal first, then unclosed-openers (greedy to EOF),
  * then orphaned closers. This avoids the unclosed-opener rule eating a block
  * that actually closes later in the same text.
  */
 
-/** Reasoning tag names known to be emitted inline by various models. */
-const REASONING_TAG_NAMES = ['think', 'thinking', 'reasoning', 'reflection'] as const
+/**
+ * Reasoning/instruction tag names known to be emitted inline by various models.
+ * Names may contain colons (e.g. MiniMax's `mm:think`).
+ */
+const REASONING_TAG_NAMES = [
+  'think',
+  'thinking',
+  'reasoning',
+  'reflection',
+  'mm:think',
+  'ask',
+] as const
+
+/** A single name alternative escaped for regex, joined into an alternation.
+ *  Colons are escaped; names are matched case-insensitively. */
+const NAME_ALT = REASONING_TAG_NAMES.join('|')
 
 /** Matches a paired `<tag>...</tag>` block for any reasoning tag name. */
 const PAIRED_RE = new RegExp(
-  `<(?:${REASONING_TAG_NAMES.join('|')})>[\\s\\S]*?<\\/(?:${REASONING_TAG_NAMES.join('|')})>`,
+  `<(?:${NAME_ALT})>[\\s\\S]*?<\\/(?:${NAME_ALT})>`,
   'gi',
 )
 
@@ -42,14 +58,20 @@ const PAIRED_RE = new RegExp(
  * of the text is reasoning and is dropped.
  */
 const UNCLOSED_OPENER_RE = new RegExp(
-  `<(?:${REASONING_TAG_NAMES.join('|')})>[\\s\\S]*`,
+  `<(?:${NAME_ALT})>[\\s\\S]*`,
   'gi',
 )
 
 /** Matches an orphaned closing tag `</tag>` with no preceding opener. */
 const ORPHANED_CLOSER_RE = new RegExp(
-  `<\\/(?:${REASONING_TAG_NAMES.join('|')})>`,
+  `<\\/(?:${NAME_ALT})>`,
   'gi',
+)
+
+/** Fast-path test: does the text contain any reasoning tag at all? */
+const HAS_ANY_TAG_RE = new RegExp(
+  `<\\/?(${NAME_ALT})>`,
+  'i',
 )
 
 /**
@@ -62,7 +84,7 @@ const ORPHANED_CLOSER_RE = new RegExp(
 export function stripInlineReasoningTags(text: string): string {
   if (!text) return text
   // Fast path: no reasoning tags present.
-  if (!/<\/?(?:think|thinking|reasoning|reflection)>/i.test(text)) return text
+  if (!HAS_ANY_TAG_RE.test(text)) return text
   let out = text.replace(PAIRED_RE, '')
   out = out.replace(UNCLOSED_OPENER_RE, '')
   out = out.replace(ORPHANED_CLOSER_RE, '')

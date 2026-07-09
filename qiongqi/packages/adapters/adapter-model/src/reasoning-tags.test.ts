@@ -92,4 +92,38 @@ describe('stripInlineReasoningTags', () => {
       ),
     ).toBe('visible')
   })
+
+  // --- MiniMax M3 variants ---
+
+  test('handles MiniMax M3 <mm:think> paired tags', () => {
+    expect(
+      stripInlineReasoningTags('Hi<mm:think>secret</mm:think>Bye'),
+    ).toBe('HiBye')
+  })
+
+  test('handles MiniMax M3 <mm:think> unclosed opener', () => {
+    expect(
+      stripInlineReasoningTags('Go<mm:think>reasoning never closes'),
+    ).toBe('Go')
+  })
+
+  test('handles MiniMax M3 orphaned </mm:think> closer', () => {
+    expect(stripInlineReasoningTags('answer</mm:think>tail')).toBe('answertail')
+  })
+
+  test('handles <ask> paired tags (MiniMax M3 instruction marker)', () => {
+    expect(
+      stripInlineReasoningTags('visible<ask>internal question</ask>more'),
+    ).toBe('visiblemore')
+  })
+
+  test('handles <ask> unclosed opener', () => {
+    expect(
+      stripInlineReasoningTags('text<ask>still asking'),
+    ).toBe('text')
+  })
+
+  test('handles <ask> orphaned closer', () => {
+    expect(stripInlineReasoningTags('content</ask>rest')).toBe('contentrest')
+  })
 })
