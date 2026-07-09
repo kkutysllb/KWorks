@@ -184,6 +184,11 @@ export function MessageList({
   }
   return (
     <Conversation
+      // Re-mount the scroll container when the thread changes so stale DOM
+      // (old messages) is fully torn down. Without this, navigating from an
+      // existing thread to a new one leaves the previous messages overlapped
+      // with the Welcome screen until a manual refresh.
+      key={threadId ?? "new-thread"}
       className={cn("flex size-full flex-col justify-center", className)}
     >
       <ConversationContent
