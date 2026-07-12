@@ -9,12 +9,6 @@ import {
 import { useMemo, useState } from "react";
 
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-
-import {
   ChainOfThought,
   ChainOfThoughtSearchResult,
   ChainOfThoughtSearchResults,
@@ -26,9 +20,14 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useI18n } from "@/core/i18n/hooks";
-import type { Message } from "@/core/threads/qiongqi-types";
 import type { ApprovalStore } from "@/core/threads/approval-store";
+import type { Message } from "@/core/threads/qiongqi-types";
 import {
   describeToolCallDisplay,
   type ToolCallDisplayDetail,
@@ -39,11 +38,12 @@ import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
+import { Tooltip } from "../tooltip";
+
 import { BashCommandCard } from "./bash-command-card";
 import { convertToSteps } from "./message-steps";
 import { ToolStep } from "./tool-step";
 import type { ToolCallStatus } from "./tool-step";
-import { Tooltip } from "../tooltip";
 
 // Re-export so existing import paths (`@/components/workspace/messages/message-group`)
 // continue to resolve, and so Task 9's renderer can consume the step types.

@@ -81,7 +81,7 @@ export function BashCommandCard({
   }, [output, status, expanded]);
 
   const hasOutput = typeof output === "string" && output.length > 0;
-  const count = lineCount ?? (hasOutput ? output!.split("\n").length : 0);
+  const count = lineCount ?? (hasOutput ? output.split("\n").length : 0);
   const isRunning = status === "running";
   const isFailed = status === "failed" || denied;
 
@@ -173,7 +173,7 @@ export function BashCommandCard({
             isRunning && "min-h-40",
           )}
         >
-          {output!.split("\n").map((line, i, lines) => (
+          {output.split("\n").map((line, i, lines) => (
             <div key={i} className="whitespace-pre-wrap break-all">
               {line}
               {isRunning && i === lines.length - 1 && (
@@ -185,7 +185,7 @@ export function BashCommandCard({
       )}
 
       {/* approval actions */}
-      {approval && approval.status === "pending" && (
+      {approval?.status === "pending" && (
         <div className="flex gap-2 border-t border-border px-3 py-2">
           <button
             type="button"

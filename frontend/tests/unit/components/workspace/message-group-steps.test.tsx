@@ -78,10 +78,7 @@ describe("convertToSteps reads tool status and bash output", () => {
     const step = steps.find((s) => s.type === "toolCall");
     expect(step).toBeDefined();
     expect(step?.type).toBe("toolCall");
-    return step as Extract<
-      (typeof steps)[number],
-      { type: "toolCall" }
-    >;
+    return step!;
   }
 
   test("pending tool call has status pending, no output", () => {

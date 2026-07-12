@@ -60,6 +60,7 @@ import {
   stopEmbeddedTerminal,
   writeEmbeddedTerminal,
 } from "@/core/desktop";
+import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
 import {
   ProjectFetchError,
   useAcceptStageSuggestion,
@@ -76,7 +77,6 @@ import {
   useProject,
   useWorktrees,
 } from "@/core/projects";
-import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
 import type {
   CodingSkill,
   DeliveryStage,

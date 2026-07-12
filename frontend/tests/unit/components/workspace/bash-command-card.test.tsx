@@ -2,9 +2,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import { BashCommandCard } from "@/components/workspace/messages/bash-command-card";
 import { zhCN } from "@/core/i18n";
 
-import { BashCommandCard } from "@/components/workspace/messages/bash-command-card";
 
 describe("BashCommandCard", () => {
   const baseProps = {

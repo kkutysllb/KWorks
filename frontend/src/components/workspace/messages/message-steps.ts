@@ -170,7 +170,7 @@ export function convertToSteps(
       if (step.type !== "toolCall") continue;
       const claimed = approvalStore.peekForTool(step.name);
       if (claimed) {
-        (step as CoTToolCallStep).approval = {
+        (step).approval = {
           approvalId: claimed.approvalId,
           status: claimed.status,
           summary: claimed.summary,
