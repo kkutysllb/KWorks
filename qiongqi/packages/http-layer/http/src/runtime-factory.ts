@@ -922,10 +922,15 @@ function withRuntimeMountedSkillRoots(
   runtimeMountedSkillRoots: readonly string[]
 ): QiongqiCapabilitiesConfig | undefined {
   if (!capabilities?.skills || runtimeMountedSkillRoots.length === 0) return capabilities
+  // When the KWorks desktop app mounts skill roots at startup (via
+  // KWorks_SKILLS_PATH), skills are a core capability that must stay enabled.
+  // Per-section/per-user config writes can flip enabled=false; force-retain it
+  // here so the live SkillPluginHost never sees a disabled state.
   return {
     ...capabilities,
     skills: {
       ...capabilities.skills,
+      enabled: true,
       roots: uniqueStrings([
         ...runtimeMountedSkillRoots,
         ...capabilities.skills.roots
