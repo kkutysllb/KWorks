@@ -16,8 +16,18 @@ interface PathParts {
   stem: string;
 }
 
+export function artifactPathname(selection: string): string {
+  if (!selection.startsWith("write-file:")) return selection;
+
+  try {
+    return decodeURIComponent(new URL(selection).pathname);
+  } catch {
+    return selection;
+  }
+}
+
 function pathParts(path: string): PathParts {
-  const normalizedPath = path.replaceAll("\\", "/");
+  const normalizedPath = artifactPathname(path).replaceAll("\\", "/");
   const separatorIndex = normalizedPath.lastIndexOf("/");
   const basename = normalizedPath.slice(separatorIndex + 1);
   const extensionIndex = basename.lastIndexOf(".");

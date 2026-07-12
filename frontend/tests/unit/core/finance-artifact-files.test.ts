@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  artifactPathname,
   isHtmlArtifact,
   resolveFinanceMarkdownArtifact,
 } from "@/components/workspace/finance/finance-artifact-files";
@@ -102,5 +103,60 @@ describe("finance artifact files", () => {
     expect(isHtmlArtifact("reports/dashboard.HTML")).toBe(true);
     expect(isHtmlArtifact("reports/dashboard.htm")).toBe(false);
     expect(isHtmlArtifact("reports/dashboard.html.md")).toBe(false);
+  });
+
+  test("detects HTML artifacts in live write-file selections", () => {
+    expect(
+      isHtmlArtifact(
+        "write-file:reports/dashboard.HTML?message_id=m&tool_call_id=c",
+      ),
+    ).toBe(true);
+  });
+
+  test("resolves a plain semantic report from a live dashboard selection", () => {
+    const root = "reports/2026-07-10_market_linkage";
+
+    expect(
+      resolveFinanceMarkdownArtifact(
+        `write-file:${root}/dashboard.html?message_id=m&tool_call_id=c`,
+        [
+          `${root}/daily_report.md`,
+          `${root}/AUDIT.md`,
+          `${root}/one_liner.md`,
+          "other/latest.md",
+        ],
+      ),
+    ).toBe(`${root}/daily_report.md`);
+  });
+
+  test("decodes encoded live artifact pathnames", () => {
+    expect(
+      artifactPathname(
+        "write-file:reports%2Fmarket%20linkage%2Fdashboard.html?message_id=m",
+      ),
+    ).toBe("reports/market linkage/dashboard.html");
+  });
+
+  test("leaves plain artifact paths unchanged", () => {
+    expect(artifactPathname("reports/market linkage/dashboard.html")).toBe(
+      "reports/market linkage/dashboard.html",
+    );
+  });
+
+  test("returns malformed live selections unchanged", () => {
+    const malformed = "write-file:reports/%E0%A4%A/dashboard.html";
+
+    expect(artifactPathname(malformed)).toBe(malformed);
+  });
+
+  test("preserves a selected live Markdown artifact path", () => {
+    const markdownSelection =
+      "write-file:reports/dashboard.md?message_id=m&tool_call_id=c";
+
+    expect(
+      resolveFinanceMarkdownArtifact("reports/dashboard.html", [
+        markdownSelection,
+      ]),
+    ).toBe(markdownSelection);
   });
 });
