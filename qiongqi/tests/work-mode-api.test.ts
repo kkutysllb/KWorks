@@ -27,7 +27,7 @@ describe('work mode skill APIs', () => {
         skills: Array<{ id: string; enabled: boolean; locked: boolean }>
       }>
     }
-    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'office'])
+    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'finance', 'office'])
     expect(body.workModes.find((mode) => mode.id === 'office')).toMatchObject({
       builtin: true,
       editable: true
@@ -137,7 +137,7 @@ describe('work mode skill APIs', () => {
 
     const afterDelete = await api(h, '/api/work-modes')
     const body = await readJson(afterDelete) as { workModes: Array<{ id: string }> }
-    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'office'])
+    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'finance', 'office'])
   })
 
   it('requires custom work modes to have an agent instruction and a simple lowercase id', async () => {
