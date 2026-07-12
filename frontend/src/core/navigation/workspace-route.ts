@@ -32,6 +32,11 @@ function workspaceShellKey(pathname: string): string | null {
     return `coding:${decodeSegment(codingMatch[1])}`;
   }
 
+  const financeMatch = /^\/workspace\/finance\/([^/]+)\/?$/.exec(pathname);
+  if (financeMatch?.[1]) {
+    return `finance:${decodeSegment(financeMatch[1])}`;
+  }
+
   return null;
 }
 
