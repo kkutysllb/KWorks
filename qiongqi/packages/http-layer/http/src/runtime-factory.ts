@@ -737,8 +737,11 @@ export async function createToolMatrix(
     const previous = mcpProviders
     const current = runtimeConfigSnapshot(configStore)
     const currentCapabilities = withRuntimeMountedSkillRoots(current.capabilities, runtimeMountedSkillRoots)
-    await skillRuntime.reload(currentCapabilities?.skills)
-    await skillPluginHost.reload(currentCapabilities?.skills)
+    // Normalize legacy "task" work-mode to "office" before reloading the skill
+    // host, so effectiveSkillIds resolves correctly for the office mode.
+    const normalizedSkills = normalizeLegacyTaskSkills(currentCapabilities?.skills)
+    await skillRuntime.reload(normalizedSkills)
+    await skillPluginHost.reload(normalizedSkills)
     skillMcpServers = collectSkillMcpServers(
       skillPluginHost.list(),
       process.cwd(),
@@ -941,6 +944,30 @@ function withRuntimeMountedSkillRoots(
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)]
+}
+
+/**
+ * Rename a legacy `task` work-mode entry to `office` in a skills config.
+ * Prevents the skill host from seeing a stale `task` mode (which produces
+ * wrong effectiveSkillIds for the office mode). Mirrors the normalization in
+ * kworks-compat.ts but operates on the skills capability section.
+ */
+function normalizeLegacyTaskSkills(skills: QiongqiCapabilitiesConfig['skills'] | undefined): QiongqiCapabilitiesConfig['skills'] | undefined {
+  if (!skills?.workModes?.modes) return skills
+  const modes = skills.workModes.modes as Record<string, Record<string, unknown>>
+  if (!('task' in modes)) return skills
+  const { task, ...rest } = modes
+  const nextModes = 'office' in rest ? rest : { ...rest, office: { ...(task as Record<string, unknown>), id: 'office' } }
+  const nextDefault = skills.workModes.defaultModeId === 'task' ? 'office' : skills.workModes.defaultModeId
+  const overrides = (skills.modeSkillOverrides ?? {}) as Record<string, unknown>
+  const { task: _drop, ...cleanOverrides } = 'task' in overrides
+    ? { ...overrides, office: { ...(overrides.office ?? {}), ...overrides.task } }
+    : overrides
+  return {
+    ...skills,
+    workModes: { ...skills.workModes, defaultModeId: nextDefault, modes: nextModes as typeof modes },
+    modeSkillOverrides: cleanOverrides as typeof skills.modeSkillOverrides
+  }
 }
 
 async function filterDuplicateBuiltinSkillRoots(

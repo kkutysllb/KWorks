@@ -70,7 +70,7 @@ export type SkillPluginHostOptions = {
 
 const DEFAULT_ACTIVE_LIMIT = 3
 const DEFAULT_INSTRUCTION_BUDGET_BYTES = 24_000
-const DEFAULT_CATALOG_BUDGET_BYTES = 6_000
+const DEFAULT_CATALOG_BUDGET_BYTES = 12_000
 
 export class SkillPluginHost {
   private plugins: LoadedSkillPlugin[]
@@ -422,10 +422,8 @@ function buildAvailableSkillsInstruction(
     .filter((id) => !loadedIds.has(id))
   const lines = [
     `Available Skills${workModeId ? ` for work mode "${workModeId}"` : ''}:`,
-    'These are installed skill instruction packages available in the current work mode. Skills are not direct tool calls; use this list to understand what specialized workflows you can apply, and do not say no skills are installed merely because they are not listed as tools.',
-    roots.length ? `Configured skill roots: ${roots.map((root) => resolve(root)).join(', ')}` : 'Configured skill roots: none',
-    'When the user asks about installed, newly created, available skills, or what skills you can call or use, answer from this runtime skill catalog and the configured skill roots before discussing built-in tools. Do not search the current project workspace to discover installed skills.',
-    'Do not list built-in tools as skills. Built-in tools are execution capabilities; skills are instruction packages from the runtime skill catalog.',
+    'These are installed skill instruction packages available in the current work mode. Skills are not direct tool calls; use this list to understand what specialized workflows you can apply.',
+    'When the user asks about installed, available, or usable skills, answer from this list. Do not list built-in tools (bash, read, etc.) as skills.',
     ''
   ]
   let bytes = Buffer.byteLength(lines.join('\n'), 'utf8')
@@ -435,7 +433,7 @@ function buildAvailableSkillsInstruction(
     const commands = skill.manifest.activation.commands.length
       ? ` Commands: ${skill.manifest.activation.commands.join(', ')}.`
       : ''
-    const line = `- ${skill.manifest.name} (${skill.id})${description}${commands} root: ${skill.root}`
+    const line = `- ${skill.manifest.name} (${skill.id})${description}${commands}`
     const lineBytes = Buffer.byteLength(`${line}\n`, 'utf8')
     if (bytes + lineBytes > budgetBytes) break
     lines.push(line)

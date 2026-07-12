@@ -122,15 +122,15 @@ describe('SkillPluginHost.resolveTurn', () => {
   it('reloads work mode definitions on the same host instance', async () => {
     const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
 
-    expect(host.workModeInfo('finance-market')?.id).toBe('task')
+    expect(host.workModeInfo('finance-market')?.id).toBe('office')
 
     await host.reload(cfg({
       roots: [root],
       workModes: {
-        defaultModeId: 'task',
+        defaultModeId: 'office',
         modes: {
           task: {
-            id: 'task',
+            id: 'office',
             name: 'Task',
             defaultSkillIds: []
           },
@@ -176,7 +176,7 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain('TDD (tdd)')
     expect(joined).not.toContain('Legacy (legacy)')
     expect(joined).toContain('not direct tool calls')
-    expect(joined).toContain('what skills you can call or use')
+    expect(joined).toContain('available, or usable skills')
   })
 
   it('explains configured work mode skill IDs even when their instruction packages are not loaded', async () => {
@@ -208,7 +208,7 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain('Available Skills for work mode "empty-mode"')
     expect(joined).toContain('Configured skill IDs without loaded instruction packages')
     expect(joined).toContain('missing-skill')
-    expect(joined).toContain('Do not list built-in tools as skills')
+    expect(joined).toContain('Do not list built-in tools')
   })
 
   it('tells the model to discover installed skills from configured skill roots, not the workspace', async () => {
@@ -221,10 +221,9 @@ describe('SkillPluginHost.resolveTurn', () => {
     })
 
     const joined = res.instructions.join('\n')
-    expect(joined).toContain('Configured skill roots')
-    expect(joined).toContain(root)
-    expect(joined).toContain('Do not search the current project workspace to discover installed skills')
-    expect(joined).toContain(`root: ${join(root, 'tdd')}`)
+    expect(joined).toContain('Available Skills')
+    expect(joined).toContain('TDD (tdd)')
+    expect(joined).toContain('answer from this list')
   })
 
   it('does not restrict the turn tool catalog even when a skill declares workspace:read', async () => {
