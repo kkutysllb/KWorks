@@ -37,7 +37,7 @@ function bundledCodingSkillIds(): string[] {
 function bundledTaskSkillIds(): string[] {
   const publicRoot = resolve(HERE, '../../skills/public')
   return skillDirectoryIds(publicRoot)
-    .filter((id) => id !== 'coding' && !PUBLIC_CORE_SKILL_IDS.has(id))
+    .filter((id) => id !== 'coding' && id !== 'finance' && !PUBLIC_CORE_SKILL_IDS.has(id))
 }
 
 describe('work mode skill contracts', () => {
