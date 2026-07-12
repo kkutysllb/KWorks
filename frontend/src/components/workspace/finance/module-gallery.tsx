@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { useFinanceCredentials } from "@/core/finance/credentials";
 import { FINANCE_MODULES, type FinanceModuleIcon } from "@/core/finance/modules";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,16 @@ const ICON_MAP: Record<FinanceModuleIcon, LucideIcon> = {
 export function FinanceModuleGallery() {
   const router = useRouter();
   const { data: credStatus } = useFinanceCredentials();
+
+  const navigateToModule = (moduleId: string) => {
+    const path = `/workspace/finance/${moduleId}`;
+    // In Electron (app:// protocol), router.push triggers will-navigate which
+    // reloads the page. Use history.pushState via navigateWorkspaceInPlace to
+    // stay in the SPA. Fall back to router.push in web mode.
+    if (!navigateWorkspaceInPlace(path)) {
+      router.push(path);
+    }
+  };
 
   return (
     <div className="flex size-full flex-col">
@@ -87,7 +98,7 @@ export function FinanceModuleGallery() {
               <button
                 key={module.id}
                 type="button"
-                onClick={() => router.push(`/workspace/finance/${module.id}`)}
+                onClick={() => navigateToModule(module.id)}
                 className={cn(
                   "group relative flex flex-col gap-3 rounded-xl border bg-card p-5 text-left transition-all",
                   "hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5",

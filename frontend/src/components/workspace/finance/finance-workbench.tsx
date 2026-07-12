@@ -18,6 +18,7 @@ import { useState } from "react";
 
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { TodoList } from "@/components/workspace/todo-list";
+import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { getFinanceModule, type FinanceModuleIcon } from "@/core/finance/modules";
 import type { Todo } from "@/core/todos";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,14 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
   const currentModule = getFinanceModule(moduleId);
   const [agentTodos, setAgentTodos] = useState<Todo[]>([]);
 
+  // In Electron (app:// protocol), router.push triggers will-navigate which
+  // reloads the page. Use history.pushState via navigateWorkspaceInPlace.
+  const navigateToPath = (path: string) => {
+    if (!navigateWorkspaceInPlace(path)) {
+      router.push(path);
+    }
+  };
+
   if (!currentModule) {
     return (
       <div className="flex size-full flex-col items-center justify-center gap-3 text-center">
@@ -59,7 +68,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
         </div>
         <button
           type="button"
-          onClick={() => router.push("/workspace/finance")}
+          onClick={() => navigateToPath("/workspace/finance")}
           className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600"
         >
           返回模块列表
@@ -79,7 +88,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push("/workspace/finance")}
+              onClick={() => navigateToPath("/workspace/finance")}
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
             >
               <ChevronLeftIcon className="size-4" />
