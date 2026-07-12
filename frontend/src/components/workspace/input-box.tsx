@@ -191,16 +191,18 @@ function contextForWorkMode(
   context: QiongQiContext,
   workModeId: string,
   supportThinking: boolean,
+  taskModeOverride?: TaskMode,
 ): QiongQiContext {
   return {
     ...context,
     workModeId,
-    taskMode: context.taskMode === "plan" ? "plan" : "agent",
-    executionProfile:
-      workModeId === "coding"
-        ? getResolvedExecutionProfile("deep", supportThinking)
-        : (context.executionProfile ??
-          getResolvedExecutionProfile(undefined, supportThinking)),
+    taskMode: taskModeOverride ?? (context.taskMode === "plan" ? "plan" : "agent"),
+    executionProfile: context.executionProfile
+      ? getResolvedExecutionProfile(context.executionProfile, supportThinking)
+      : getResolvedExecutionProfile(
+          workModeId === "coding" ? "deep" : undefined,
+          supportThinking,
+        ),
   };
 }
 
@@ -258,6 +260,12 @@ export function InputBox({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  // Deep mode has two phases: "plan" (read-only investigation, generates a
+  // plan file) then "execute" (actual code changes with deep reasoning).
+  // When the user picks "深度" we start in "plan"; once that turn finishes
+  // (streaming → ready) we auto-advance to "execute" for subsequent messages.
+  const [deepPhase, setDeepPhase] = useState<"plan" | "execute">("plan");
+  const prevStatusRef = useRef(status);
   const { models, isLoading: isModelsLoading } = useModels();
   const { defaultModeId, workModes: loadedWorkModes } = useWorkModes();
   const { data: historyThreads } = useThreads();
@@ -280,6 +288,25 @@ export function InputBox({
   const hasComposerText = promptController.textInput.value.trim().length > 0;
   const submitStatus =
     status === "streaming" && !hasComposerText ? "streaming" : status;
+
+  // Auto-advance deep mode: when a plan turn completes (streaming → ready),
+  // flip deepPhase from "plan" to "execute" so the next message runs as agent.
+  useEffect(() => {
+    const wasStreaming = prevStatusRef.current === "streaming";
+    prevStatusRef.current = status;
+    if (
+      wasStreaming &&
+      status !== "streaming" &&
+      context.executionProfile === "deep" &&
+      deepPhase === "plan"
+    ) {
+      setDeepPhase("execute");
+      // Sync context taskMode so stored state matches the new phase.
+      if (context.taskMode === "plan") {
+        onContextChange?.({ ...context, taskMode: "agent" });
+      }
+    }
+  }, [status, context, context.executionProfile, deepPhase, onContextChange]);
 
   useEffect(() => {
     if (models.length === 0) {
@@ -398,29 +425,33 @@ export function InputBox({
     [onContextChange, context, models],
   );
 
-  const handleTaskModeSelect = useCallback(
-    (taskMode: TaskMode) => {
-      onContextChange?.({
-        ...context,
-        taskMode,
-      });
-    },
-    [onContextChange, context],
-  );
-
-  const handleExecutionProfileSelect = useCallback(
+  // Unified mode select: sets executionProfile + derived reasoning_effort +
+  // taskMode in one shot. For "deep", taskMode follows the deepPhase state
+  // ("plan" first, then "execute" after the plan turn finishes).
+  const handleUnifiedModeSelect = useCallback(
     (executionProfile: ExecutionProfile) => {
       const resolvedProfile = getResolvedExecutionProfile(
         executionProfile,
         supportThinking,
       );
+      const resolvedTaskMode: TaskMode =
+        resolvedProfile === "deep"
+          ? deepPhase === "plan"
+            ? "plan"
+            : "agent"
+          : "agent";
+      // Reset deepPhase when re-selecting "deep" (user wants to re-plan)
+      if (resolvedProfile === "deep") {
+        setDeepPhase("plan");
+      }
       onContextChange?.({
         ...context,
         executionProfile: resolvedProfile,
+        taskMode: resolvedTaskMode,
         reasoning_effort: getReasoningEffortForProfile(resolvedProfile),
       });
     },
-    [onContextChange, context, supportThinking],
+    [onContextChange, context, supportThinking, deepPhase],
   );
 
   const handleCollaborationPolicySelect = useCallback(
@@ -497,6 +528,18 @@ export function InputBox({
         return;
       }
 
+      // In deep mode, taskMode follows the deepPhase state machine:
+      //   deepPhase "plan"    → taskMode "plan"  (read-only investigation)
+      //   deepPhase "execute" → taskMode "agent" (actual execution)
+      const effectiveTaskMode: TaskMode =
+        context.executionProfile === "deep"
+          ? deepPhase === "plan"
+            ? "plan"
+            : "agent"
+          : context.taskMode === "plan"
+            ? "plan"
+            : "agent";
+
       if (resolvedModelName && context.model_name !== resolvedModelName) {
         const nextContext: QiongQiContext = {
           ...context,
@@ -505,7 +548,7 @@ export function InputBox({
             context.executionProfile,
             selectedModel?.supports_thinking ?? false,
           ),
-          taskMode: context.taskMode === "plan" ? "plan" : "agent",
+          taskMode: effectiveTaskMode,
           collaborationPolicy: context.collaborationPolicy ?? "single",
           workModeId,
         };
@@ -516,11 +559,12 @@ export function InputBox({
 
       onSubmit?.(
         message,
-        contextForWorkMode(context, workModeId, supportThinking),
+        contextForWorkMode(context, workModeId, supportThinking, effectiveTaskMode),
       );
     },
     [
       context,
+      deepPhase,
       onContextChange,
       onSubmit,
       onStop,
@@ -601,8 +645,10 @@ export function InputBox({
               workspaceRoot={context.workspaceRoot}
               workspaceRootLabel={workspaceRootLabel}
               workspaceHistory={workspaceHistory}
+              approvalPolicy={context.approvalPolicy ?? "auto"}
               onPickDirectory={handleWorkspaceRootPick}
               onWorkspaceRootSelect={handleWorkspaceRootSelect}
+              onApprovalPolicySelect={handleApprovalPolicySelect}
             />
             {/* TODO: Add more connectors here
           <PromptInputActionMenu>
@@ -614,15 +660,14 @@ export function InputBox({
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
             <AddAttachmentsButton className="px-2!" />
-            <QiongQiExecutionModeMenu
-              context={context}
+            <QiongQiUnifiedModeMenu
+              executionProfile={getResolvedExecutionProfile(
+                context.executionProfile,
+                supportThinking,
+              )}
               supportThinking={supportThinking}
-              onExecutionProfileSelect={handleExecutionProfileSelect}
-              onApprovalPolicySelect={handleApprovalPolicySelect}
-            />
-            <QiongQiTaskModeMenu
-              taskMode={context.taskMode === "plan" ? "plan" : "agent"}
-              onTaskModeSelect={handleTaskModeSelect}
+              deepPhase={deepPhase}
+              onSelect={handleUnifiedModeSelect}
             />
             <QiongQiCollaborationMenu
               collaborationPolicy={context.collaborationPolicy ?? "single"}
@@ -719,123 +764,72 @@ function AddAttachmentsButton({ className }: { className?: string }) {
   );
 }
 
-function QiongQiExecutionModeMenu({
-  context,
+/**
+ * Unified mode selector: one choice drives executionProfile (reasoning depth),
+ * reasoning_effort, and taskMode (agent vs plan) together.
+ *
+ * - 快速: direct execution, minimal reasoning
+ * - 均衡: direct execution, medium reasoning
+ * - 深度: "plan-then-execute" — first turn is read-only investigation that
+ *         produces a plan file; after that turn completes, deepPhase auto-
+ *         advances to "execute" so the next message runs as agent with deep
+ *         reasoning.
+ */
+function QiongQiUnifiedModeMenu({
+  executionProfile,
   supportThinking,
-  onExecutionProfileSelect,
-  onApprovalPolicySelect,
+  deepPhase,
+  onSelect,
 }: {
-  context: QiongQiContext;
+  executionProfile: ExecutionProfile;
   supportThinking: boolean;
-  onExecutionProfileSelect: (profile: ExecutionProfile) => void;
-  onApprovalPolicySelect: (policy: QiongQiContext["approvalPolicy"]) => void;
+  deepPhase: "plan" | "execute";
+  onSelect: (profile: ExecutionProfile) => void;
 }) {
-  const profile = getResolvedExecutionProfile(
-    context.executionProfile,
-    supportThinking,
-  );
   return (
     <PromptInputActionMenu>
       <PromptInputActionMenuTrigger className="gap-1! px-2!">
-        <ProfileIcon profile={profile} />
-        <div className="text-xs font-normal">
-          {profile === "fast" && "快速"}
-          {profile === "balanced" && "均衡"}
-          {profile === "deep" && "深度"}
+        <ProfileIcon profile={executionProfile} />
+        <div className="flex items-center gap-1 text-xs font-normal">
+          {executionProfile === "fast" && "快速"}
+          {executionProfile === "balanced" && "均衡"}
+          {executionProfile === "deep" && (
+            <>
+              深度
+              <span className="text-muted-foreground/70 text-[10px]">
+                ·{deepPhase === "plan" ? "规划中" : "执行中"}
+              </span>
+            </>
+          )}
         </div>
       </PromptInputActionMenuTrigger>
       <PromptInputActionMenuContent className="w-86">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-muted-foreground text-xs">
-            执行预设
+            执行模式
           </DropdownMenuLabel>
           <ModeMenuItem
-            active={profile === "fast"}
+            active={executionProfile === "fast"}
             icon={<ZapIcon className="mr-2 size-4" />}
             title="快速"
-            description="最小推理预算，适合轻量问答和短任务。"
-            onSelect={() => onExecutionProfileSelect("fast")}
+            description="最小推理·直接执行 — 轻量问答和短任务。"
+            onSelect={() => onSelect("fast")}
           />
           {supportThinking && (
             <ModeMenuItem
-              active={profile === "balanced"}
+              active={executionProfile === "balanced"}
               icon={<LightbulbIcon className="mr-2 size-4" />}
               title="均衡"
-              description="保留必要推理步骤，兼顾速度与质量。"
-              onSelect={() => onExecutionProfileSelect("balanced")}
+              description="适中推理·直接执行 — 兼顾速度与质量。"
+              onSelect={() => onSelect("balanced")}
             />
           )}
           <ModeMenuItem
-            active={profile === "deep"}
+            active={executionProfile === "deep"}
             icon={<GraduationCapIcon className="mr-2 size-4" />}
             title="深度"
-            description="更高推理预算，适合复杂分析和长任务。"
-            onSelect={() => onExecutionProfileSelect("deep")}
-          />
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-muted-foreground text-xs">
-            权限策略
-          </DropdownMenuLabel>
-          <PromptInputActionMenuItem
-            onSelect={() => onApprovalPolicySelect("auto")}
-          >
-            自动批准
-            {(context.approvalPolicy ?? "auto") === "auto" && (
-              <CheckIcon className="ml-auto size-4" />
-            )}
-          </PromptInputActionMenuItem>
-          <PromptInputActionMenuItem
-            onSelect={() => onApprovalPolicySelect("manual")}
-          >
-            关键操作确认
-            {context.approvalPolicy === "manual" && (
-              <CheckIcon className="ml-auto size-4" />
-            )}
-          </PromptInputActionMenuItem>
-        </DropdownMenuGroup>
-      </PromptInputActionMenuContent>
-    </PromptInputActionMenu>
-  );
-}
-
-function QiongQiTaskModeMenu({
-  taskMode,
-  onTaskModeSelect,
-}: {
-  taskMode: TaskMode;
-  onTaskModeSelect: (mode: TaskMode) => void;
-}) {
-  const modeLabel = taskMode === "plan" ? "规划" : "执行";
-  return (
-    <PromptInputActionMenu>
-      <PromptInputActionMenuTrigger className="gap-1! px-2!">
-        {taskMode === "plan" ? (
-          <GraduationCapIcon className="size-3 text-violet-500" />
-        ) : (
-          <ZapIcon className="size-3 text-cyan-500" />
-        )}
-        <span className="text-xs font-normal">{modeLabel}</span>
-      </PromptInputActionMenuTrigger>
-      <PromptInputActionMenuContent className="w-80">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-muted-foreground text-xs">
-            执行方式
-          </DropdownMenuLabel>
-          <ModeMenuItem
-            active={taskMode === "agent"}
-            icon={<ZapIcon className="mr-2 size-4 text-cyan-500" />}
-            title="执行"
-            description="直接进入穷奇 Agent 回合，适合边分析边完成任务。"
-            onSelect={() => onTaskModeSelect("agent")}
-          />
-          <ModeMenuItem
-            active={taskMode === "plan"}
-            icon={<GraduationCapIcon className="mr-2 size-4 text-violet-500" />}
-            title="规划"
-            description="进入 Plan 回合，先沉淀计划文件，再继续执行。"
-            onSelect={() => onTaskModeSelect("plan")}
+            description="深度推理·先规划再执行 — 复杂分析和长任务。"
+            onSelect={() => onSelect("deep")}
           />
         </DropdownMenuGroup>
       </PromptInputActionMenuContent>
@@ -924,14 +918,18 @@ function WorkspaceRootMenu({
   workspaceRoot,
   workspaceRootLabel,
   workspaceHistory,
+  approvalPolicy,
   onPickDirectory,
   onWorkspaceRootSelect,
+  onApprovalPolicySelect,
 }: {
   workspaceRoot?: string;
   workspaceRootLabel: string;
   workspaceHistory: string[];
+  approvalPolicy: QiongQiContext["approvalPolicy"];
   onPickDirectory: () => void;
   onWorkspaceRootSelect: (workspaceRoot: string | undefined) => void;
+  onApprovalPolicySelect: (policy: QiongQiContext["approvalPolicy"]) => void;
 }) {
   const selectedWorkspaceRoot = isSelectedWorkspaceRoot(workspaceRoot)
     ? workspaceRoot.trim()
@@ -943,6 +941,12 @@ function WorkspaceRootMenu({
       value,
     })),
   ];
+  // Prevent the menu from closing when toggling the approval policy, so users
+  // can see the checkmark update without reopening the dropdown.
+  const handleApprovalSelect = (e: Event, policy: QiongQiContext["approvalPolicy"]) => {
+    e.preventDefault();
+    onApprovalPolicySelect(policy);
+  };
   return (
     <div className="flex max-w-full min-w-0">
       <PromptInputActionMenu>
@@ -986,6 +990,38 @@ function WorkspaceRootMenu({
                 )}
               </PromptInputActionMenuItem>
             ))}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="text-muted-foreground text-xs">
+              操作权限
+            </DropdownMenuLabel>
+            <PromptInputActionMenuItem
+              onSelect={(e) => handleApprovalSelect(e, "auto")}
+            >
+              <div className="flex min-w-0 flex-col">
+                <span>自动批准</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  文件读写等操作自动执行
+                </span>
+              </div>
+              {(approvalPolicy ?? "auto") === "auto" && (
+                <CheckIcon className="ml-auto size-4" />
+              )}
+            </PromptInputActionMenuItem>
+            <PromptInputActionMenuItem
+              onSelect={(e) => handleApprovalSelect(e, "manual")}
+            >
+              <div className="flex min-w-0 flex-col">
+                <span>关键操作确认</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  写文件等操作需手动确认
+                </span>
+              </div>
+              {approvalPolicy === "manual" && (
+                <CheckIcon className="ml-auto size-4" />
+              )}
+            </PromptInputActionMenuItem>
           </DropdownMenuGroup>
         </PromptInputActionMenuContent>
       </PromptInputActionMenu>
