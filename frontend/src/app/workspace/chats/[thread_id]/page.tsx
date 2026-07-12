@@ -10,6 +10,7 @@ import {
   useSpecificChatMode,
   useThreadChat,
 } from "@/components/workspace/chats";
+import { FinanceHtmlArtifactReader } from "@/components/workspace/finance/finance-html-artifact-reader";
 import {
   InputBox,
   type InputBoxSubmitContext,
@@ -23,8 +24,8 @@ import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
 import { useI18n } from "@/core/i18n/hooks";
-import { useNotification } from "@/core/notification/hooks";
 import { replaceWorkspaceRouteInPlace } from "@/core/navigation/workspace-route";
+import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
@@ -178,6 +179,9 @@ export default function ChatPage() {
   return (
     <PromptInputProvider>
       <ThreadContext.Provider value={{ thread, isMock }}>
+        {thread.values.workModeId === "finance" && (
+          <FinanceHtmlArtifactReader threadId={threadId} />
+        )}
         <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
           <header

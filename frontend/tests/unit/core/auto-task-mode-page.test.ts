@@ -8,6 +8,7 @@ const {
   searchParamsGet,
   threadChatState,
   settingsState,
+  threadState,
   setSettingsMock,
   sendMessageMock,
   streamOptions,
@@ -25,10 +26,22 @@ const {
     },
   },
   settingsState: {
-      current: {
-        context: {
+    current: {
+      context: {
         taskMode: "agent" as "agent" | "plan",
       },
+    },
+  },
+  threadState: {
+    current: {
+      messages: [],
+      values: {
+        todos: [] as unknown[],
+        workModeId: undefined as string | undefined,
+      },
+      isLoading: false,
+      error: null,
+      stop: vi.fn(async () => undefined),
     },
   },
   setSettingsMock: vi.fn(),
@@ -66,6 +79,14 @@ vi.mock("@/components/workspace/export-trigger", () => ({
 
 vi.mock("@/components/workspace/input-box", () => ({
   InputBox: () => React.createElement("div", { "data-testid": "input-box" }),
+}));
+
+vi.mock("@/components/workspace/finance/finance-html-artifact-reader", () => ({
+  FinanceHtmlArtifactReader: ({ threadId }: { threadId: string }) =>
+    React.createElement("div", {
+      "data-testid": "finance-html-artifact-reader",
+      "data-thread-id": threadId,
+    }),
 }));
 
 vi.mock("@/components/workspace/messages", () => ({
@@ -115,13 +136,7 @@ vi.mock("@/core/threads/hooks", () => ({
   useThreadStream: vi.fn((options) => {
     streamOptions.current = options;
     return {
-      thread: {
-        messages: [],
-        values: { todos: [] },
-        isLoading: false,
-        error: null,
-        stop: vi.fn(async () => undefined),
-      },
+      thread: threadState.current,
       sendMessage: sendMessageMock,
       isUploading: false,
       isHistoryLoading: false,
@@ -190,6 +205,13 @@ describe("chat page plan event behavior", () => {
         taskMode: "agent",
       },
     };
+    threadState.current = {
+      messages: [],
+      values: { todos: [], workModeId: undefined },
+      isLoading: false,
+      error: null,
+      stop: vi.fn(async () => undefined),
+    };
     setSettingsMock.mockReset();
     sendMessageMock.mockReset();
     sendMessageMock.mockResolvedValue(undefined);
@@ -245,5 +267,27 @@ describe("chat page plan event behavior", () => {
 
     expect(sendMessageMock).not.toHaveBeenCalled();
     expect(setSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("finance history tasks mount the fullscreen HTML artifact reader", () => {
+    threadState.current.values.workModeId = "finance";
+
+    renderPage();
+
+    const reader = container!.querySelector(
+      '[data-testid="finance-html-artifact-reader"]',
+    );
+    expect(reader).not.toBeNull();
+    expect(reader?.getAttribute("data-thread-id")).toBe("thread-a");
+  });
+
+  test("office history tasks retain the generic artifact experience", () => {
+    threadState.current.values.workModeId = "office";
+
+    renderPage();
+
+    expect(
+      container!.querySelector('[data-testid="finance-html-artifact-reader"]'),
+    ).toBeNull();
   });
 });
