@@ -15,11 +15,12 @@ describe("finance artifact layout", () => {
       "utf8",
     );
 
-    expect(agentPanel).toContain("FinanceHtmlArtifactReader");
-    expect(agentPanel).toContain("useArtifacts");
-    expect(agentPanel).toContain("isHtmlArtifact(selectedArtifact)");
-    expect(agentPanel).toContain("FinanceArtifactPreview");
-    expect(agentPanel).toContain("onBack={deselect}");
+    expect(agentPanel).toContain(
+      'from "./finance-html-artifact-reader"',
+    );
+    expect(agentPanel).not.toContain("useArtifacts");
+    expect(agentPanel).not.toContain("isHtmlArtifact");
+    expect(agentPanel).not.toContain("FinanceArtifactPreview");
 
     const threadProviderIndex = agentPanel.indexOf("<ThreadContext.Provider");
     const readerIndex = agentPanel.indexOf("<FinanceHtmlArtifactReader");
