@@ -7,6 +7,7 @@ import {
   PromptInputProvider,
   usePromptInputController,
 } from "@/components/ai-elements/prompt-input";
+import { useArtifacts } from "@/components/workspace/artifacts";
 import { ChatBox } from "@/components/workspace/chats";
 import {
   InputBox,
@@ -25,6 +26,9 @@ import type { Message } from "@/core/threads/qiongqi-types";
 import type { Todo } from "@/core/todos";
 import { isTodoWriteToolName } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
+
+import { isHtmlArtifact } from "./finance-artifact-files";
+import { FinanceArtifactPreview } from "./finance-artifact-preview";
 
 const FINANCE_AGENT_CONTENT_WIDTH_CLASS = "max-w-4xl";
 // Right-padding gutter to reserve space for the floating TodoList panel,
@@ -182,6 +186,7 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
 
   return (
     <ThreadContext.Provider value={{ thread }}>
+      <FinanceHtmlArtifactReader threadId={uiThreadId} />
       <ChatBox threadId={uiThreadId} artifactsMode="side-panel">
         <div className="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
           {/* Messages */}
@@ -274,6 +279,23 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
         </div>
       </ChatBox>
     </ThreadContext.Provider>
+  );
+}
+
+function FinanceHtmlArtifactReader({ threadId }: { threadId: string }) {
+  const { artifacts, deselect, open, selectedArtifact } = useArtifacts();
+
+  if (!open || !selectedArtifact || !isHtmlArtifact(selectedArtifact)) {
+    return null;
+  }
+
+  return (
+    <FinanceArtifactPreview
+      artifacts={artifacts}
+      filepath={selectedArtifact}
+      onBack={deselect}
+      threadId={threadId}
+    />
   );
 }
 
