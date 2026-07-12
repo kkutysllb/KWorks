@@ -116,11 +116,10 @@ function FinanceAgentPanelInner({
   const [settings, setSettings] = useThreadSettings(`finance:${module.id}`);
   const { textInput } = usePromptInputController();
 
-  // Ensure the finance work mode is active, force agent mode (never plan),
-  // and no filesystem root is bound. The "deep → plan" state from a previous
-  // chat session can persist in the shared local-settings context; if it
-  // leaks into finance, the backend enters a plan turn and requires the
-  // create_plan tool, which is not applicable to finance analysis.
+  // Ensure the finance work mode is active, force agent mode (never plan).
+  // Do NOT clear workspaceRoot — the backend resolves a default finance
+  // workspace directory. Clearing it to undefined makes the agent think it
+  // has no workspace and try writing to /tmp/ (which is sandbox-blocked).
   useEffect(() => {
     if (
       settings.context.workModeId !== "finance" ||
@@ -130,7 +129,6 @@ function FinanceAgentPanelInner({
         ...settings.context,
         workModeId: "finance",
         taskMode: "agent",
-        workspaceRoot: undefined,
       });
     }
   }, [settings.context, setSettings]);
@@ -178,7 +176,6 @@ function FinanceAgentPanelInner({
           workModeId: "finance",
           taskMode: "agent",
           mode: "agent",
-          workspaceRoot: undefined,
         },
       });
     },

@@ -19,6 +19,12 @@ export function auditShellCommand(command: string): CommandAuditResult {
   }
   if (/: *\(\) *\{ *: *\| *: *& *\} *; *:/.test(lowered)) reasons.push('fork-bomb')
 
+  // Block package installation commands — all skill dependencies are
+  // pre-installed in the KWorks runtime environment. Running pip/npm/etc.
+  // install wastes time, can break the environment, and distracts the agent
+  // from its actual task.
+  if (isPackageInstall(lowered)) reasons.push('package-install-blocked')
+
   if (reasons.length > 0) {
     return {
       decision: 'block',
@@ -72,4 +78,34 @@ function isDestructiveDelete(lowered: string): boolean {
   if (!/\brm\s+/.test(lowered)) return false
   if (!/(?:^|\s)-[a-z]*r[a-z]*f|(?:^|\s)-[a-z]*f[a-z]*r/.test(lowered)) return false
   return /\s(?:\/|~|\$home|\$\{home\}|\/users|\/home|\.{1,2})(?:\s|$)/.test(lowered)
+}
+
+/**
+ * Detect package installation commands (pip, npm, yarn, pnpm, cargo, gem, etc.).
+ * These are blocked because all skill dependencies are pre-installed.
+ */
+function isPackageInstall(lowered: string): boolean {
+  // pip install / pip3 install
+  if (/\bpip3?\s+install\b/.test(lowered)) return true
+  // python -m pip install
+  if (/python\d?\s+-m\s+pip\s+install\b/.test(lowered)) return true
+  // python setup.py install / develop
+  if (/python\d?\s+setup\.py\s+(install|develop)\b/.test(lowered)) return true
+  // npm install / npm i / npm add
+  if (/\bnpm\s+(install|i|add|ci)\b/.test(lowered)) return true
+  // yarn install / yarn add
+  if (/\byarn\s+(install|add)\b/.test(lowered)) return true
+  // pnpm install / pnpm add
+  if (/\bpnpm\s+(install|add)\b/.test(lowered)) return true
+  // cargo install
+  if (/\bcargo\s+install\b/.test(lowered)) return true
+  // gem install
+  if (/\bgem\s+install\b/.test(lowered)) return true
+  // conda install
+  if (/\bconda\s+install\b/.test(lowered)) return true
+  // uv pip install / uv add
+  if (/\buv\s+(pip\s+install|add)\b/.test(lowered)) return true
+  // poetry install / poetry add
+  if (/\bpoetry\s+(install|add)\b/.test(lowered)) return true
+  return false
 }
