@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 const repoRoot = resolve(__dirname, "../../..");
 
 describe("coding agent change summary card", () => {
-  test("agent panel renders clickable changed files below the chat stream", () => {
+  test("agent panel no longer embeds the in-stream change summary card", () => {
     const agentPanel = readFileSync(
       resolve(repoRoot, "src/components/workspace/coding/agent-panel.tsx"),
       "utf8",
@@ -24,27 +24,32 @@ describe("coding agent change summary card", () => {
       "utf8",
     );
 
-    expect(agentPanel).toContain("useCodingSessionChanges");
-    expect(agentPanel).toContain("useDiscardProjectFileChange");
-    expect(agentPanel).toContain("CodingChangeSummaryCard");
-    expect(agentPanel).toContain("已编辑");
-    expect(agentPanel).toContain("审查");
-    expect(agentPanel).toContain("撤销");
-    expect(agentPanel).toContain("撤销变更");
-    expect(agentPanel).toContain("全部撤销");
-    expect(agentPanel).toContain("只撤销选中文件");
-    expect(agentPanel).toContain("changedFiles");
-    expect(agentPanel).toContain("latestTaskId");
-    expect(agentPanel).toContain("visibleFiles");
-    expect(agentPanel).toContain("setExpanded((value) => !value)");
-    expect(agentPanel).toContain("{expanded && (");
-    expect(agentPanel).toContain("slice(0, 4)");
-    expect(agentPanel).toContain("max-h-[172px]");
-    expect(agentPanel).toContain("更多");
-    expect(agentPanel).toContain("max-w-4xl");
-    expect(agentPanel).toContain("handleReviewChanges");
-    expect(agentPanel).toContain("handleDiscardChanges");
-    expect(agentPanel).toContain("Promise.all");
+    // The inline change-summary card was removed from the agent panel; change
+    // review now lives exclusively in the merged right-pane "变更" tab.
+    expect(agentPanel).not.toContain("CodingChangeSummaryCard");
+    expect(agentPanel).not.toContain("已编辑");
+    expect(agentPanel).not.toContain("审查");
+    expect(agentPanel).not.toContain("撤销变更");
+    expect(agentPanel).not.toContain("全部撤销");
+    expect(agentPanel).not.toContain("useDiscardProjectFileChange");
+    expect(agentPanel).not.toContain("changedFiles");
+    expect(agentPanel).not.toContain("latestTaskId");
+    expect(agentPanel).not.toContain("visibleFiles");
+    expect(agentPanel).not.toContain("max-h-[172px]");
+    expect(agentPanel).not.toContain("handleReviewChanges");
+    expect(agentPanel).not.toContain("handleDiscardChanges");
+    expect(agentPanel).not.toContain(
+      "MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM",
+    );
+    expect(agentPanel).not.toContain('hasCodingChanges ? "bottom-60"');
+    expect(agentPanel).not.toContain("useCodingSessionChanges");
+    // The deduplicated change summary also no longer reaches the environment
+    // floating card.
+    expect(workbench).not.toContain("additions={totalAdditions}");
+    expect(workbench).not.toContain("deletions={totalDeletions}");
+    expect(workbench).not.toContain("changedFiles={totalChangedFiles}");
+
+    // The agent panel still owns its chat layout + message wiring.
     expect(agentPanel).toContain("CODING_AGENT_CONTENT_WIDTH_CLASS");
     expect(agentPanel).toContain(
       "contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}",
@@ -57,30 +62,18 @@ describe("coding agent change summary card", () => {
     expect(agentPanel).toContain(
       "relative flex w-full min-w-0 flex-col items-center",
     );
-    expect(agentPanel).toContain(
-      '<div\n                    className="w-full min-w-0"',
-    );
     expect(agentPanel).toContain("min-h-28 w-full");
     expect(agentPanel).toContain("[&_[data-slot=input-group]]:min-h-28");
     expect(agentPanel).toContain(
       "[&_[data-slot=input-group-control]]:min-h-16",
     );
     expect(agentPanel).toContain("data-floating-panels");
-    expect(agentPanel).not.toContain("xl:mr-[22rem]");
-    expect(agentPanel).toContain(
-      'hasCodingChanges ? "bottom-60" : "bottom-40"',
-    );
-    expect(agentPanel).not.toContain("bottom-[104px]");
-    expect(agentPanel).not.toContain("bottom-24");
-    expect(agentPanel).toContain(
-      'onFocusFile?.(file.path, "task-changes", file.taskId)',
-    );
+    expect(agentPanel).toContain("paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}");
     expect(agentPanel).toContain("handleOpenMessageFileChange");
     expect(agentPanel).toContain("onOpenFileChange=");
-    expect(agentPanel).toContain(
-      "MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM",
-    );
+    expect(agentPanel).toContain('onFocusFile?.(filePath, "code")');
     expect(agentPanel).toContain("onFocusFile={onFocusFile}");
+
     expect(messageList).toContain("onOpenFileChange?: MessageFileFocusHandler");
     expect(messageList).toContain("onOpenFileChange={onOpenFileChange}");
     expect(messageList).toContain(

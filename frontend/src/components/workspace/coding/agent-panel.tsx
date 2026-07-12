@@ -1,15 +1,9 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  FileDiffIcon,
-  SearchCodeIcon,
-  TerminalIcon,
-  Undo2Icon,
-} from "lucide-react";
+import { TerminalIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
@@ -17,21 +11,6 @@ import {
   usePromptInputController,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ChatBox } from "@/components/workspace/chats";
 import {
   InputBox,
@@ -42,13 +21,8 @@ import {
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
-import {
-  useCodingSessionChanges,
-  useDiscardProjectFileChange,
-  useProject,
-} from "@/core/projects";
+import { useProject } from "@/core/projects";
 import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
-import type { QiongqiChange } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
@@ -71,7 +45,6 @@ interface AgentPanelProps {
   ) => void;
 }
 
-const MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM = 92;
 const CODING_AGENT_CONTENT_WIDTH_CLASS = "max-w-4xl";
 const CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS = "xl:pr-[356px]";
 
@@ -145,7 +118,6 @@ function AgentPanelInner({
     }
   }, [projectId, threadId, threadIdStorageKey]);
   const uiThreadId = threadId ?? projectId;
-  const { changes } = useCodingSessionChanges(uiThreadId);
   const [settings, setSettings] = useThreadSettings(`coding:${projectId}`);
   const { textInput } = usePromptInputController();
   const [draggingCodingPath, setDraggingCodingPath] = useState(false);
@@ -417,7 +389,6 @@ function AgentPanelInner({
     [onFocusFile],
   );
 
-  const hasCodingChanges = changes.length > 0;
   const visibleTodos = useMemo(
     () => todosFromThreadStateOrToolCalls(thread.values.todos, thread.messages),
     [thread.values.todos, thread.messages],
@@ -436,9 +407,6 @@ function AgentPanelInner({
   useEffect(() => {
     return () => onTodosChange?.([]);
   }, [onTodosChange]);
-  const messageListPaddingBottom =
-    MESSAGE_LIST_DEFAULT_PADDING_BOTTOM +
-    (hasCodingChanges ? MESSAGE_LIST_CODING_CHANGES_EXTRA_PADDING_BOTTOM : 0);
 
   const status = thread.error
     ? "error"
@@ -471,7 +439,7 @@ function AgentPanelInner({
                 contentClassName={CODING_AGENT_CONTENT_WIDTH_CLASS}
                 threadId={uiThreadId}
                 thread={thread}
-                paddingBottom={messageListPaddingBottom}
+                paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
                 hasMoreHistory={hasMoreHistory}
                 loadMoreHistory={loadMoreHistory}
                 isHistoryLoading={isHistoryLoading}
@@ -496,11 +464,6 @@ function AgentPanelInner({
                     CODING_AGENT_CONTENT_WIDTH_CLASS,
                   )}
                 >
-                  <CodingChangeSummaryCard
-                    changes={changes}
-                    projectId={projectId}
-                    onFocusFile={onFocusFile}
-                  />
                   <div
                     className="w-full min-w-0"
                     data-testid="coding-agent-input-shell"
@@ -533,7 +496,7 @@ function AgentPanelInner({
                 "pointer-events-none absolute inset-x-0 top-9 flex justify-center px-3 text-center sm:px-5",
                 avoidRightFloatingPanels &&
                   CODING_AGENT_FLOATING_PANEL_GUTTER_CLASS,
-                hasCodingChanges ? "bottom-60" : "bottom-40",
+                "bottom-40",
               )}
             >
               <div
@@ -584,323 +547,6 @@ function parseCodingPathDragPayload(raw: string): CodingPathDragPayload | null {
     return null;
   }
   return null;
-}
-
-function CodingChangeSummaryCard({
-  changes,
-  onFocusFile,
-  projectId,
-}: {
-  changes: QiongqiChange[];
-  projectId: string;
-  onFocusFile?: (
-    filePath: string,
-    target?: "code" | "task-changes" | "diff" | "review",
-    taskId?: string,
-    line?: number | null,
-  ) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
-  const [discardMode, setDiscardMode] = useState<"all" | "file">("all");
-  const [discardFilePath, setDiscardFilePath] = useState("");
-  const [discardedPaths, setDiscardedPaths] = useState<Set<string>>(new Set());
-  const discardProjectFileChange = useDiscardProjectFileChange(projectId);
-  const changedFiles = useMemo(() => {
-    const latestTaskId = changes.reduce<string | null>((latest, change) => {
-      if (!latest) return change.task_id;
-      const latestChange = changes.find((item) => item.task_id === latest);
-      if (!latestChange) return change.task_id;
-      return change.created_at > latestChange.created_at
-        ? change.task_id
-        : latest;
-    }, null);
-    const scopedChanges = latestTaskId
-      ? changes.filter((change) => change.task_id === latestTaskId)
-      : changes;
-    const byPath = new Map<
-      string,
-      {
-        path: string;
-        taskId: string;
-        additions: number;
-        deletions: number;
-        lastChangedAt: string;
-      }
-    >();
-    for (const change of scopedChanges) {
-      const existing = byPath.get(change.path);
-      if (!existing) {
-        byPath.set(change.path, {
-          path: change.path,
-          taskId: change.task_id,
-          additions: change.additions,
-          deletions: change.deletions,
-          lastChangedAt: change.created_at,
-        });
-        continue;
-      }
-      existing.additions += change.additions;
-      existing.deletions += change.deletions;
-      if (change.created_at > existing.lastChangedAt) {
-        existing.lastChangedAt = change.created_at;
-        existing.taskId = change.task_id;
-      }
-    }
-    return Array.from(byPath.values())
-      .filter((file) => !discardedPaths.has(file.path))
-      .sort((a, b) => b.lastChangedAt.localeCompare(a.lastChangedAt))
-      .slice(0, 24);
-  }, [changes, discardedPaths]);
-  const latestTaskId = changedFiles[0]?.taskId ?? null;
-  const visibleFiles = expanded ? changedFiles : changedFiles.slice(0, 4);
-  const isDiscarding = discardProjectFileChange.isPending;
-
-  const totals = useMemo(
-    () =>
-      changedFiles.reduce(
-        (acc, file) => ({
-          additions: acc.additions + file.additions,
-          deletions: acc.deletions + file.deletions,
-        }),
-        { additions: 0, deletions: 0 },
-      ),
-    [changedFiles],
-  );
-
-  useEffect(() => {
-    setDiscardFilePath((current) => {
-      if (current && changedFiles.some((file) => file.path === current)) {
-        return current;
-      }
-      return changedFiles[0]?.path ?? "";
-    });
-  }, [changedFiles]);
-
-  const handleReviewChanges = () => {
-    const firstFile = changedFiles[0];
-    if (!firstFile) return;
-    onFocusFile?.(firstFile.path, "task-changes", firstFile.taskId);
-  };
-
-  const handleOpenDiscardDialog = () => {
-    setDiscardMode("all");
-    setDiscardFilePath(changedFiles[0]?.path ?? "");
-    setDiscardDialogOpen(true);
-  };
-
-  const handleDiscardChanges = async () => {
-    const targets =
-      discardMode === "all"
-        ? changedFiles
-        : changedFiles.filter((file) => file.path === discardFilePath);
-    if (targets.length === 0) return;
-    try {
-      await Promise.all(
-        targets.map((file) =>
-          discardProjectFileChange.mutateAsync({ path: file.path }),
-        ),
-      );
-      setDiscardedPaths((prev) => {
-        const next = new Set(prev);
-        for (const file of targets) {
-          next.add(file.path);
-        }
-        return next;
-      });
-      setDiscardDialogOpen(false);
-      toast.success(
-        discardMode === "all" ? "已撤销全部变更" : "已撤销选中文件变更",
-      );
-    } catch (error) {
-      toast.error("撤销变更失败", {
-        description: error instanceof Error ? error.message : "请稍后重试",
-      });
-    }
-  };
-
-  if (changedFiles.length === 0) return null;
-
-  return (
-    <div className="pointer-events-auto w-full max-w-4xl">
-      <div className="bg-background/95 overflow-hidden rounded-lg border shadow-sm backdrop-blur">
-        <div className="hover:bg-muted/40 flex w-full items-center justify-between gap-3 px-2.5 py-2 text-left transition-colors">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              className="flex min-w-0 items-center gap-2 text-left"
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              <div className="bg-muted flex size-7 shrink-0 items-center justify-center rounded-md">
-                <FileDiffIcon className="text-muted-foreground h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">
-                  已编辑 {changedFiles.length} 个文件
-                </p>
-                <p className="font-mono text-xs">
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{totals.additions}
-                  </span>{" "}
-                  <span className="text-red-600 dark:text-red-400">
-                    -{totals.deletions}
-                  </span>
-                </p>
-              </div>
-            </button>
-            <button
-              className="text-muted-foreground hidden max-w-32 shrink-0 truncate text-[11px] sm:inline"
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {!expanded && changedFiles.length > 4
-                ? `更多 ${changedFiles.length - 4} 个文件`
-                : latestTaskId}
-            </button>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              className="h-7 gap-1.5 px-2 text-xs"
-              size="sm"
-              type="button"
-              variant="ghost"
-              onClick={handleReviewChanges}
-            >
-              <SearchCodeIcon className="h-3.5 w-3.5" />
-              审查
-            </Button>
-            <Button
-              className="h-7 gap-1.5 px-2 text-xs"
-              disabled={isDiscarding}
-              size="sm"
-              type="button"
-              variant="ghost"
-              onClick={handleOpenDiscardDialog}
-            >
-              <Undo2Icon className="h-3.5 w-3.5" />
-              撤销
-            </Button>
-          </div>
-        </div>
-        {expanded && (
-          <div className="max-h-[172px] divide-y overflow-y-auto border-t">
-            {visibleFiles.map((file) => (
-              <button
-                key={file.path}
-                className="hover:bg-muted/60 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
-                type="button"
-                onClick={() =>
-                  onFocusFile?.(file.path, "task-changes", file.taskId)
-                }
-              >
-                <span className="min-w-0 flex-1 truncate font-mono text-sm">
-                  {file.path}
-                </span>
-                <span className="shrink-0 font-mono text-xs">
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{file.additions}
-                  </span>{" "}
-                  <span className="text-red-600 dark:text-red-400">
-                    -{file.deletions}
-                  </span>
-                </span>
-              </button>
-            ))}
-            {changedFiles.length > 4 && (
-              <button
-                className="text-muted-foreground hover:bg-muted/60 flex w-full items-center justify-center px-3 py-1.5 text-xs transition-colors"
-                type="button"
-                onClick={() => setExpanded(false)}
-              >
-                收起
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-      <Dialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>撤销变更</DialogTitle>
-            <DialogDescription>
-              选择撤销当前这次变更中的全部文件，或只撤销某一个文件。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button
-                className={cn(
-                  "rounded-md border p-3 text-left transition-colors",
-                  discardMode === "all"
-                    ? "border-emerald-500/60 bg-emerald-500/10"
-                    : "hover:bg-muted/50",
-                )}
-                type="button"
-                onClick={() => setDiscardMode("all")}
-              >
-                <p className="text-sm font-medium">全部撤销</p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  撤销 {changedFiles.length} 个文件的未提交变更。
-                </p>
-              </button>
-              <button
-                className={cn(
-                  "rounded-md border p-3 text-left transition-colors",
-                  discardMode === "file"
-                    ? "border-emerald-500/60 bg-emerald-500/10"
-                    : "hover:bg-muted/50",
-                )}
-                type="button"
-                onClick={() => setDiscardMode("file")}
-              >
-                <p className="text-sm font-medium">只撤销选中文件</p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  从本次变更列表中选择一个文件。
-                </p>
-              </button>
-            </div>
-            {discardMode === "file" && (
-              <Select
-                value={discardFilePath}
-                onValueChange={setDiscardFilePath}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择要撤销的文件" />
-                </SelectTrigger>
-                <SelectContent>
-                  {changedFiles.map((file) => (
-                    <SelectItem key={file.path} value={file.path}>
-                      {file.path}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={isDiscarding}
-              type="button"
-              variant="ghost"
-              onClick={() => setDiscardDialogOpen(false)}
-            >
-              取消
-            </Button>
-            <Button
-              disabled={
-                isDiscarding || (discardMode === "file" && !discardFilePath)
-              }
-              type="button"
-              variant="destructive"
-              onClick={() => void handleDiscardChanges()}
-            >
-              {isDiscarding ? "撤销中" : "确认撤销"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
 }
 
 function isFileMutationTool(name: string) {

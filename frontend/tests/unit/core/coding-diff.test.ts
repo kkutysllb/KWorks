@@ -1,9 +1,8 @@
+import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, test } from "vitest";
-
-import { parseUnifiedDiffForSideBySide } from "@/components/workspace/coding/diff-view";
 
 const repoRoot = resolve(__dirname, "../../..");
 
@@ -34,25 +33,30 @@ describe("coding diff workflow", () => {
     expect(hooks).toContain('queryKey: ["projects", projectId, "diff"]');
   });
 
-  test("coding workbench renders a middle-panel diff tab", () => {
+  test("coding workbench renders the merged changes tab in the right pane", () => {
     const workbench = readFileSync(
       resolve(repoRoot, "src/components/workspace/coding/coding-workbench.tsx"),
       "utf8",
     );
 
     expect(workbench).toContain("CodingDiffPanel");
-    expect(workbench).toContain("selectedFile={selectedFile}");
-    expect(workbench).toContain("workbenchView === \"diff\"");
+    expect(workbench).toContain("CodingTaskChangesPanel");
+    // The former "diff" and "task-changes" tabs merged into a single "changes"
+    // tab that stacks both panels.
+    expect(workbench).toContain('workbenchView === "changes"');
     expect(workbench).toContain("showWorkbenchPane &&");
     expect(workbench).toContain("<CodeViewer");
     expect(workbench).toContain('aria-label="代码区视图"');
-    expect(workbench).toContain('label="项目 Diff"');
-    expect(workbench).toContain('handleSelectWorkbenchTab("diff")');
-    expect(workbench).toContain("任务变更");
-    expect(workbench).toContain('activeCodeTab === "diff"');
+    expect(workbench).toContain('handleSelectWorkbenchTab("changes")');
+    expect(workbench).toContain("activeCodeTab === \"changes\"");
+    expect(workbench).toContain('label="变更"');
+    // The old separate diff/task-changes tabs are gone.
+    expect(workbench).not.toContain('handleSelectWorkbenchTab("diff")');
+    expect(workbench).not.toContain('handleSelectWorkbenchTab("task-changes")');
+    expect(workbench).not.toContain('workbenchView === "diff"');
   });
 
-  test("coding diff panel shows changed files and unified diff", () => {
+  test("coding diff panel shows changed files and an inline unified diff", () => {
     const panel = readFileSync(
       resolve(
         repoRoot,
@@ -65,15 +69,9 @@ describe("coding diff workflow", () => {
     expect(panel).toContain("selectedDiffFile");
     expect(panel).toContain("filteredDiff");
     expect(panel).toContain("selectedFile?.diff");
-    expect(panel).toContain("diffViewMode");
-    expect(panel).toContain('"side-by-side"');
-    expect(panel).toContain("SideBySideDiff");
-    expect(panel).toContain("parseUnifiedDiffForSideBySide");
     expect(panel).toContain("selectedFilePath");
     expect(panel).toContain("focusLine");
     expect(panel).toContain("focusedDiffLine");
-    expect(panel).toContain("highlightedNewLine");
-    expect(panel).toContain("highlightedOldLine");
     expect(panel).toContain("totalAdditions");
     expect(panel).toContain("totalDeletions");
     expect(panel).toContain("refetch");
@@ -82,26 +80,8 @@ describe("coding diff workflow", () => {
     expect(panel).toContain("discardProjectFileChange");
     expect(panel).toContain("撤销此文件");
     expect(panel).toContain("确认撤销");
-    expect(panel).not.toContain("oldLineNumber");
-
-    // Side-by-side diff components are now in the shared diff-view module
-    const diffView = readFileSync(
-      resolve(
-        repoRoot,
-        "src/components/workspace/coding/diff-view.tsx",
-      ),
-      "utf8",
-    );
-    expect(diffView).toContain("oldLineNumber");
-    expect(diffView).toContain("newLineNumber");
-    expect(diffView).toContain("highlightedNewLine");
-    expect(diffView).toContain("highlightedOldLine");
-    expect(diffView).toContain("ring-1 ring-amber-500/60");
-    expect(diffView).toContain("highlightedRowRef");
-    expect(diffView).toContain("scrollIntoView");
     expect(panel).toContain("renderUnifiedDiff");
     expect(panel).toContain("highlightedUnifiedLine");
-    expect(diffView).toContain("SideBySideDiff");
     expect(panel).toContain("diffScope");
     expect(panel).toContain('"selected"');
     expect(panel).toContain('"all"');
@@ -110,8 +90,6 @@ describe("coding diff workflow", () => {
       "inline-flex h-8 shrink-0 items-center rounded-md p-1",
     );
     expect(panel).toContain("当前文件暂无变更");
-    expect(diffView).toContain("binary files differ");
-    expect(diffView).toContain("parseUnifiedDiffForSideBySide");
     expect(panel).toContain("isFetching");
     expect(panel).toContain("正在刷新变更");
     expect(panel).toContain("当前项目不是 Git 仓库");
@@ -121,6 +99,19 @@ describe("coding diff workflow", () => {
     expect(panel).toContain(
       "files.some((file) => file.path === selectedDiffFile)",
     );
+
+    // The split-view mode was removed: only the unified renderer remains.
+    expect(panel).not.toContain("diffViewMode");
+    expect(panel).not.toContain('"side-by-side"');
+    expect(panel).not.toContain("SideBySideDiff");
+    expect(panel).not.toContain("parseUnifiedDiffForSideBySide");
+    expect(panel).not.toContain("左右对比");
+    // The shared side-by-side module was deleted entirely.
+    expect(
+      existsSync(
+        resolve(repoRoot, "src/components/workspace/coding/diff-view.tsx"),
+      ),
+    ).toBe(false);
   });
 
   test("coding agent refreshes diff state after file activity", () => {
@@ -130,44 +121,5 @@ describe("coding diff workflow", () => {
     );
 
     expect(agentPanel).toContain('queryKey: ["projects", projectId, "diff"]');
-  });
-
-  test("side-by-side parser keeps line numbers and pairs replacements", () => {
-    const rows = parseUnifiedDiffForSideBySide(
-      [
-        "diff --git a/src/app.ts b/src/app.ts",
-        "index 1111111..2222222 100644",
-        "--- a/src/app.ts",
-        "+++ b/src/app.ts",
-        "@@ -10,3 +10,4 @@",
-        " const first = true;",
-        "-const label = 'old';",
-        "+const label = 'new';",
-        "+const extra = true;",
-        " export { label };",
-      ].join("\n"),
-    );
-
-    expect(rows).toContainEqual({
-      oldLine: "const label = 'old';",
-      newLine: "const label = 'new';",
-      oldLineNumber: 11,
-      newLineNumber: 11,
-      type: "added",
-    });
-    expect(rows).toContainEqual({
-      oldLine: "",
-      newLine: "const extra = true;",
-      oldLineNumber: null,
-      newLineNumber: 12,
-      type: "added",
-    });
-    expect(rows).toContainEqual({
-      oldLine: "export { label };",
-      newLine: "export { label };",
-      oldLineNumber: 12,
-      newLineNumber: 13,
-      type: "context",
-    });
   });
 });

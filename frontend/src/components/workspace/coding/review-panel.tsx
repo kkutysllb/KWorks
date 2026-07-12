@@ -14,7 +14,7 @@ import {
   Wand2Icon,
   SparklesIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,14 @@ import {
   useRunCodingReview,
 } from "@/core/projects";
 import type { CodingReviewFinding } from "@/core/projects";
+import { qiongqiClient } from "@/core/threads/qiongqi-client";
 import { cn } from "@/lib/utils";
 
 interface ReviewPanelProps {
   projectId: string;
   projectRoot: string;
   threadId: string;
+  onThreadCreated?: (threadId: string) => void;
   onFocusFile?: (
     filePath: string,
     target?: "code" | "task-changes" | "diff",
@@ -76,6 +78,7 @@ export function ReviewPanel({
   projectId,
   projectRoot,
   threadId,
+  onThreadCreated,
 }: ReviewPanelProps) {
   const { review, isLoading, isFetching, error, refetch } =
     useLatestCodingReview(threadId);
@@ -105,15 +108,34 @@ export function ReviewPanel({
     applyFix.error instanceof Error ? applyFix.error.message : null;
   const applyFixSuccess = applyFix.isSuccess ? applyFix.data : null;
 
-  const startReview = (scope: "project_diff" | "pr" = "project_diff") => {
-    runReview.mutate({
-      project_id: projectId,
-      project_root: projectRoot,
-      thread_id: threadId,
-      scope,
-      base_ref: undefined,
-    });
-  };
+  const startReview = useCallback(
+    async (scope: "project_diff" | "pr" = "project_diff") => {
+      // If no agent thread exists yet, create one so the review backend has a
+      // thread_id to associate findings with. This happens when the user opens
+      // Code Review before starting a conversation.
+      let effectiveThreadId = threadId;
+      if (!effectiveThreadId) {
+        try {
+          const thread = await qiongqiClient.createThread({
+            workspace: projectRoot,
+            workModeId: "coding",
+          });
+          effectiveThreadId = thread.id;
+          onThreadCreated?.(thread.id);
+        } catch {
+          // If thread creation fails, let the backend reject with its own error.
+        }
+      }
+      runReview.mutate({
+        project_id: projectId,
+        project_root: projectRoot,
+        thread_id: effectiveThreadId,
+        scope,
+        base_ref: undefined,
+      });
+    },
+    [threadId, projectId, projectRoot, runReview, onThreadCreated],
+  );
 
   const reviewSummary = currentReview?.summary ?? null;
   const hasBlockingIssue =

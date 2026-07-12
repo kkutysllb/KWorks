@@ -17,11 +17,6 @@ import { useDiscardProjectFileChange, useProjectDiff } from "@/core/projects";
 import type { ProjectDiffFile } from "@/core/projects";
 import { cn } from "@/lib/utils";
 
-import {
-  parseUnifiedDiffForSideBySide,
-  SideBySideDiff,
-} from "./diff-view";
-
 interface CodingDiffPanelProps {
   projectId: string;
   selectedFilePath?: string | null;
@@ -47,9 +42,6 @@ export function CodingDiffPanel({
   const discardProjectFileChange = useDiscardProjectFileChange(projectId);
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const [diffScope, setDiffScope] = useState<"selected" | "all">("selected");
-  const [diffViewMode, setDiffViewMode] = useState<"side-by-side" | "unified">(
-    "side-by-side",
-  );
   const files = useMemo(() => diff?.files ?? [], [diff?.files]);
   const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
   const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
@@ -93,8 +85,8 @@ export function CodingDiffPanel({
   const scopedDiffText =
     diffScope === "all" ? (diff?.diff ?? "") : filteredDiff;
   // Truncate pathologically large diffs before rendering (see
-  // MAX_DIFF_RENDER_LINES). Both the side-by-side parser and the unified
-  // renderer consume `displayDiffText`, so a single guard covers both modes.
+  // MAX_DIFF_RENDER_LINES). The unified renderer consumes
+  // `displayDiffText`.
   const diffLines = useMemo(() => scopedDiffText.split("\n"), [scopedDiffText]);
   const isDiffTruncated = diffLines.length > MAX_DIFF_RENDER_LINES;
   const displayDiffText = useMemo(
@@ -103,10 +95,6 @@ export function CodingDiffPanel({
         ? diffLines.slice(0, MAX_DIFF_RENDER_LINES).join("\n")
         : scopedDiffText,
     [diffLines, isDiffTruncated, scopedDiffText],
-  );
-  const sideBySideRows = useMemo(
-    () => parseUnifiedDiffForSideBySide(displayDiffText),
-    [displayDiffText],
   );
   const discardError =
     discardProjectFileChange.error instanceof Error
@@ -282,28 +270,6 @@ export function CodingDiffPanel({
                   全部变更
                 </Button>
               </div>
-              <div className="bg-muted text-muted-foreground inline-flex h-8 shrink-0 items-center rounded-md p-1">
-                <Button
-                  className="h-6 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  variant={
-                    diffViewMode === "side-by-side" ? "secondary" : "ghost"
-                  }
-                  onClick={() => setDiffViewMode("side-by-side")}
-                >
-                  左右对比
-                </Button>
-                <Button
-                  className="h-6 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  variant={diffViewMode === "unified" ? "secondary" : "ghost"}
-                  onClick={() => setDiffViewMode("unified")}
-                >
-                  Unified
-                </Button>
-              </div>
               {diffScope === "selected" && selectedFile && (
                 <Button
                   className="h-7 px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
@@ -336,15 +302,7 @@ export function CodingDiffPanel({
             </div>
           )}
           <ScrollArea className="min-h-0 flex-1">
-            {diffViewMode === "side-by-side" ? (
-              <SideBySideDiff
-                highlightedNewLine={focusedDiffLine}
-                highlightedOldLine={focusedDiffLine}
-                rows={sideBySideRows}
-              />
-            ) : (
-              renderUnifiedDiff(displayDiffText, focusedDiffLine)
-            )}
+            {renderUnifiedDiff(displayDiffText, focusedDiffLine)}
           </ScrollArea>
         </div>
       </div>

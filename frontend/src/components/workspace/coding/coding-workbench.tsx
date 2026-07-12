@@ -5,14 +5,12 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
   ArrowLeftIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   ClipboardCheckIcon,
   CopyIcon,
   CloudIcon,
   GithubIcon,
   FileTextIcon,
-  FilterIcon,
   GitBranchIcon,
   GitCompareIcon,
   GitCommitHorizontalIcon,
@@ -25,10 +23,8 @@ import {
   ActivityIcon,
   InfoIcon,
   LoaderCircleIcon,
-  SparklesIcon,
   MessageSquareIcon,
   RefreshCwIcon,
-  SearchIcon,
   SendIcon,
   TerminalIcon,
   MonitorCogIcon,
@@ -52,7 +48,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { TodoList } from "@/components/workspace/todo-list";
 import {
@@ -69,8 +64,6 @@ import {
   ProjectFetchError,
   useAcceptStageSuggestion,
   useCodingSession,
-  useCodingSessionChanges,
-  useCodingSessionEvents,
   useCodingSkills,
   useDeliveryStages,
   useDismissStageSuggestion,
@@ -79,7 +72,6 @@ import {
   useProjectGitCommit,
   useProjectGitPush,
   useProjectStage,
-  useProjectDiff,
   useSetProjectStage,
   useProject,
   useWorktrees,
@@ -89,8 +81,6 @@ import type {
   CodingSkill,
   DeliveryStage,
   ProjectStageState,
-  QiongqiChange,
-  QiongqiEvent,
   StageHistoryEntry,
   StageSuggestion,
 } from "@/core/projects";
@@ -111,7 +101,7 @@ interface CodingWorkbenchProps {
 }
 
 type WorkbenchFocusTarget = "code" | "task-changes" | "diff" | "review";
-type AgentInspectorTab = "agent" | "events" | "session" | "workflow" | "skills";
+type AgentInspectorTab = "agent" | "workflow";
 type WorkbenchFocusHandler = (
   filePath: string,
   target?: WorkbenchFocusTarget,
@@ -141,7 +131,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   const searchParams = useWorkspaceSearchParams(routerSearchParams);
   const { project, isLoading, error } = useProject(projectId);
   const { worktrees } = useWorktrees(projectId);
-  const { diff } = useProjectDiff(projectId);
   const { environment } = useProjectEnvironment(projectId);
   const commitMutation = useProjectGitCommit(projectId);
   const pushMutation = useProjectGitPush(projectId);
@@ -192,51 +181,12 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
     }
   }, [agentThreadId, threadIdStorageKey]);
   const codingThreadId = agentThreadId ?? "";
-  const { changes: historicalChanges } =
-    useCodingSessionChanges(codingThreadId);
-  const { review } = useLatestCodingReview(codingThreadId);
-  const reviewSummary = review?.summary;
-  const taskChangeSummary = useMemo(
-    () => ({
-      additions: historicalChanges.reduce(
-        (sum, change) => sum + change.additions,
-        0,
-      ),
-      deletions: historicalChanges.reduce(
-        (sum, change) => sum + change.deletions,
-        0,
-      ),
-      changedFiles: new Set(historicalChanges.map((change) => change.path))
-        .size,
-    }),
-    [historicalChanges],
-  );
-  const reviewChangeSummary = reviewSummary
-    ? {
-        additions: reviewSummary.additions,
-        deletions: reviewSummary.deletions,
-        changedFiles:
-          reviewSummary.project_files > 0
-            ? reviewSummary.project_files
-            : reviewSummary.task_changes,
-      }
-    : {
-        additions: 0,
-        deletions: 0,
-        changedFiles: 0,
-      };
-  const historicalChangeSummary = {
-    additions: reviewChangeSummary.additions || taskChangeSummary.additions,
-    deletions: reviewChangeSummary.deletions || taskChangeSummary.deletions,
-    changedFiles:
-      reviewChangeSummary.changedFiles || taskChangeSummary.changedFiles,
-  };
 
   const [activeCodeTab, setActiveCodeTab] = useState<
-    "code" | "task-changes" | "diff" | "review"
+    "code" | "changes" | "review"
   >("code");
   const [workbenchView, setWorkbenchView] = useState<
-    "code" | "task-changes" | "diff" | "review"
+    "code" | "changes" | "review"
   >("code");
   const [activeInspectorTab, setActiveInspectorTab] =
     useState<AgentInspectorTab>("agent");
@@ -404,8 +354,11 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   ) => {
     setSelectedFile(normalizeProjectFilePath(filePath, project.path));
     setFocusedLine(line ?? null);
-    setActiveCodeTab(target);
-    setWorkbenchView(target);
+    // Both "task-changes" and "diff" collapse into the unified "changes" view.
+    const resolvedView =
+      target === "task-changes" || target === "diff" ? "changes" : target;
+    setActiveCodeTab(resolvedView);
+    setWorkbenchView(resolvedView);
     openWorkbenchPane();
     if (taskId) {
       setSelectedTaskId(taskId);
@@ -497,7 +450,7 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
   };
 
   const handleSelectWorkbenchTab = (
-    tab: "code" | "task-changes" | "diff" | "review",
+    tab: "code" | "changes" | "review",
   ) => {
     setActiveCodeTab(tab);
     setWorkbenchView(tab);
@@ -543,28 +496,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
     environment?.branch ??
     worktrees.find((worktree) => worktree.branch)?.branch ??
     (project.is_git_repo ? "main" : "未连接");
-  const diffAdditions =
-    diff?.files.reduce((sum, file) => sum + file.additions, 0) ?? 0;
-  const diffDeletions =
-    diff?.files.reduce((sum, file) => sum + file.deletions, 0) ?? 0;
-  const environmentChangedFiles = environment?.changed_files ?? 0;
-  const diffChangedFiles = diff?.files.length ?? 0;
-  const totalAdditions =
-    environment?.additions && environment.additions > 0
-      ? environment.additions
-      : diffAdditions > 0
-        ? diffAdditions
-        : historicalChangeSummary.additions;
-  const totalDeletions =
-    environment?.deletions && environment.deletions > 0
-      ? environment.deletions
-      : diffDeletions > 0
-        ? diffDeletions
-        : historicalChangeSummary.deletions;
-  const totalChangedFiles =
-    environmentChangedFiles ||
-    diffChangedFiles ||
-    historicalChangeSummary.changedFiles;
 
   return (
     <ArtifactsProvider>
@@ -607,18 +538,11 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 onClick={() => handleSelectWorkbenchTab("code")}
               />
               <WorkbenchToolbarButton
-                active={activeCodeTab === "task-changes"}
+                active={activeCodeTab === "changes"}
                 icon={<GitCompareIcon className="h-3 w-3" />}
-                label="任务变更"
+                label="变更"
                 shortLabel="变更"
-                onClick={() => handleSelectWorkbenchTab("task-changes")}
-              />
-              <WorkbenchToolbarButton
-                active={activeCodeTab === "diff"}
-                icon={<GitCompareIcon className="h-3 w-3" />}
-                label="项目 Diff"
-                shortLabel="Diff"
-                onClick={() => handleSelectWorkbenchTab("diff")}
+                onClick={() => handleSelectWorkbenchTab("changes")}
               />
               <WorkbenchToolbarButton
                 active={activeCodeTab === "review"}
@@ -641,28 +565,10 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 onClick={() => setActiveInspectorTab("agent")}
               />
               <AgentInspectorToolbarButton
-                active={activeInspectorTab === "events"}
-                icon={<ActivityIcon className="h-3.5 w-3.5" />}
-                label="事件"
-                onClick={() => setActiveInspectorTab("events")}
-              />
-              <AgentInspectorToolbarButton
-                active={activeInspectorTab === "session"}
-                icon={<InfoIcon className="h-3.5 w-3.5" />}
-                label="Session"
-                onClick={() => setActiveInspectorTab("session")}
-              />
-              <AgentInspectorToolbarButton
                 active={activeInspectorTab === "workflow"}
                 icon={<GitCompareIcon className="h-3.5 w-3.5" />}
                 label="流程"
                 onClick={() => setActiveInspectorTab("workflow")}
-              />
-              <AgentInspectorToolbarButton
-                active={activeInspectorTab === "skills"}
-                icon={<SparklesIcon className="h-3.5 w-3.5" />}
-                label="Skills"
-                onClick={() => setActiveInspectorTab("skills")}
               />
             </div>
             <Button
@@ -699,8 +605,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                 <CodingFloatingPanelStack rightRailVisible={!showWorkbenchPane}>
                   {showEnvironmentCard && (
                     <EnvironmentInfoFloatingCard
-                      additions={totalAdditions}
-                      deletions={totalDeletions}
                       branch={gitBranch}
                       githubCli={environment?.github_cli ?? null}
                       sourceLabel={environment?.source.label ?? "仅本地"}
@@ -708,7 +612,6 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                       head={environment?.head ?? null}
                       ahead={environment?.ahead ?? 0}
                       behind={environment?.behind ?? 0}
-                      changedFiles={totalChangedFiles}
                       commitPending={commitMutation.isPending}
                       pushPending={pushMutation.isPending}
                       commitDisabled={
@@ -831,28 +734,31 @@ export function CodingWorkbench({ projectId }: CodingWorkbenchProps) {
                               filePath={selectedFile}
                             />
                           )}
-                          {workbenchView === "diff" && showWorkbenchPane && (
-                            <CodingDiffPanel
-                              projectId={projectId}
-                              selectedFilePath={selectedFile}
-                              focusLine={focusedLine}
-                            />
-                          )}
-                          {workbenchView === "task-changes" &&
+                          {workbenchView === "changes" &&
                             showWorkbenchPane && (
-                              <CodingTaskChangesPanel
-                                threadId={codingThreadId}
-                                selectedFilePath={selectedFile}
-                                highlightedTaskId={selectedTaskId}
-                                onSelectTask={setSelectedTaskId}
-                                onFocusFile={focusWorkbenchFile}
-                              />
+                              <ScrollArea className="h-full">
+                                <div className="flex flex-col">
+                                  <CodingTaskChangesPanel
+                                    threadId={codingThreadId}
+                                    selectedFilePath={selectedFile}
+                                    highlightedTaskId={selectedTaskId}
+                                    onSelectTask={setSelectedTaskId}
+                                    onFocusFile={focusWorkbenchFile}
+                                  />
+                                  <CodingDiffPanel
+                                    projectId={projectId}
+                                    selectedFilePath={selectedFile}
+                                    focusLine={focusedLine}
+                                  />
+                                </div>
+                              </ScrollArea>
                             )}
                           {workbenchView === "review" && showWorkbenchPane && (
                             <ReviewPanel
                               projectId={projectId}
                               projectRoot={project.path}
                               threadId={codingThreadId}
+                              onThreadCreated={setAgentThreadId}
                               onFocusFile={focusWorkbenchFile}
                             />
                           )}
@@ -1094,13 +1000,11 @@ function CollapsedSidePanelRail({
 }
 
 function workbenchPanelTitle(
-  view: "code" | "task-changes" | "diff" | "review",
+  view: "code" | "changes" | "review",
 ): string {
   switch (view) {
-    case "task-changes":
-      return "任务变更";
-    case "diff":
-      return "项目 Diff";
+    case "changes":
+      return "变更";
     case "review":
       return "Code Review";
     case "code":
@@ -1432,24 +1336,11 @@ function AgentInspector({
             onTodosChange={onTodosChange}
           />
         </PersistentInspectorPanel>
-        <PersistentInspectorPanel active={activeTab === "events"}>
-          <CodingEventsInspector
-            threadId={threadId}
-            onFocusFile={onFocusFile}
-            selectedTaskId={selectedTaskId}
-          />
-        </PersistentInspectorPanel>
-        <PersistentInspectorPanel active={activeTab === "session"}>
-          <CodingSessionInspector threadId={threadId} />
-        </PersistentInspectorPanel>
         <PersistentInspectorPanel active={activeTab === "workflow"}>
           <CodingWorkflowInspector
             projectRoot={projectRoot}
             threadId={threadId}
           />
-        </PersistentInspectorPanel>
-        <PersistentInspectorPanel active={activeTab === "skills"}>
-          <CodingSkillsInspector projectRoot={projectRoot} />
         </PersistentInspectorPanel>
       </div>
     </div>
@@ -1477,13 +1368,10 @@ function CodingFloatingPanelStack({
 }
 
 function EnvironmentInfoFloatingCard({
-  additions,
   ahead,
   branch,
-  changedFiles,
   commitDisabled,
   commitPending,
-  deletions,
   githubCli,
   head,
   onCommit,
@@ -1495,13 +1383,10 @@ function EnvironmentInfoFloatingCard({
   sourceRemote,
   behind,
 }: {
-  additions: number;
   ahead: number;
   branch: string;
-  changedFiles: number;
   commitDisabled: boolean;
   commitPending: boolean;
-  deletions: number;
   githubCli: {
     available: boolean;
     authenticated: boolean;
@@ -1538,12 +1423,6 @@ function EnvironmentInfoFloatingCard({
           </p>
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold">{branch}</p>
-            <Badge
-              variant="secondary"
-              className="h-5 rounded-sm px-1.5 font-mono text-[10px]"
-            >
-              {changedFiles} files
-            </Badge>
           </div>
         </div>
         <div className="bg-muted/70 flex size-8 items-center justify-center rounded-xl border">
@@ -1551,29 +1430,14 @@ function EnvironmentInfoFloatingCard({
         </div>
       </div>
       <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2">
-          <InfoMetricTile
-            label="变更"
-            value={
-              <span className="font-mono text-xs">
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  +{additions}
-                </span>{" "}
-                <span className="text-red-600 dark:text-red-400">
-                  -{deletions}
-                </span>
-              </span>
-            }
-          />
-          <InfoMetricTile
-            label="同步"
-            value={
-              <span className="text-muted-foreground font-mono text-xs">
-                ↑{ahead} ↓{behind}
-              </span>
-            }
-          />
-        </div>
+        <InfoMetricTile
+          label="同步"
+          value={
+            <span className="text-muted-foreground font-mono text-xs">
+              ↑{ahead} ↓{behind}
+            </span>
+          }
+        />
 
         <div className="bg-muted/40 rounded-xl border p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
@@ -1700,611 +1564,6 @@ function PersistentInspectorPanel({
     </div>
   );
 }
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  session_started: "会话",
-  task_started: "任务",
-  plan_updated: "计划",
-  tool_policy_decided: "策略",
-  file_changed: "文件",
-  diff_summarized: "Diff",
-  roi_reported: "ROI",
-  task_completed: "完成",
-};
-
-function CodingEventsInspector({
-  onFocusFile,
-  selectedTaskId,
-  threadId,
-}: {
-  threadId: string;
-  onFocusFile?: WorkbenchFocusHandler;
-  selectedTaskId?: string | null;
-}) {
-  const { events, isLoading, isFetching, error, refetch } =
-    useCodingSessionEvents(threadId);
-  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [groupByTask, setGroupByTask] = useState(false);
-
-  // Auto-refresh every 10s
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => void refetch(), 10000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, refetch]);
-
-  // Available event types from current data
-  const availableTypes = useMemo(() => {
-    const types = new Set<string>();
-    for (const event of events) types.add(event.event_type);
-    return Array.from(types).sort();
-  }, [events]);
-
-  // Filter + optionally group
-  const filteredEvents = useMemo(() => {
-    let filtered = events;
-    if (selectedTypes.size > 0) {
-      filtered = filtered.filter((e) => selectedTypes.has(e.event_type));
-    }
-    return filtered.slice().reverse();
-  }, [events, selectedTypes]);
-
-  const taskGroups = useMemo(() => {
-    if (!groupByTask) return null;
-    const groups = new Map<string, QiongqiEvent[]>();
-    for (const event of filteredEvents) {
-      const taskId =
-        typeof event.payload.task_id === "string"
-          ? event.payload.task_id
-          : "__unknown__";
-      if (!groups.has(taskId)) groups.set(taskId, []);
-      groups.get(taskId)!.push(event);
-    }
-    return Array.from(groups.entries()).sort(([a], [b]) =>
-      a === "__unknown__" ? 1 : b === "__unknown__" ? -1 : a.localeCompare(b),
-    );
-  }, [filteredEvents, groupByTask]);
-
-  const toggleType = (type: string) => {
-    setSelectedTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  };
-
-  return (
-    <InspectorSection
-      title="事件流"
-      meta={`${filteredEvents.length} 条${selectedTypes.size > 0 ? ` (已过滤)` : ""}`}
-      isFetching={isFetching}
-      onRefresh={() => void refetch()}
-      action={
-        <button
-          className={cn(
-            "inline-flex h-6 items-center gap-1 rounded-sm px-1.5 text-[10px] font-medium transition-colors",
-            autoRefresh && "text-emerald-600 dark:text-emerald-400",
-          )}
-          type="button"
-          onClick={() => setAutoRefresh((v) => !v)}
-        >
-          <RefreshCwIcon
-            className={cn("h-3 w-3", autoRefresh && "animate-spin")}
-          />
-          自动刷新
-        </button>
-      }
-    >
-      {isLoading ? (
-        <InspectorSkeleton rows={5} />
-      ) : error ? (
-        <InspectorError message={getErrorMessage(error)} />
-      ) : events.length === 0 ? (
-        <InspectorEmpty
-          title="暂无事件"
-          description="Agent 运行后会记录任务、工具、ROI 和文件变更事件。"
-        />
-      ) : (
-        <div className="flex min-h-0 flex-col">
-          {/* Filter chips + group toggle */}
-          <div className="flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1.5">
-            <FilterIcon className="text-muted-foreground h-3 w-3 shrink-0" />
-            {availableTypes.map((type) => {
-              const active =
-                selectedTypes.size === 0 || selectedTypes.has(type);
-              return (
-                <button
-                  key={type}
-                  className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                    active
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-foreground opacity-60",
-                  )}
-                  type="button"
-                  onClick={() => toggleType(type)}
-                >
-                  {EVENT_TYPE_LABELS[type] ?? type}
-                </button>
-              );
-            })}
-            <button
-              className={cn(
-                "ml-auto rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                groupByTask &&
-                  "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
-              )}
-              type="button"
-              onClick={() => setGroupByTask((v) => !v)}
-            >
-              按 Task
-            </button>
-          </div>
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-2 p-3">
-              {taskGroups
-                ? taskGroups.map(([taskId, taskEvents]) => (
-                    <TaskGroup
-                      key={taskId}
-                      taskId={taskId}
-                      events={taskEvents}
-                      onFocusFile={onFocusFile}
-                      selectedTaskId={selectedTaskId}
-                    />
-                  ))
-                : filteredEvents.map((event) => (
-                    <EventRow
-                      key={event.seq}
-                      event={event}
-                      onFocusFile={onFocusFile}
-                      selectedTaskId={selectedTaskId}
-                    />
-                  ))}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
-    </InspectorSection>
-  );
-}
-
-function TaskGroup({
-  events,
-  onFocusFile,
-  selectedTaskId,
-  taskId,
-}: {
-  events: QiongqiEvent[];
-  onFocusFile?: WorkbenchFocusHandler;
-  selectedTaskId?: string | null;
-  taskId: string;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const isHighlighted = selectedTaskId === taskId;
-
-  return (
-    <div>
-      <button
-        className={cn(
-          "hover:bg-muted/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-          isHighlighted && "bg-emerald-500/10 ring-1 ring-emerald-500/30",
-        )}
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        {expanded ? (
-          <ChevronDownIcon className="h-3 w-3 shrink-0" />
-        ) : (
-          <ChevronRightIcon className="h-3 w-3 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[10px]">
-          {taskId === "__unknown__" ? "未关联任务" : taskId}
-        </span>
-        <span className="text-muted-foreground shrink-0 text-[10px]">
-          {events.length} 事件
-        </span>
-      </button>
-      {expanded && (
-        <div className="border-muted ml-3 space-y-1.5 border-l-2 pl-2">
-          {events.map((event) => (
-            <EventRow
-              key={event.seq}
-              event={event}
-              onFocusFile={onFocusFile}
-              selectedTaskId={selectedTaskId}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EventRow({
-  event,
-  onFocusFile,
-  selectedTaskId,
-}: {
-  event: QiongqiEvent;
-  onFocusFile?: WorkbenchFocusHandler;
-  selectedTaskId?: string | null;
-}) {
-  const focusTarget = getEventFocusTarget(event);
-
-  return (
-    <div
-      className={cn(
-        "rounded-md border p-2",
-        focusTarget?.taskId &&
-          focusTarget.taskId === selectedTaskId &&
-          "bg-emerald-500/10 ring-1 ring-emerald-500/30",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <Badge
-          variant="outline"
-          className="rounded px-1.5 font-mono text-[10px]"
-        >
-          #{event.seq}
-        </Badge>
-        <span className="text-muted-foreground truncate text-[11px]">
-          {formatCompactDate(event.created_at)}
-        </span>
-      </div>
-      <p className="mt-1 truncate text-xs font-medium">
-        {formatEventType(event.event_type)}
-      </p>
-      <pre className="text-muted-foreground mt-1 line-clamp-3 overflow-hidden font-mono text-[11px] whitespace-pre-wrap">
-        {formatJsonPreview(event.payload)}
-      </pre>
-      {focusTarget && onFocusFile && (
-        <Button
-          className="mt-2 h-7 w-full justify-start px-2 text-xs"
-          size="sm"
-          type="button"
-          variant="ghost"
-          onClick={() =>
-            onFocusFile(
-              focusTarget.path,
-              focusTarget.target,
-              focusTarget.taskId,
-            )
-          }
-        >
-          <FileTextIcon className="h-3.5 w-3.5" />
-          定位 {focusTarget.target === "diff" ? "变更" : "文件"}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function CodingSessionInspector({ threadId }: { threadId: string }) {
-  const { session, isLoading, isFetching, error, refetch } =
-    useCodingSession(threadId);
-  const { changes } = useCodingSessionChanges(threadId);
-  const [expandedRawSession, setExpandedRawSession] = useState(false);
-  const changeSummary = useMemo(
-    () => session?.change_summary ?? {},
-    [session?.change_summary],
-  );
-  const changeSummaryFromChanges = useMemo(
-    () => buildChangeSummaryFromChanges(changes),
-    [changes],
-  );
-  const effectiveChangeSummary = useMemo(
-    () => mergeChangeSummary(changeSummary, changeSummaryFromChanges),
-    [changeSummary, changeSummaryFromChanges],
-  );
-  const changedFiles = getNumberValue(effectiveChangeSummary, "changed_files");
-  const additions = getNumberValue(effectiveChangeSummary, "additions");
-  const deletions = getNumberValue(effectiveChangeSummary, "deletions");
-  const currentTask = getCurrentTaskLabel(effectiveChangeSummary);
-  const roi = session?.roi ?? {};
-  const providerUsage = getRecordValue(roi, "provider_usage");
-  const tokenTotal = getNumberValue(providerUsage, "total_tokens");
-  const toolPolicyCount = session?.tool_policy.length ?? 0;
-
-  return (
-    <InspectorSection
-      title="运行概览"
-      meta={
-        session?.updated_at
-          ? `更新 ${formatCompactDate(session.updated_at)}`
-          : undefined
-      }
-      isFetching={isFetching}
-      onRefresh={() => void refetch()}
-    >
-      {isLoading ? (
-        <InspectorSkeleton rows={4} />
-      ) : error ? (
-        <InspectorError message={getErrorMessage(error)} />
-      ) : !session ? (
-        <InspectorEmpty
-          title="暂无 Session"
-          description="Agent 首次运行后会生成 Qiongqi session 状态。"
-        />
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 p-3">
-            <MetricGrid
-              items={[
-                ["Skills", session.skills.length, "发现的 Coding skills"],
-                [
-                  "Active",
-                  session.active_coding_skills.length,
-                  "本轮激活的 Coding skills",
-                ],
-                ["Tools", toolPolicyCount, "当前工具策略条目"],
-                ["Tokens", tokenTotal, "当前 ROI provider usage 总 token"],
-              ]}
-            />
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">运行边界</p>
-              <KeyValueRow label="Thread" value={session.thread_id} />
-              <KeyValueRow
-                label="Project"
-                value={session.project_root ?? "未绑定项目路径"}
-              />
-              <KeyValueRow
-                label="Scratch"
-                value={session.scratch_root ?? "未创建 scratch workspace"}
-              />
-            </div>
-
-            <MetricGrid
-              items={[
-                ["Files", changedFiles, "本 session 记录的文件变更数"],
-                ["Additions", additions, "新增行数"],
-                ["Deletions", deletions, "删除行数"],
-                ["+ / -", additions + deletions, "新增与删除行合计"],
-              ]}
-            />
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">当前任务</p>
-              <p className="text-muted-foreground text-xs leading-5">
-                {currentTask}
-              </p>
-            </div>
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">变更摘要</p>
-              {Object.keys(effectiveChangeSummary).length === 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  暂无任务变更摘要。
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {Object.entries(effectiveChangeSummary)
-                    .slice(0, 6)
-                    .map(([key, value]) => (
-                      <KeyValueRow
-                        key={key}
-                        label={key}
-                        value={formatInspectorValue(value)}
-                      />
-                    ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">活跃技能</p>
-              {session.active_coding_skills.length === 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  当前 session 未激活 Coding skill。
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1">
-                  {session.active_coding_skills.map((skill, index) => (
-                    <Badge
-                      key={`${formatInspectorValue(skill.id ?? index)}-${index}`}
-                      variant="secondary"
-                      className="rounded px-1.5 text-[10px]"
-                    >
-                      {formatInspectorValue(skill.name ?? skill.id ?? "skill")}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">工具策略</p>
-              {session.tool_policy.length === 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  当前 session 没有工具限制策略。
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {session.tool_policy.slice(0, 5).map((policy, index) => (
-                    <div
-                      key={`${formatInspectorValue(policy.id ?? index)}-${index}`}
-                      className="bg-muted/40 rounded px-2 py-1"
-                    >
-                      <p className="truncate text-xs font-medium">
-                        {formatInspectorValue(
-                          policy.id ?? policy.name ?? `policy-${index + 1}`,
-                        )}
-                      </p>
-                      <p className="text-muted-foreground mt-0.5 truncate text-[10px]">
-                        {formatToolPolicySummary(policy)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 rounded-md border p-2">
-              <p className="text-xs font-medium">ROI 摘要</p>
-              {Object.keys(roi).length === 0 ? (
-                <p className="text-muted-foreground text-xs">暂无 ROI 摘要。</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <MiniStat label="Total" value={tokenTotal} />
-                  <MiniStat
-                    label="Input"
-                    value={getNumberValue(providerUsage, "input_tokens")}
-                  />
-                  <MiniStat
-                    label="Output"
-                    value={getNumberValue(providerUsage, "output_tokens")}
-                  />
-                  <MiniStat
-                    label="Hidden tools"
-                    value={getNumberValue(roi, "hidden_tool_count")}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 rounded-md border p-2">
-              <button
-                className="hover:bg-muted/60 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs font-medium"
-                type="button"
-                onClick={() => setExpandedRawSession((value) => !value)}
-              >
-                {expandedRawSession ? (
-                  <ChevronDownIcon className="h-3 w-3" />
-                ) : (
-                  <ChevronRightIcon className="h-3 w-3" />
-                )}
-                原始 Session
-              </button>
-              {expandedRawSession && (
-                <pre className="text-muted-foreground max-h-44 overflow-auto font-mono text-[11px] leading-4 whitespace-pre-wrap">
-                  {formatJsonPreview({
-                    tool_policy: session.tool_policy,
-                    change_summary: effectiveChangeSummary,
-                    roi: session.roi,
-                  })}
-                </pre>
-              )}
-            </div>
-          </div>
-        </ScrollArea>
-      )}
-    </InspectorSection>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-muted/40 rounded px-2 py-1.5">
-      <p className="text-muted-foreground text-[10px]">{label}</p>
-      <p className="mt-0.5 font-mono text-xs font-semibold">
-        {formatNumber(value)}
-      </p>
-    </div>
-  );
-}
-
-const SKILL_CATEGORIES = [
-  {
-    id: "delivery",
-    label: "项目交付",
-    ids: [
-      "project-delivery-workflow",
-      "requirements-analysis",
-      "product-spec",
-      "acceptance-criteria",
-      "technical-design",
-      "project-scaffolding",
-      "environment-setup",
-      "handoff-docs",
-    ],
-  },
-  {
-    id: "core",
-    label: "核心工程",
-    ids: [
-      "using-superpowers",
-      "planning",
-      "task-decomposition",
-      "codebase-analysis",
-      "context-management",
-      "implement",
-      "patch-authoring",
-      "rollback-recovery",
-    ],
-  },
-  {
-    id: "qiongqi",
-    label: "Qiongqi",
-    ids: [
-      "agent-memory-isolation",
-      "scratch-workspace",
-      "qiongqi-roi",
-      "diff-analysis",
-      "pr-review-advanced",
-    ],
-  },
-  {
-    id: "frontend",
-    label: "前端",
-    ids: [
-      "frontend-engineering",
-      "react-nextjs",
-      "ui-polish",
-      "web-accessibility",
-      "webapp-testing",
-      "playwright-verification",
-      "state-management",
-      "typescript",
-    ],
-  },
-  {
-    id: "backend",
-    label: "后端",
-    ids: [
-      "fastapi-backend",
-      "api-design",
-      "database",
-      "migration",
-      "error-handling",
-      "observability",
-      "build-system",
-    ],
-  },
-  {
-    id: "quality",
-    label: "质量审查",
-    ids: [
-      "debug",
-      "systematic-debugging",
-      "test-driven-development",
-      "test-writer",
-      "qa-test-plan",
-      "code-review",
-      "security-review",
-      "security-hardening",
-      "performance",
-      "verification-before-completion",
-    ],
-  },
-  {
-    id: "release",
-    label: "发布运维",
-    ids: [
-      "ci-cd",
-      "dependency-upgrade",
-      "deployment",
-      "release-engineering",
-      "operations-runbook",
-      "docs",
-      "workflow-automation",
-      "using-git-worktrees",
-      "subagent-orchestration",
-      "skill-authoring",
-    ],
-  },
-] as const;
 
 function CodingWorkflowInspector({
   projectRoot,
@@ -2457,90 +1716,6 @@ function currentStageTitle(
 ): string {
   const stage = stages.find((s) => s.id === state.current_stage);
   return stage?.title ?? state.current_stage ?? "";
-}
-
-function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
-  const { skills, isLoading, isFetching, error, refetch } =
-    useCodingSkills(projectRoot);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [skillSearch, setSkillSearch] = useState("");
-
-  const filteredSkills = useMemo(() => {
-    const query = skillSearch.trim().toLowerCase();
-    const category = SKILL_CATEGORIES.find(
-      (item) => item.id === activeCategory,
-    );
-    const categoryIds = category ? new Set<string>(category.ids) : null;
-    return skills.filter((skill) => {
-      if (categoryIds && !categoryIds.has(skill.id)) return false;
-      if (!query) return true;
-      return (
-        skill.id.toLowerCase().includes(query) ||
-        skill.name.toLowerCase().includes(query) ||
-        skill.description.toLowerCase().includes(query)
-      );
-    });
-  }, [activeCategory, skillSearch, skills]);
-
-  const enabledCount = useMemo(
-    () => skills.filter((s) => s.enabled).length,
-    [skills],
-  );
-
-  return (
-    <InspectorSection
-      title="Skills"
-      meta={`内置技能 · ${enabledCount} 个`}
-      isFetching={isFetching}
-      onRefresh={() => void refetch()}
-    >
-      {isLoading ? (
-        <InspectorSkeleton rows={5} />
-      ) : error ? (
-        <InspectorError message={getErrorMessage(error)} />
-      ) : skills.length === 0 ? (
-        <InspectorEmpty
-          title="暂无 Coding Skills"
-          description="内置 Coding skills 会显示在这里，和通用任务技能隔离。"
-        />
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 p-3">
-            <div className="space-y-2">
-              <div className="relative">
-                <SearchIcon className="text-muted-foreground pointer-events-none absolute top-[50%] left-2 h-3.5 w-3.5 -translate-y-1/2" />
-                <input
-                  className="border-input bg-background placeholder:text-muted-foreground focus:border-ring h-8 w-full rounded-md border pr-2 pl-7 text-xs transition-colors outline-none"
-                  placeholder="搜索技能..."
-                  type="search"
-                  value={skillSearch}
-                  onChange={(event) => setSkillSearch(event.target.value)}
-                />
-              </div>
-              <SkillCategoryFilter
-                activeCategory={activeCategory}
-                skills={skills}
-                onSelectCategory={setActiveCategory}
-              />
-            </div>
-
-            <div className="space-y-2">
-              {filteredSkills.length === 0 ? (
-                <InspectorEmpty
-                  title="没有匹配的技能"
-                  description="调整搜索关键词或切换分类。"
-                />
-              ) : (
-                filteredSkills.map((skill) => (
-                  <SkillCard key={`${skill.scope}-${skill.id}`} skill={skill} />
-                ))
-              )}
-            </div>
-          </div>
-        </ScrollArea>
-      )}
-    </InspectorSection>
-  );
 }
 
 function WorkflowStageCard({
@@ -2848,138 +2023,6 @@ function StageHistoryTimeline({
   );
 }
 
-function SkillCategoryFilter({
-  activeCategory,
-  onSelectCategory,
-  skills,
-}: {
-  activeCategory: string;
-  skills: CodingSkill[];
-  onSelectCategory: (category: string) => void;
-}) {
-  const skillIds = useMemo(
-    () => new Set(skills.map((skill) => skill.id)),
-    [skills],
-  );
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      <button
-        className={cn(
-          "rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
-          activeCategory === "all"
-            ? "bg-primary text-primary-foreground"
-            : "hover:bg-muted text-muted-foreground hover:text-foreground",
-        )}
-        type="button"
-        onClick={() => onSelectCategory("all")}
-      >
-        全部分类
-      </button>
-      {SKILL_CATEGORIES.map((category) => {
-        const count = category.ids.filter((id) => skillIds.has(id)).length;
-        return (
-          <button
-            key={category.id}
-            className={cn(
-              "rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
-              activeCategory === category.id
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted text-muted-foreground hover:text-foreground",
-            )}
-            type="button"
-            onClick={() => onSelectCategory(category.id)}
-          >
-            {category.label} {count}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function SkillCard({ skill }: { skill: CodingSkill }) {
-  const category = SKILL_CATEGORIES.find((item) =>
-    (item.ids as readonly string[]).includes(skill.id),
-  );
-
-  return (
-    <div className="bg-background w-full rounded-md border p-2.5 text-left">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{skill.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            <Badge
-              variant={skill.enabled ? "secondary" : "outline"}
-              className="rounded px-1.5 text-[10px]"
-            >
-              {skill.scope === "global" ? "内置技能" : skill.scope}
-            </Badge>
-            {category && (
-              <Badge variant="outline" className="rounded px-1.5 text-[10px]">
-                {category.label}
-              </Badge>
-            )}
-            {!skill.enabled && (
-              <Badge variant="outline" className="rounded px-1.5 text-[10px]">
-                disabled
-              </Badge>
-            )}
-          </div>
-        </div>
-        <Switch
-          aria-label={`${skill.name} 启用状态`}
-          checked={skill.enabled}
-          disabled
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        />
-      </div>
-      <p className="text-muted-foreground mt-2 line-clamp-3 text-xs leading-5">
-        {skill.description || skill.id}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {activationKeywordsForSkill(skill)
-          .slice(0, 4)
-          .map((keyword) => (
-            <Badge
-              key={keyword}
-              variant="outline"
-              className="rounded px-1.5 text-[10px]"
-            >
-              {keyword}
-            </Badge>
-          ))}
-        {activationKeywordsForSkill(skill).length > 4 && (
-          <Badge
-            variant="outline"
-            className="text-muted-foreground rounded px-1.5 text-[10px]"
-          >
-            +{activationKeywordsForSkill(skill).length - 4}
-          </Badge>
-        )}
-        {manifestErrorsForSkill(skill).length > 0 && (
-          <Badge variant="destructive" className="rounded px-1.5 text-[10px]">
-            manifest
-          </Badge>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function activationKeywordsForSkill(skill: CodingSkill): string[] {
-  return Array.isArray(skill.activation_keywords)
-    ? skill.activation_keywords.filter((keyword) => typeof keyword === "string")
-    : [];
-}
-
-function manifestErrorsForSkill(skill: CodingSkill): string[] {
-  return Array.isArray(skill.manifest_errors)
-    ? skill.manifest_errors.filter((error) => typeof error === "string")
-    : [];
-}
-
 function InspectorSection({
   action,
   children,
@@ -3060,73 +2103,8 @@ function InspectorEmpty({
   );
 }
 
-function MetricGrid({
-  items,
-}: {
-  items: Array<[string, number | string] | [string, number | string, string]>;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {items.map((item) => {
-        const [label, value, tip] = item;
-        return (
-          <div key={label} className="rounded-md border p-2" title={tip}>
-            <p className="text-muted-foreground text-[11px]">{label}</p>
-            <p className="mt-1 font-mono text-sm font-semibold">
-              {typeof value === "number" ? formatNumber(value) : value}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function KeyValueRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[56px_minmax(0,1fr)] gap-2 text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="truncate font-mono" title={value}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "加载失败";
-}
-
-function formatEventType(eventType: string): string {
-  return eventType.replaceAll("_", " ");
-}
-
-function getEventFocusTarget(event: QiongqiEvent): {
-  path: string;
-  target: "code" | "task-changes" | "diff";
-  taskId?: string;
-} | null {
-  const path =
-    typeof event.payload.path === "string"
-      ? event.payload.path
-      : Array.isArray(event.payload.paths) &&
-          typeof event.payload.paths[0] === "string"
-        ? event.payload.paths[0]
-        : null;
-  if (!path) return null;
-  const taskId =
-    typeof event.payload.task_id === "string"
-      ? event.payload.task_id
-      : undefined;
-  return {
-    path,
-    target:
-      event.event_type === "file_changed" ||
-      event.event_type === "diff_summarized"
-        ? "task-changes"
-        : "code",
-    taskId,
-  };
 }
 
 function normalizeProjectFilePath(
@@ -3144,127 +2122,7 @@ function normalizeProjectFilePath(
   return trimmedPath;
 }
 
-function formatJsonPreview(value: Record<string, unknown>): string {
-  if (Object.keys(value).length === 0) return "{}";
-  return JSON.stringify(value, null, 2);
-}
-
 function getNumberValue(value: Record<string, unknown>, key: string): number {
   const raw = value[key];
   return typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
-}
-
-function getRecordValue(
-  value: Record<string, unknown>,
-  key: string,
-): Record<string, unknown> {
-  const raw = value[key];
-  return raw && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : {};
-}
-
-function buildChangeSummaryFromChanges(
-  changes: QiongqiChange[],
-): Record<string, unknown> {
-  if (changes.length === 0) return {};
-  const latestChange = changes.reduce((latest, change) =>
-    change.created_at > latest.created_at ? change : latest,
-  );
-  const paths = Array.from(
-    new Set(changes.map((change) => change.path)),
-  ).sort();
-  const additions = changes.reduce((sum, change) => sum + change.additions, 0);
-  const deletions = changes.reduce((sum, change) => sum + change.deletions, 0);
-  return {
-    thread_id: latestChange.thread_id,
-    task_id: latestChange.task_id,
-    changed_files: paths.length,
-    additions,
-    deletions,
-    paths,
-    summary: `${paths.length} 个文件变更，+${additions} -${deletions}`,
-  };
-}
-
-function mergeChangeSummary(
-  sessionSummary: Record<string, unknown>,
-  changesSummary: Record<string, unknown>,
-): Record<string, unknown> {
-  if (Object.keys(changesSummary).length === 0) return sessionSummary;
-  if (Object.keys(sessionSummary).length === 0) return changesSummary;
-  const merged = { ...changesSummary, ...sessionSummary };
-  for (const key of ["changed_files", "additions", "deletions"]) {
-    if (getNumberValue(sessionSummary, key) === 0) {
-      merged[key] = getNumberValue(changesSummary, key);
-    }
-  }
-  if (!Array.isArray(sessionSummary.paths)) {
-    merged.paths = changesSummary.paths;
-  }
-  if (typeof sessionSummary.task_id !== "string") {
-    merged.task_id = changesSummary.task_id;
-  }
-  if (typeof sessionSummary.summary !== "string") {
-    merged.summary = changesSummary.summary;
-  }
-  return merged;
-}
-
-function getCurrentTaskLabel(
-  changeSummary: Record<string, unknown> | undefined,
-): string {
-  if (!changeSummary || Object.keys(changeSummary).length === 0) {
-    return "暂无当前任务摘要。Agent 产生任务变更后会在这里显示。";
-  }
-  const taskId = changeSummary.task_id;
-  const title =
-    changeSummary.title ?? changeSummary.task ?? changeSummary.summary;
-  if (typeof taskId === "string" && typeof title === "string") {
-    return `${taskId}: ${title}`;
-  }
-  if (typeof title === "string") return title;
-  if (typeof taskId === "string") return taskId;
-  return "已有变更摘要，但未记录明确任务标题。";
-}
-
-function formatInspectorValue(value: unknown): string {
-  if (value == null) return "-";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  if (Array.isArray(value)) return `${value.length} 项`;
-  if (typeof value === "object") return JSON.stringify(value);
-  return "";
-}
-
-function formatToolPolicySummary(policy: Record<string, unknown>): string {
-  const tools = Array.isArray(policy.allowed_tools)
-    ? policy.allowed_tools.map(String)
-    : [];
-  const permissions =
-    policy.permissions && typeof policy.permissions === "object"
-      ? Object.keys(policy.permissions as Record<string, unknown>)
-      : [];
-  if (tools.length > 0 && permissions.length > 0) {
-    return `${tools.slice(0, 4).join(", ")} · ${permissions.join(", ")}`;
-  }
-  if (tools.length > 0) return tools.slice(0, 5).join(", ");
-  if (permissions.length > 0) return permissions.join(", ");
-  return "未声明工具限制";
-}
-
-function formatCompactDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat().format(value);
 }

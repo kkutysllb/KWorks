@@ -88,10 +88,11 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("grid-cols-5");
     expect(workbench).not.toContain("sm:mr-1");
     expect(workbench).toContain('setActiveInspectorTab("agent")');
-    expect(workbench).toContain('setActiveInspectorTab("events")');
-    expect(workbench).toContain('setActiveInspectorTab("session")');
     expect(workbench).toContain('setActiveInspectorTab("workflow")');
-    expect(workbench).toContain('setActiveInspectorTab("skills")');
+    // The events/session/skills inspector tabs were removed.
+    expect(workbench).not.toContain('setActiveInspectorTab("events")');
+    expect(workbench).not.toContain('setActiveInspectorTab("session")');
+    expect(workbench).not.toContain('setActiveInspectorTab("skills")');
     expect(workbench).toContain("PersistentInspectorPanel");
     expect(workbench).toContain(
       '<PersistentInspectorPanel active={activeTab === "agent"} keepMounted>',
@@ -102,11 +103,13 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain('value="roi"');
     expect(workbench).not.toContain('value="workflow"');
     expect(workbench).not.toContain('value="skills"');
-    expect(workbench).toContain("CodingEventsInspector");
-    expect(workbench).toContain("CodingSessionInspector");
-    expect(workbench).toContain("useCodingSessionChanges(threadId)");
-    expect(workbench).toContain("effectiveChangeSummary");
-    expect(workbench).toContain("buildChangeSummaryFromChanges");
+    // Removed inspector surfaces.
+    expect(workbench).not.toContain("CodingEventsInspector");
+    expect(workbench).not.toContain("CodingSessionInspector");
+    expect(workbench).not.toContain("CodingSkillsInspector");
+    expect(workbench).not.toContain("useCodingSessionEvents");
+    expect(workbench).not.toContain("effectiveChangeSummary");
+    expect(workbench).not.toContain("buildChangeSummaryFromChanges");
     expect(workbench).not.toContain("CodingRoiInspector");
     expect(workbench).not.toContain("useCodingRoiSummary");
     expect(workbench).not.toContain("useCodingRoiReports");
@@ -115,44 +118,33 @@ describe("coding workbench layout", () => {
     expect(workbench).not.toContain("RoiSavingsDonut");
     expect(workbench).not.toContain("RoiContributionBars");
     expect(workbench).not.toContain("RoiCostBreakdown");
+    // The Workflow inspector survived the cut.
     expect(workbench).toContain("CodingWorkflowInspector");
-    expect(workbench).toContain("CodingSkillsInspector");
-    expect(workbench).toContain("useCodingSessionEvents");
     expect(workbench).toContain("useCodingSession");
     expect(workbench).toContain("useCodingSkills");
     expect(workbench).not.toContain("useSetCodingSkillEnabled");
-    expect(workbench).toContain("<Switch");
-    expect(workbench).toContain("disabled");
-    expect(workbench).toContain("event.stopPropagation()");
-    expect(workbench).not.toContain("onCheckedChange={onToggle}");
-    expect(workbench).toContain("内置技能");
-    expect(workbench).toContain("activationKeywordsForSkill(skill)");
-    expect(workbench).toContain(".slice(0, 4)");
-    expect(workbench).not.toContain("skill.activation_keywords.slice(0, 4)");
-    expect(workbench).toContain("SKILL_CATEGORIES");
+    expect(workbench).not.toContain("<Switch");
+    expect(workbench).not.toContain("内置技能");
+    expect(workbench).not.toContain("activationKeywordsForSkill(skill)");
+    expect(workbench).not.toContain("SKILL_CATEGORIES");
     expect(workbench).toContain("useDeliveryStages");
     expect(workbench).toContain("copyWorkflowPrompt");
     expect(workbench).toContain("复制提示词");
     expect(workbench).toContain("nextPrompt");
     expect(workbench).toContain("goal");
-    expect(workbench).toContain("filteredSkills");
-    expect(workbench).toContain("setSkillSearch");
+    expect(workbench).not.toContain("filteredSkills");
+    expect(workbench).not.toContain("setSkillSearch");
     expect(workbench).toContain("项目交付流程");
-    expect(workbench).toContain("全部分类");
+    expect(workbench).not.toContain("全部分类");
     expect(workbench).toContain("WorkflowStageCard");
-    expect(workbench).toContain("SkillCategoryFilter");
+    expect(workbench).not.toContain("SkillCategoryFilter");
     expect(workbench).toContain("const signals = useMemo");
     expect(workbench).toContain("isCurrent={isCurrent}");
     expect(workbench).toContain("isVisited={isVisited}");
     expect(workbench).toContain("signals={signals}");
-    expect(workbench).toContain("运行概览");
-    expect(workbench).toContain("当前任务");
-    expect(workbench).toContain("变更摘要");
-    expect(workbench).toContain("活跃技能");
-    expect(workbench).toContain("工具策略");
-    expect(workbench).toContain("ROI 摘要");
-    expect(workbench).toContain("原始 Session");
-    expect(workbench).toContain("expandedRawSession");
+    expect(workbench).not.toContain("运行概览");
+    expect(workbench).not.toContain("原始 Session");
+    expect(workbench).not.toContain("expandedRawSession");
     expect(workbench).not.toContain("useCodingSkillDetail");
     expect(workbench).not.toContain("useCreateCodingSkill");
     expect(workbench).not.toContain("useUpdateCodingSkill");
@@ -171,14 +163,14 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("focusWorkbenchFile");
     expect(workbench).toContain("handleSelectExplorerFile");
     expect(workbench).toContain("onFocusFile");
-    expect(workbench).toContain("getEventFocusTarget");
+    expect(workbench).not.toContain("getEventFocusTarget");
     expect(workbench).toContain("CodingTaskChangesPanel");
-    expect(workbench).toContain('label="任务变更"');
+    expect(workbench).toContain('label="变更"');
     expect(workbench).toContain('label="Code Review"');
-    expect(workbench).toContain('handleSelectWorkbenchTab("task-changes")');
+    expect(workbench).toContain('handleSelectWorkbenchTab("changes")');
     expect(workbench).toContain('handleSelectWorkbenchTab("review")');
-    expect(workbench).toContain('event.event_type === "file_changed"');
-    expect(workbench).toContain('event.event_type === "diff_summarized"');
+    expect(workbench).not.toContain('handleSelectWorkbenchTab("task-changes")');
+    expect(workbench).not.toContain('handleSelectWorkbenchTab("diff")');
     expect(workbench).toContain('target: WorkbenchFocusTarget = "code"');
     expect(workbench).toContain("openWorkbenchPane()");
     expect(workbench).not.toContain("后续接入 Qiongqi");
@@ -200,8 +192,9 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain('aria-label="代码区视图"');
     expect(workbench).toContain("inline-flex h-7 w-fit max-w-full shrink-0");
     expect(workbench).toContain('shortLabel="变更"');
-    expect(workbench).toContain('shortLabel="Diff"');
     expect(workbench).toContain('shortLabel="Review"');
+    // The separate project-Diff toolbar tab was folded into "变更".
+    expect(workbench).not.toContain('shortLabel="Diff"');
     expect(workbench).toContain('<span className="hidden lg:inline">');
     expect(workbench).toContain('aria-label="切换环境信息面板"');
     expect(workbench).toContain(
@@ -262,19 +255,19 @@ describe("coding workbench layout", () => {
     expect(workbench).toContain("{showEnvironmentCard && (");
     expect(workbench).toContain("gitBranch");
     expect(workbench).toContain("useProjectEnvironment");
-    expect(workbench).toContain("useCodingSessionChanges");
-    expect(workbench).toContain("const taskChangeSummary = useMemo");
-    expect(workbench).toContain("const reviewChangeSummary = reviewSummary");
-    expect(workbench).toContain(
+    // The change-summary aggregation that fed +/- stats into the environment
+    // card was removed (deduplication); the card now shows only branch +
+    // sync + git actions.
+    expect(workbench).not.toContain("useCodingSessionChanges");
+    expect(workbench).not.toContain("const taskChangeSummary = useMemo");
+    expect(workbench).not.toContain("const reviewChangeSummary = reviewSummary");
+    expect(workbench).not.toContain(
       "reviewChangeSummary.additions || taskChangeSummary.additions",
     );
-    expect(workbench).toContain(
-      "reviewChangeSummary.deletions || taskChangeSummary.deletions",
-    );
-    expect(workbench).toContain(
-      "reviewChangeSummary.changedFiles || taskChangeSummary.changedFiles",
-    );
-    expect(workbench).toContain("review?.summary");
+    expect(workbench).not.toContain("review?.summary");
+    expect(workbench).not.toContain("additions={totalAdditions}");
+    expect(workbench).not.toContain("deletions={totalDeletions}");
+    expect(workbench).not.toContain("changedFiles={totalChangedFiles}");
     expect(workbench).toContain("useProjectGitCommit");
     expect(workbench).toContain("useProjectGitPush");
     expect(workbench).toContain("githubCli");
