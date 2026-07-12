@@ -671,6 +671,8 @@ void app.whenReady().then(async () => {
 
   // Register IPC handlers (returns the shared BackendManager).
   backend = registerIpc();
+  // Expose for the updater to force-kill before quitAndInstall.
+  (globalThis as Record<string, unknown>).__backendRef = backend;
   backend.onStatusChange((status) => {
     log.info(
       `backend status: ${status.status} (port=${status.port}${status.error ? `, error=${status.error}` : ""})`,
@@ -720,17 +722,21 @@ app.on("before-quit", async (e) => {
   // An update install was requested via autoUpdater.quitAndInstall(). That
   // call internally does app.quit() and relies on the quit sequence reaching
   // will-quit so Squirrel (macOS) / the forked installer (Win/Linux) can
-  // install and relaunch. If we preventDefault + app.exit(0) here, those
-  // hooks are skipped and the app quits without restarting — which is the
-  // "must manually reopen after clicking restart-update" bug. So for an
-  // update install we stand aside: set isQuitting so windows actually close
-  // instead of hiding to tray, drop the tray, and let app.quit() proceed.
-  // The backend child is spawned non-detached and exits with this process;
-  // the relaunched app re-spawns it, so there is no port conflict.
+  // install and relaunch. We must NOT call app.exit(0) (which skips will-quit
+  // and prevents the installer from running). But we DO need to stop the
+  // backend child process synchronously, otherwise the OS may keep the old
+  // process alive and block the installer from replacing files.
   if (isUpdateInstallRequested()) {
     isQuitting = true;
+    isShuttingDown = true;
     destroyTray();
-    return;
+    closeWindowsForQuit();
+    // Kill backend child immediately (non-detached, so it dies with us, but
+    // be explicit to avoid port conflicts on relaunch).
+    if (backend && backend.getStatus().status !== "stopped") {
+      try { backend.stop(); } catch { /* best effort */ }
+    }
+    return; // Let app.quit() proceed → will-quit → Squirrel installer
   }
   if (backend?.getStatus().status === "stopped") return;
   e.preventDefault();

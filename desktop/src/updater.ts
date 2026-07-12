@@ -357,9 +357,16 @@ export async function registerUpdater(): Promise<void> {
       // (which would skip will-quit/quit and prevent Squirrel / the forked
       // installer from relaunching the app). See update-install-state.ts.
       markUpdateInstallRequested();
-      // quitAndInstall() restarts the app and installs the update. On macOS
-      // it's a synchronous relaunch; on Windows/Linux the app quits and
-      // the installer runs on next launch.
+      // Force-kill the backend child process BEFORE calling quitAndInstall.
+      // quitAndInstall() triggers app.quit() → before-quit, but Electron does
+      // not await async before-quit handlers. If the backend child is still
+      // alive, it can prevent the app from fully quitting, leaving the user
+      // stuck at "restarting…". Killing it here (synchronously) ensures
+      // quitAndInstall can complete.
+      const backendRef = (globalThis as Record<string, unknown>).__backendRef as { child?: { pid?: number; kill?: (sig?: string) => boolean } } | undefined;
+      if (backendRef?.child?.pid) {
+        try { process.kill(backendRef.child.pid, "SIGKILL"); } catch { /* best effort */ }
+      }
       autoUpdater.quitAndInstall();
       return true;
     } catch (e) {
