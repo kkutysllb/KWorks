@@ -976,7 +976,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       const requestedWorkModeId = workModeIdFromContext(context);
       // TEMP DEBUG: trace work-mode pollution. Enable with DEBUG_THREAD_MODE=1
       if (typeof window !== "undefined" && (window as { __DEBUG_THREAD_MODE?: boolean }).__DEBUG_THREAD_MODE) {
-        // eslint-disable-next-line no-console
+         
         console.log("[DEBUG_THREAD_MODE ensureThread]", {
           activeThreadId,
           requestedThreadId,
@@ -1015,7 +1015,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       if (shouldUpdateWorkspace || shouldUpdateWorkMode) {
         const previousWorkModeId = workModeIdRef.current;
         if (typeof window !== "undefined" && (window as { __DEBUG_THREAD_MODE?: boolean }).__DEBUG_THREAD_MODE) {
-          // eslint-disable-next-line no-console
+           
           console.log("[DEBUG_THREAD_MODE UPDATE]", {
             activeThreadId,
             shouldUpdateWorkMode,

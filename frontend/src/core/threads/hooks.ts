@@ -17,6 +17,7 @@ import {
   useThreadRuntimeSnapshot,
 } from "../workspace-runtime";
 
+import { createApprovalStore, type ApprovalStore } from "./approval-store";
 import {
   qiongqiClient,
   threadSummaryToAgentThread,
@@ -24,7 +25,6 @@ import {
 } from "./qiongqi-client";
 import { useQiongqiStream } from "./qiongqi-stream";
 import type { Message, Run } from "./qiongqi-types";
-import { createApprovalStore, type ApprovalStore } from "./approval-store";
 import { handleStreamEvent } from "./stream-event-handler";
 import {
   getCachedThreadState,
