@@ -2482,10 +2482,15 @@ function CodingSkillsInspector({ projectRoot }: { projectRoot: string }) {
     });
   }, [activeCategory, skillSearch, skills]);
 
+  const enabledCount = useMemo(
+    () => skills.filter((s) => s.enabled).length,
+    [skills],
+  );
+
   return (
     <InspectorSection
       title="Skills"
-      meta={`内置技能 · ${skills.length} 个`}
+      meta={`内置技能 · ${enabledCount} 个`}
       isFetching={isFetching}
       onRefresh={() => void refetch()}
     >
