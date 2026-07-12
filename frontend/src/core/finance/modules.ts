@@ -178,8 +178,8 @@ export const FINANCE_SHARED_SKILL_IDS = [
   "analysis-report",
   "chart-visualization",
   "kk-mcf",
-  "report-search",
-  "announcement-search",
+  "kk-report-search",
+  "kk-announcement-search",
   "md-to-html-converter",
 ] as const;
 
