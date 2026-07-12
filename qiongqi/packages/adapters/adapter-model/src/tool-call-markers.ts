@@ -88,6 +88,14 @@ const STRAY_BRACKET_SPACES_RE = /\[\s*\]\s*/g
  * Exception: skip `][` between alphanumeric chars (e.g. arr[0][1]).
  */
 const STRAY_BRACKET_PAIR_RE = /(?<![a-zA-Z0-9])\]\[\/?\s*/g
+/**
+ * MiniMax `]`-delimited command leak. After other markers are stripped,
+ * bare shell commands wrapped in standalone `]` delimiters remain:
+ *   `] ls -la && echo "test" ]`
+ *   `] python script.py ]`
+ * Match `]` at line start + shell command + trailing `]`.
+ */
+const BRACKET_COMMAND_LEAK_RE = /^\]\s+.+?\s+\]$/gm
 /** Leaked (tool call) or (tool call ) markers — with or without trailing space */
 const LEAKED_TOOL_CALL_RE = /\(\s*tool\s*call\s*\)\s*/gi
 /**
@@ -108,7 +116,7 @@ const ANTHROPIC_TO_UNCLOSED_RE = /\(\s*to\s+name="[^"]*">\][\s\S]*$/gi
 const PROSE_TOOL_CALL_RE = /\(tool call\s*\[Tool call:[^\]]*\][\s\S]*?\)\s*/gi
 
 /** Fast-path test: any tool-call marker present at all? */
-const HAS_MARKER_RE = /<\]minimax\[>|<\/?(?:invoke|command|parameter|tool_call|function_calls)\b|\(\s*(?:tool\s*call|to\s+name=)|<function_calls>|\[<(?:invoke|parameter|function_calls|path|command|content)|\]\[|\[<\/(?:path|invoke|parameter|command|content|function_calls|antml)/i
+const HAS_MARKER_RE = /<\]minimax\[>|<\/?(?:invoke|command|parameter|tool_call|function_calls)\b|\(\s*(?:tool\s*call|to\s+name=)|<function_calls>|\[<(?:invoke|parameter|function_calls|path|command|content)|\]\[|\[<\/(?:path|invoke|parameter|command|content|function_calls|antml)|^\]|(?<=\n)\]/i
 
 /**
  * Remove inline tool/function-call markers and their inner content from `text`.
@@ -140,6 +148,8 @@ export function stripInlineToolCallMarkers(text: string): string {
   out = out.replace(STRAY_BRACKET_SPACES_RE, '')
   // Stray bracket delimiters: ][ (orphaned tool-call fragment)
   out = out.replace(STRAY_BRACKET_PAIR_RE, ' ')
+  // Bracket-delimited command leaks: ] command ]
+  out = out.replace(BRACKET_COMMAND_LEAK_RE, '')
   // Anthropic-style (to name="..."> leaks
   out = out.replace(ANTHROPIC_TO_LEAK_RE, '')
   out = out.replace(ANTHROPIC_TO_UNCLOSED_RE, '')
