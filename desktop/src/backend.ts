@@ -33,6 +33,7 @@ import {
   getBundledQiongqiRuntimeArchivePath,
   getBuiltinCodingSkillsDir,
   getBuiltinCoreSkillsDir,
+  getBuiltinFinanceSkillsDir,
   getBuiltinTaskSkillsDir,
   getBundledSkillsDir,
   getCodingHome,
@@ -685,9 +686,10 @@ export class BackendManager extends EventEmitter {
     const coreTarget = getBuiltinCoreSkillsDir();
     const taskTarget = getBuiltinTaskSkillsDir();
     const codingTarget = getBuiltinCodingSkillsDir();
+    const financeTarget = getBuiltinFinanceSkillsDir();
     const customSharedTarget = getCustomSharedSkillsDir();
 
-    for (const dir of [coreTarget, taskTarget, codingTarget, customSharedTarget]) {
+    for (const dir of [coreTarget, taskTarget, codingTarget, financeTarget, customSharedTarget]) {
       mkdirSync(dir, { recursive: true });
     }
     this.migrateLegacySkillRoots(skillsRoot, { coreTarget, taskTarget, codingTarget, customSharedTarget });
@@ -704,6 +706,7 @@ export class BackendManager extends EventEmitter {
       copied += this.copyMissingChildren(join(bundledBuiltin, "core"), coreTarget);
       copied += this.copyMissingChildren(join(bundledBuiltin, "task"), taskTarget);
       copied += this.copyMissingChildren(join(bundledBuiltin, "coding"), codingTarget);
+      copied += this.copyMissingChildren(join(bundledBuiltin, "finance"), financeTarget);
     }
 
     const bundledPublic = join(bundled, "public");
@@ -713,6 +716,10 @@ export class BackendManager extends EventEmitter {
         if (!statSync(src).isDirectory()) continue;
         if (name === "coding") {
           copied += this.copyMissingChildren(src, codingTarget);
+          continue;
+        }
+        if (name === "finance") {
+          copied += this.copyMissingChildren(src, financeTarget);
           continue;
         }
         const target = join(this.targetForPublicSkill(name, {

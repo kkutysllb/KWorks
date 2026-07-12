@@ -138,6 +138,10 @@ export function getBuiltinCodingSkillsDir(): string {
   return join(getSkillsDir(), "builtin", "coding");
 }
 
+export function getBuiltinFinanceSkillsDir(): string {
+  return join(getSkillsDir(), "builtin", "finance");
+}
+
 export function getCustomSharedSkillsDir(): string {
   return join(getSkillsDir(), "custom", "shared");
 }
