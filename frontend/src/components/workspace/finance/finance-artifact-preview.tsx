@@ -29,6 +29,7 @@ export function FinanceArtifactPreview({
   threadId,
   onBack,
 }: FinanceArtifactPreviewProps) {
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const { content, error, isLoading, refetch } = useArtifactContent({
     enabled: true,
     filepath,
@@ -39,11 +40,55 @@ export function FinanceArtifactPreview({
   const [isDownloadingHtml, setIsDownloadingHtml] = useState(false);
   const markdownDownloadPending = useRef(false);
   const htmlDownloadPending = useRef(false);
+  const dialogRef = useRef<HTMLElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
   const filename = basename(filepath);
   const markdownPath = useMemo(
     () => resolveFinanceMarkdownArtifact(filepath, artifacts),
     [artifacts, filepath],
   );
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
+
+  useEffect(() => {
+    if (!portalTarget || !dialogRef.current) return;
+
+    const dialog = dialogRef.current;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const siblingStates = Array.from(portalTarget.children)
+      .filter(
+        (element): element is HTMLElement =>
+          element instanceof HTMLElement && element !== dialog,
+      )
+      .map((element) => ({
+        ariaHidden: element.getAttribute("aria-hidden"),
+        element,
+        inert: element.inert,
+      }));
+
+    for (const state of siblingStates) {
+      state.element.inert = true;
+      state.element.setAttribute("aria-hidden", "true");
+    }
+    backButtonRef.current?.focus();
+
+    return () => {
+      for (const state of siblingStates) {
+        state.element.inert = state.inert;
+        if (state.ariaHidden === null) {
+          state.element.removeAttribute("aria-hidden");
+        } else {
+          state.element.setAttribute("aria-hidden", state.ariaHidden);
+        }
+      }
+      previouslyFocused?.focus();
+    };
+  }, [portalTarget]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -104,17 +149,47 @@ export function FinanceArtifactPreview({
     }
   }, [filename, filepath, threadId]);
 
+  const handleDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      const first = focusable.at(0);
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    [],
+  );
+
   const markdownTitle = !markdownPath
     ? "未找到 Markdown 报告"
     : isDownloadingMarkdown
       ? "正在下载 Markdown 报告"
       : `下载 ${basename(markdownPath)}`;
 
+  if (!portalTarget) return null;
+
   return createPortal(
     <section
       aria-label="金融结果预览"
+      aria-modal="true"
       className="fixed inset-0 z-[100] flex min-h-0 flex-col bg-white"
       data-testid="finance-artifact-preview"
+      onKeyDown={handleDialogKeyDown}
+      ref={dialogRef}
+      role="dialog"
     >
       <header className="flex h-11 shrink-0 items-center bg-neutral-950 px-2 text-neutral-100">
         <div className="flex min-w-0 flex-1 basis-0 justify-start">
@@ -122,6 +197,7 @@ export function FinanceArtifactPreview({
             aria-label="返回任务"
             className="text-neutral-100 hover:bg-neutral-800 hover:text-white"
             onClick={onBack}
+            ref={backButtonRef}
             size="sm"
             type="button"
             variant="ghost"
@@ -214,6 +290,6 @@ export function FinanceArtifactPreview({
         ) : null}
       </main>
     </section>,
-    document.body,
+    portalTarget,
   );
 }

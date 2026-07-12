@@ -7,7 +7,9 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -94,6 +96,47 @@ describe("FinanceArtifactPreview", () => {
       filepath: baseProps.filepath,
       threadId: baseProps.threadId,
     });
+  });
+
+  test("renders no overlay during server rendering", () => {
+    expect(renderToString(<FinanceArtifactPreview {...baseProps} />)).toBe("");
+    expect(
+      screen.queryByTestId("finance-artifact-preview"),
+    ).not.toBeInTheDocument();
+  });
+
+  test("isolates dialog focus and restores the underlying page on unmount", async () => {
+    const underlying = document.createElement("main");
+    const previousButton = document.createElement("button");
+    previousButton.textContent = "Previous action";
+    underlying.setAttribute("aria-hidden", "false");
+    underlying.appendChild(previousButton);
+    document.body.appendChild(underlying);
+    previousButton.focus();
+
+    const { unmount } = render(<FinanceArtifactPreview {...baseProps} />);
+    const dialog = await screen.findByRole("dialog", {
+      name: "金融结果预览",
+    });
+    const dialogButtons = within(dialog).getAllByRole("button");
+    const firstButton = screen.getByRole("button", { name: "返回任务" });
+    const lastButton = dialogButtons.at(-1);
+
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(firstButton).toHaveFocus();
+    expect(underlying.inert).toBe(true);
+    expect(underlying).toHaveAttribute("aria-hidden", "true");
+
+    expect(lastButton).toBeDefined();
+    lastButton?.focus();
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(firstButton).toHaveFocus();
+
+    unmount();
+    expect(underlying.inert).toBe(false);
+    expect(underlying).toHaveAttribute("aria-hidden", "false");
+    expect(previousButton).toHaveFocus();
+    underlying.remove();
   });
 
   test("returns from the toolbar button and parent Escape key", () => {
