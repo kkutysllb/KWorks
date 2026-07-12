@@ -118,17 +118,17 @@ describe("FinanceArtifactPreview", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "金融结果预览",
     });
-    const dialogButtons = within(dialog).getAllByRole("button");
     const firstButton = screen.getByRole("button", { name: "返回任务" });
-    const lastButton = dialogButtons.at(-1);
+    const iframe = screen.getByTitle("dashboard.html 金融看板");
 
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(firstButton).toHaveFocus();
     expect(underlying.inert).toBe(true);
     expect(underlying).toHaveAttribute("aria-hidden", "true");
 
-    expect(lastButton).toBeDefined();
-    lastButton?.focus();
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    expect(iframe).toHaveFocus();
+
     fireEvent.keyDown(dialog, { key: "Tab" });
     expect(firstButton).toHaveFocus();
 
@@ -137,6 +137,27 @@ describe("FinanceArtifactPreview", () => {
     expect(underlying).toHaveAttribute("aria-hidden", "false");
     expect(previousButton).toHaveFocus();
     underlying.remove();
+  });
+
+  test("keeps focus trapped when the dashboard is in an error state", async () => {
+    vi.mocked(useArtifactContent).mockReturnValue({
+      ...hookResult,
+      content: undefined,
+      error: new Error("network down"),
+    });
+    render(<FinanceArtifactPreview {...baseProps} />);
+    const dialog = await screen.findByRole("dialog", {
+      name: "金融结果预览",
+    });
+    const buttons = within(dialog).getAllByRole("button");
+    const firstButton = screen.getByRole("button", { name: "返回任务" });
+    const lastButton = buttons.at(-1);
+
+    expect(lastButton).toBeDefined();
+    lastButton?.focus();
+    fireEvent.keyDown(dialog, { key: "Tab" });
+
+    expect(firstButton).toHaveFocus();
   });
 
   test("returns from the toolbar button and parent Escape key", () => {
