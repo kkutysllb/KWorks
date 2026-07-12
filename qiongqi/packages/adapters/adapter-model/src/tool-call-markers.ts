@@ -80,6 +80,14 @@ const BRACKET_ANTML_UNCLOSED_RE = new RegExp(
 const BRACKET_CLOSE_RE = /\[<\/(?:invoke|parameter|function_calls|path|command|content|antml:invoke|antml:parameter)>\]\s*/gi
 /** Stray empty bracket markers: [ ][ ] at end of tool-call blocks */
 const STRAY_BRACKET_SPACES_RE = /\[\s*\]\s*/g
+/**
+ * Stray bracket delimiters left after stripping tool-call fragments.
+ * MiniMax M3 emits `][` as an empty delimiter between stripped content blocks.
+ * Since this only runs when HAS_MARKER_RE matched (confirming tool-call
+ * leakage), any remaining `][` is a stray fragment.
+ * Exception: skip `][` between alphanumeric chars (e.g. arr[0][1]).
+ */
+const STRAY_BRACKET_PAIR_RE = /(?<![a-zA-Z0-9])\]\[\/?\s*/g
 /** Leaked (tool call) or (tool call ) markers — with or without trailing space */
 const LEAKED_TOOL_CALL_RE = /\(\s*tool\s*call\s*\)\s*/gi
 /**
@@ -130,6 +138,8 @@ export function stripInlineToolCallMarkers(text: string): string {
   out = out.replace(BRACKET_CLOSE_RE, '')
   // Stray empty bracket markers left after stripping
   out = out.replace(STRAY_BRACKET_SPACES_RE, '')
+  // Stray bracket delimiters: ][ (orphaned tool-call fragment)
+  out = out.replace(STRAY_BRACKET_PAIR_RE, ' ')
   // Anthropic-style (to name="..."> leaks
   out = out.replace(ANTHROPIC_TO_LEAK_RE, '')
   out = out.replace(ANTHROPIC_TO_UNCLOSED_RE, '')
