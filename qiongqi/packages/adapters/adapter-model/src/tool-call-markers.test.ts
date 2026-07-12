@@ -85,4 +85,40 @@ describe('stripInlineToolCallMarkers', () => {
       'Just a normal sentence.',
     )
   })
+
+  // ── Bracket-style XML function_calls leaks ───────────────────────
+
+  test('strips bracket-style <function_calls> with invoke and parameter', () => {
+    const input = '分析完成。\n(tool call <function_calls>[<invoke name="bash">][<parameter name="command">head -50 file.json][ ](tool call)(tool call)][][][ ]'
+    const result = stripInlineToolCallMarkers(input)
+    // Should keep "分析完成。" and strip all the bracket-style markers
+    expect(result).toContain('分析完成')
+    expect(result).not.toContain('<function_calls>')
+    expect(result).not.toContain('<invoke')
+    expect(result).not.toContain('<parameter')
+    expect(result).not.toContain('(tool call)')
+  })
+
+  test('strips bracket parameter tags', () => {
+    const result = stripInlineToolCallMarkers('[<parameter name="command">ls -la][ ]')
+    expect(result).not.toContain('<parameter')
+    expect(result).not.toContain('ls -la')
+  })
+
+  test('strips orphaned bracket close tags', () => {
+    const result = stripInlineToolCallMarkers('text[</invoke>]more[</parameter>]')
+    expect(result).not.toContain('</invoke>')
+    expect(result).not.toContain('</parameter>')
+  })
+
+  test('strips empty (tool call) markers', () => {
+    const result = stripInlineToolCallMarkers('before (tool call) after')
+    expect(result).not.toContain('(tool call)')
+  })
+
+  test('strips unclosed <function_calls> at end of stream', () => {
+    const input = 'normal text\n<function_calls>[<invoke name="bash">][<parameter name="command">pwd'
+    const result = stripInlineToolCallMarkers(input)
+    expect(result).toBe('normal text\n')
+  })
 })

@@ -628,21 +628,11 @@ export function useThreadStream({
       }
 
       const text = message.text.trim();
-      // ── Don't interrupt a running turn ────────────────────────────────
-      // If a turn is streaming, buffer the message into the pending queue
-      // instead of aborting the current task. The queue auto-drains when the
-      // turn finishes (see the drain effect below). The user can also "steer"
-      // (inject into the running turn) a queued entry from the queue UI.
-      if (text && thread.isLoading) {
-        enqueuePending({
-          id: `pending-${Date.now()}`,
-          message: { ...message, text },
-          extraContext,
-          options,
-          createdAt: Date.now(),
-        });
-        return;
-      }
+      // ── Interrupt-and-send ───────────────────────────────────────────
+      // If a turn is currently streaming, interrupt it and immediately start
+      // a new turn with this message. The backend discards partial assistant
+      // items (keeps user items) and the new message gets full context.
+      const shouldInterrupt = text && thread.isLoading;
 
       sendInFlightRef.current = true;
       pendingSubmitThreadIdRef.current = requestedThreadId ?? null;
@@ -836,7 +826,7 @@ export function useThreadStream({
         };
 
         try {
-          await doSubmit();
+          await doSubmit(shouldInterrupt ? "interrupt" : undefined);
         } catch (error) {
           if (isThreadBusyConflict(error)) {
             toast.info("已有任务在运行，正在接管并继续…");

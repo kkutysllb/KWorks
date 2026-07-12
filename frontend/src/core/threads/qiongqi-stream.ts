@@ -1135,15 +1135,37 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
   // --- stop ---
   const stop = useCallback(async () => {
     const tid = threadIdRef.current;
-    const turnId = currentTurnIdRef.current;
+    // Use the ref first; fall back to the mirror's active-turn scan so stop
+    // works even after a renderer reload where currentTurnIdRef hasn't been
+    // repopulated yet.
+    const turnId = currentTurnIdRef.current ?? mirrorRef.current.getActiveTurnId();
     if (tid && turnId) {
+      // Race the interrupt call against a timeout so the UI is never blocked
+      // by a hung backend request.
       try {
-        await qiongqiClient.interruptTurn(tid, turnId, false);
+        await Promise.race([
+          qiongqiClient.interruptTurn(tid, turnId, false),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("stop timeout")), 8000),
+          ),
+        ]);
       } catch {
-        // Best effort — the SSE stream will confirm termination
+        // Best effort — we force-clear local state below regardless.
       }
     }
-  }, []);
+    // Unconditionally force-clear local streaming state so the UI is never
+    // stuck in a perpetual "streaming" state, even if the SSE connection is
+    // dead and turn_aborted is never received.
+    if (turnId) {
+      mirrorRef.current.setTurnStatus(turnId, "aborted");
+    }
+    // Abort the SSE reader so a stale connection doesn't resurrect loading.
+    abortRef.current?.abort();
+    abortRef.current = null;
+    // Force isLoading=false immediately.
+    setIsLoading(false);
+    syncState();
+  }, [syncState]);
 
   // --- joinStream (reconnect to existing turn) ---
   const joinStream = useCallback(
