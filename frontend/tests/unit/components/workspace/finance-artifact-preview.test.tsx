@@ -52,6 +52,13 @@ const baseProps = {
   onBack: vi.fn(),
 };
 
+const liveFilepath =
+  "write-file:reports/2026-07-10/dashboard.html?message_id=m&tool_call_id=c";
+const liveProps = {
+  ...baseProps,
+  filepath: liveFilepath,
+};
+
 describe("FinanceArtifactPreview", () => {
   let createObjectURL: ReturnType<typeof vi.fn>;
   let revokeObjectURL: ReturnType<typeof vi.fn>;
@@ -96,6 +103,64 @@ describe("FinanceArtifactPreview", () => {
       filepath: baseProps.filepath,
       threadId: baseProps.threadId,
     });
+  });
+
+  test("renders live HTML with a normalized filename and paired Markdown report", async () => {
+    const liveContent = "<html><body>live dashboard</body></html>";
+    vi.mocked(useArtifactContent).mockReturnValue({
+      ...hookResult,
+      content: liveContent,
+    });
+
+    render(<FinanceArtifactPreview {...liveProps} />);
+
+    expect(await screen.findByTitle("dashboard.html 金融看板")).toHaveAttribute(
+      "src",
+      "about:blank#dashboard",
+    );
+    expect(screen.getByText("dashboard.html")).toBeInTheDocument();
+    expect(useArtifactContent).toHaveBeenCalledWith({
+      enabled: false,
+      filepath: liveFilepath,
+      threadId: "thread-1",
+    });
+    const htmlBlob = vi.mocked(createObjectURL).mock.calls[0]?.[0] as Blob;
+    expect(await htmlBlob.text()).toBe(liveContent);
+
+    fireEvent.click(screen.getByRole("button", { name: "下载 MD 报告" }));
+    await waitFor(() => {
+      expect(urlOfArtifact).toHaveBeenCalledWith({
+        filepath: "reports/2026-07-10/daily_report.md",
+        threadId: "thread-1",
+        download: true,
+      });
+    });
+  });
+
+  test.each([
+    {
+      label: "empty",
+      result: { ...hookResult, content: "" },
+    },
+    {
+      label: "error",
+      result: {
+        ...hookResult,
+        content: undefined,
+        error: new Error("live content unavailable"),
+      },
+    },
+  ])("does not offer HTML download for $label live content", ({ result }) => {
+    vi.mocked(useArtifactContent).mockReturnValue(result);
+
+    render(<FinanceArtifactPreview {...liveProps} />);
+
+    expect(
+      screen.queryByRole("button", { name: "下载 HTML" }),
+    ).not.toBeInTheDocument();
+    expect(urlOfArtifact).not.toHaveBeenCalledWith(
+      expect.objectContaining({ filepath: liveFilepath }),
+    );
   });
 
   test("renders no overlay during server rendering", () => {

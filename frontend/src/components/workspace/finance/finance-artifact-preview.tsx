@@ -10,7 +10,10 @@ import { downloadArtifactUrl } from "@/core/artifacts/authenticated-url";
 import { useArtifactContent } from "@/core/artifacts/hooks";
 import { urlOfArtifact } from "@/core/artifacts/utils";
 
-import { resolveFinanceMarkdownArtifact } from "./finance-artifact-files";
+import {
+  artifactPathname,
+  resolveFinanceMarkdownArtifact,
+} from "./finance-artifact-files";
 
 interface FinanceArtifactPreviewProps {
   artifacts: readonly string[];
@@ -30,8 +33,10 @@ export function FinanceArtifactPreview({
   onBack,
 }: FinanceArtifactPreviewProps) {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const isWriteFile = filepath.startsWith("write-file:");
+  const artifactPath = artifactPathname(filepath);
   const { content, error, isLoading, refetch } = useArtifactContent({
-    enabled: true,
+    enabled: !isWriteFile,
     filepath,
     threadId,
   });
@@ -42,7 +47,7 @@ export function FinanceArtifactPreview({
   const htmlDownloadPending = useRef(false);
   const dialogRef = useRef<HTMLElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
-  const filename = basename(filepath);
+  const filename = basename(artifactPath);
   const markdownPath = useMemo(
     () => resolveFinanceMarkdownArtifact(filepath, artifacts),
     [artifacts, filepath],
@@ -133,7 +138,7 @@ export function FinanceArtifactPreview({
   }, [markdownPath, threadId]);
 
   const handleHtmlDownload = useCallback(async () => {
-    if (htmlDownloadPending.current) return;
+    if (isWriteFile || htmlDownloadPending.current) return;
     htmlDownloadPending.current = true;
     setIsDownloadingHtml(true);
     try {
@@ -147,7 +152,7 @@ export function FinanceArtifactPreview({
       htmlDownloadPending.current = false;
       setIsDownloadingHtml(false);
     }
-  }, [filename, filepath, threadId]);
+  }, [filename, filepath, isWriteFile, threadId]);
 
   const handleDialogKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLElement>) => {
@@ -248,6 +253,27 @@ export function FinanceArtifactPreview({
               >
                 重试
               </Button>
+              {!isWriteFile ? (
+                <Button
+                  aria-label="下载 HTML"
+                  disabled={isDownloadingHtml}
+                  onClick={() => void handleHtmlDownload()}
+                  type="button"
+                >
+                  {isDownloadingHtml ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <DownloadIcon />
+                  )}
+                  下载 HTML
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : !content ? (
+          <div className="flex flex-col items-center gap-3 px-4 text-center">
+            <p className="text-sm text-neutral-600">文件内容为空</p>
+            {!isWriteFile ? (
               <Button
                 aria-label="下载 HTML"
                 disabled={isDownloadingHtml}
@@ -261,24 +287,7 @@ export function FinanceArtifactPreview({
                 )}
                 下载 HTML
               </Button>
-            </div>
-          </div>
-        ) : !content ? (
-          <div className="flex flex-col items-center gap-3 px-4 text-center">
-            <p className="text-sm text-neutral-600">文件内容为空</p>
-            <Button
-              aria-label="下载 HTML"
-              disabled={isDownloadingHtml}
-              onClick={() => void handleHtmlDownload()}
-              type="button"
-            >
-              {isDownloadingHtml ? (
-                <Loader2Icon className="animate-spin" />
-              ) : (
-                <DownloadIcon />
-              )}
-              下载 HTML
-            </Button>
+            ) : null}
           </div>
         ) : htmlUrl ? (
           <iframe
