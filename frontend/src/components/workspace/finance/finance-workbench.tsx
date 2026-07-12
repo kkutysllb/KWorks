@@ -73,7 +73,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
 
   return (
     <ArtifactsProvider>
-      <div className="relative flex size-full flex-col">
+      <div className="relative flex size-full min-h-0 flex-col overflow-hidden">
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-3">
@@ -106,7 +106,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
         </header>
 
         {/* Agent panel — full width, no sidebar */}
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <FinanceAgentPanel
             module={currentModule}
             onTodosChange={setAgentTodos}

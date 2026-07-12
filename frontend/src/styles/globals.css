@@ -465,4 +465,38 @@
   --container-width-sm: calc(var(--spacing) * 144);
   --container-width-md: calc(var(--spacing) * 204);
   --container-width-lg: calc(var(--spacing) * 256);
+
+  /* Slim, unobtrusive scrollbars — applied globally to all scroll containers. */
+  --scrollbar-thumb: var(--color-muted-foreground);
+  --scrollbar-size: 6px;
+}
+
+/* Minimal scrollbars for all elements (WebKit + Firefox + Edge). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb) 25%, transparent) transparent;
+}
+
+/* WebKit (Chrome, Safari, Electron) — slim track + thumb that fades to near-invisible. */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--scrollbar-thumb) 20%, transparent);
+  border-radius: calc(var(--scrollbar-size) / 2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--scrollbar-thumb) 40%, transparent);
+}
+
+/* Hide scrollbar corners where horizontal/vertical tracks overlap. */
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
