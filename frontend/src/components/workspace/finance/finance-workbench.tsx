@@ -110,6 +110,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
           <FinanceAgentPanel
             module={currentModule}
             onTodosChange={setAgentTodos}
+            avoidRightFloatingPanels={showFloatingTodos}
           />
         </div>
 

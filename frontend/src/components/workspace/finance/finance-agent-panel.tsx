@@ -27,10 +27,16 @@ import { isTodoWriteToolName } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
 const FINANCE_AGENT_CONTENT_WIDTH_CLASS = "max-w-4xl";
+// Right-padding gutter to reserve space for the floating TodoList panel,
+// preventing overlap with chat content. 336px ≈ 320px panel + 16px gap.
+const FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS = "xl:pr-[336px]";
 
 interface FinanceAgentPanelProps {
   module: FinanceModule;
   onTodosChange?: (todos: Todo[]) => void;
+  /** When true, chat content gets right-padding so the floating TodoList
+   *  panel doesn't overlap messages and the input box. */
+  avoidRightFloatingPanels?: boolean;
 }
 
 /**
@@ -44,17 +50,21 @@ interface FinanceAgentPanelProps {
  * history list) are detected via the threads query and automatically reset
  * to a fresh new-thread state — no 404 errors.
  */
-export function FinanceAgentPanel({ module, onTodosChange }: FinanceAgentPanelProps) {
+export function FinanceAgentPanel({ module, onTodosChange, avoidRightFloatingPanels = false }: FinanceAgentPanelProps) {
   return (
     <SubtasksProvider>
       <PromptInputProvider>
-        <FinanceAgentPanelInner module={module} onTodosChange={onTodosChange} />
+        <FinanceAgentPanelInner
+          module={module}
+          onTodosChange={onTodosChange}
+          avoidRightFloatingPanels={avoidRightFloatingPanels}
+        />
       </PromptInputProvider>
     </SubtasksProvider>
   );
 }
 
-function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProps) {
+function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanels = false }: FinanceAgentPanelProps) {
   const threadIdStorageKey = `finance:thread:${module.id}`;
   const [threadId, setThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
@@ -96,12 +106,20 @@ function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProp
   const [settings, setSettings] = useThreadSettings(`finance:${module.id}`);
   const { textInput } = usePromptInputController();
 
-  // Ensure the finance work mode is active and no filesystem root is bound.
+  // Ensure the finance work mode is active, force agent mode (never plan),
+  // and no filesystem root is bound. The "deep → plan" state from a previous
+  // chat session can persist in the shared local-settings context; if it
+  // leaks into finance, the backend enters a plan turn and requires the
+  // create_plan tool, which is not applicable to finance analysis.
   useEffect(() => {
-    if (settings.context.workModeId !== "finance") {
+    if (
+      settings.context.workModeId !== "finance" ||
+      settings.context.taskMode === "plan"
+    ) {
       setSettings("context", {
         ...settings.context,
         workModeId: "finance",
+        taskMode: "agent",
         workspaceRoot: undefined,
       });
     }
@@ -143,6 +161,8 @@ function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProp
         context: {
           ...submitContext,
           workModeId: "finance",
+          taskMode: "agent",
+          mode: "agent",
           workspaceRoot: undefined,
         },
       });
@@ -168,7 +188,10 @@ function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProp
           <main className="relative flex min-h-0 min-w-0 grow flex-col overflow-hidden">
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <MessageList
-                className="size-full min-w-0"
+                className={cn(
+                  "size-full min-w-0",
+                  avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                )}
                 contentClassName={FINANCE_AGENT_CONTENT_WIDTH_CLASS}
                 threadId={uiThreadId}
                 thread={thread}
@@ -178,7 +201,12 @@ function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProp
                 isHistoryLoading={isHistoryLoading}
               />
               {/* Input */}
-              <div className="absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4">
+              <div
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4",
+                  avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                )}
+              >
                 <div
                   className={cn(
                     "relative flex w-full min-w-0 flex-col items-center gap-2",
@@ -206,7 +234,12 @@ function FinanceAgentPanelInner({ module, onTodosChange }: FinanceAgentPanelProp
 
           {/* Empty-state hint */}
           {thread.messages.length === 0 && !thread.isLoading && (
-            <div className="pointer-events-none absolute inset-x-0 top-9 bottom-40 flex justify-center px-3 text-center sm:px-5">
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-9 bottom-40 flex justify-center px-3 text-center sm:px-5",
+                avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+              )}
+            >
               <div
                 className={cn(
                   "flex w-full min-w-0 flex-col items-center justify-center gap-3",
