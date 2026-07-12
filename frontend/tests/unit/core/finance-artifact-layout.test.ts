@@ -15,9 +15,7 @@ describe("finance artifact layout", () => {
       "utf8",
     );
 
-    expect(agentPanel).toContain(
-      'from "./finance-html-artifact-reader"',
-    );
+    expect(agentPanel).toContain('from "./finance-html-artifact-reader"');
     expect(agentPanel).not.toContain("useArtifacts");
     expect(agentPanel).not.toContain("isHtmlArtifact");
     expect(agentPanel).not.toContain("FinanceArtifactPreview");

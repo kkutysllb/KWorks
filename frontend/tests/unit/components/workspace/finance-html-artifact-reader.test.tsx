@@ -1,15 +1,23 @@
 // @vitest-environment happy-dom
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   ArtifactsProvider,
   useArtifacts,
 } from "@/components/workspace/artifacts";
 import { FinanceHtmlArtifactReader } from "@/components/workspace/finance/finance-html-artifact-reader";
+
+const { previewSpy } = vi.hoisted(() => ({ previewSpy: vi.fn() }));
 
 vi.mock("@/components/workspace/artifacts", async () =>
   vi.importActual("@/components/workspace/artifacts/context"),
@@ -28,14 +36,17 @@ vi.mock("@/components/workspace/finance/finance-artifact-preview", () => ({
     filepath: string;
     onBack: () => void;
     threadId: string;
-  }) => (
-    <div data-testid="finance-preview">
-      <span>{`${threadId}:${filepath}`}</span>
-      <button type="button" onClick={onBack}>
-        Back
-      </button>
-    </div>
-  ),
+  }) => {
+    previewSpy({ filepath, threadId });
+    return (
+      <div data-testid="finance-preview">
+        <span>{`${threadId}:${filepath}`}</span>
+        <button type="button" onClick={onBack}>
+          Back
+        </button>
+      </div>
+    );
+  },
 }));
 
 function ArtifactHarness({ threadId }: { threadId: string }) {
@@ -48,7 +59,10 @@ function ArtifactHarness({ threadId }: { threadId: string }) {
 
   return (
     <>
-      <button type="button" onClick={() => openArtifact("reports/dashboard.html")}>
+      <button
+        type="button"
+        onClick={() => openArtifact("reports/dashboard.html")}
+      >
         Open HTML
       </button>
       <button type="button" onClick={() => openArtifact("reports/report.docx")}>
@@ -92,6 +106,10 @@ function MountReaderWithSelection() {
 }
 
 describe("FinanceHtmlArtifactReader", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   afterEach(cleanup);
 
   test("renders the selected HTML artifact for the active thread", () => {
@@ -148,8 +166,13 @@ describe("FinanceHtmlArtifactReader", () => {
 
     rerender(<TestApp threadId="thread-2" />);
 
+    expect(screen.queryByTestId("finance-preview")).not.toBeInTheDocument();
+    expect(previewSpy).not.toHaveBeenCalledWith({
+      filepath: "reports/dashboard.html",
+      threadId: "thread-2",
+    });
+
     await waitFor(() => {
-      expect(screen.queryByTestId("finance-preview")).not.toBeInTheDocument();
       expect(screen.getByTestId("artifact-state")).toHaveTextContent(
         "closed:none",
       );

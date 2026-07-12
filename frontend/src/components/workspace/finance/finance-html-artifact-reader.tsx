@@ -16,14 +16,20 @@ export function FinanceHtmlArtifactReader({
 }: FinanceHtmlArtifactReaderProps) {
   const { artifacts, deselect, open, selectedArtifact } = useArtifacts();
   const previousThreadIdRef = useRef(threadId);
+  const threadChanged = previousThreadIdRef.current !== threadId;
 
   useEffect(() => {
-    if (previousThreadIdRef.current === threadId) return;
+    if (!threadChanged) return;
     previousThreadIdRef.current = threadId;
     deselect();
-  }, [deselect, threadId]);
+  }, [deselect, threadChanged, threadId]);
 
-  if (!open || !selectedArtifact || !isHtmlArtifact(selectedArtifact)) {
+  if (
+    threadChanged ||
+    !open ||
+    !selectedArtifact ||
+    !isHtmlArtifact(selectedArtifact)
+  ) {
     return null;
   }
 

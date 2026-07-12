@@ -52,7 +52,11 @@ interface FinanceAgentPanelProps {
  * history list) are detected via the threads query and automatically reset
  * to a fresh new-thread state — no 404 errors.
  */
-export function FinanceAgentPanel({ module, onTodosChange, avoidRightFloatingPanels = false }: FinanceAgentPanelProps) {
+export function FinanceAgentPanel({
+  module,
+  onTodosChange,
+  avoidRightFloatingPanels = false,
+}: FinanceAgentPanelProps) {
   return (
     <SubtasksProvider>
       <PromptInputProvider>
@@ -66,7 +70,11 @@ export function FinanceAgentPanel({ module, onTodosChange, avoidRightFloatingPan
   );
 }
 
-function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanels = false }: FinanceAgentPanelProps) {
+function FinanceAgentPanelInner({
+  module,
+  onTodosChange,
+  avoidRightFloatingPanels = false,
+}: FinanceAgentPanelProps) {
   const threadIdStorageKey = `finance:thread:${module.id}`;
   const [threadId, setThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
@@ -90,7 +98,7 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
   // reset and silently kill the outgoing stream.
   const initialThreadIdRef = useRef<string | undefined>(
     typeof window !== "undefined"
-      ? window.localStorage.getItem(threadIdStorageKey) ?? undefined
+      ? (window.localStorage.getItem(threadIdStorageKey) ?? undefined)
       : undefined,
   );
   const { data: threads } = useThreads();
@@ -127,14 +135,19 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
     }
   }, [settings.context, setSettings]);
 
-  const { thread, sendMessage, isHistoryLoading, hasMoreHistory, loadMoreHistory } =
-    useThreadStream({
-      threadId,
-      context: settings.context,
-      onStart: (createdThreadId) => {
-        setThreadId(createdThreadId);
-      },
-    });
+  const {
+    thread,
+    sendMessage,
+    isHistoryLoading,
+    hasMoreHistory,
+    loadMoreHistory,
+  } = useThreadStream({
+    threadId,
+    context: settings.context,
+    onStart: (createdThreadId) => {
+      setThreadId(createdThreadId);
+    },
+  });
 
   // Derive todos from thread state or tool calls, and emit them to the parent
   // workbench for the floating TodoList panel.
@@ -193,7 +206,8 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
               <MessageList
                 className={cn(
                   "size-full min-w-0",
-                  avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                  avoidRightFloatingPanels &&
+                    FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
                 )}
                 contentClassName={FINANCE_AGENT_CONTENT_WIDTH_CLASS}
                 threadId={uiThreadId}
@@ -207,7 +221,8 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
               <div
                 className={cn(
                   "absolute inset-x-0 bottom-0 z-30 flex min-w-0 justify-center px-3 pb-3 sm:px-5 sm:pb-4",
-                  avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                  avoidRightFloatingPanels &&
+                    FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
                 )}
               >
                 <div
@@ -240,7 +255,8 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
             <div
               className={cn(
                 "pointer-events-none absolute inset-x-0 top-9 bottom-40 flex justify-center px-3 text-center sm:px-5",
-                avoidRightFloatingPanels && FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
+                avoidRightFloatingPanels &&
+                  FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS,
               )}
             >
               <div
@@ -252,8 +268,11 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
                 <p className="text-lg font-semibold">
                   我是「小s」，金融分析助手
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  当前模块：<span className="font-medium text-foreground">{module.name}</span>
+                <p className="text-muted-foreground text-sm">
+                  当前模块：
+                  <span className="text-foreground font-medium">
+                    {module.name}
+                  </span>
                   ，已加载 {module.skillIds.length} 个专业技能包。
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -261,14 +280,14 @@ function FinanceAgentPanelInner({ module, onTodosChange, avoidRightFloatingPanel
                     <button
                       key={example}
                       type="button"
-                      className="pointer-events-auto rounded-lg border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-amber-500/40 hover:text-foreground"
+                      className="bg-card text-muted-foreground hover:text-foreground pointer-events-auto rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-amber-500/40"
                       onClick={() => textInput.setInput(example)}
                     >
                       {example}
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground/70">
+                <p className="text-muted-foreground/70 mt-2 text-xs">
                   所有分析基于技能获取的客观数据，不构成投资建议。
                 </p>
               </div>
