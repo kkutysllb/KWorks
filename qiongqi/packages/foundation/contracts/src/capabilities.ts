@@ -224,6 +224,7 @@ export const DEFAULT_WORK_MODES = {
       'agent-memory-isolation',
       'api-design',
       'architecture',
+      'brainstorming',
       'build-system',
       'ci-cd',
       'code-review',
