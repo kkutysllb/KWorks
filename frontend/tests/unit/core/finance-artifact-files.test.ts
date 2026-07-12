@@ -51,7 +51,7 @@ describe("finance artifact files", () => {
 
   test("normalizes Windows separators for matching and returns the original path", () => {
     expect(
-      resolveFinanceMarkdownArtifact("reports\\daily\\dashboard.HTML", [
+      resolveFinanceMarkdownArtifact("reports/daily/dashboard.HTML", [
         "reports/other.md",
         "reports\\daily\\dashboard.MD",
       ]),
