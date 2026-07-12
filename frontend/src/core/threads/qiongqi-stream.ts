@@ -1128,8 +1128,14 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         thread_id: activeThreadId,
         run_id: result.turnId,
       });
+      // Ensure the SSE subscription is active so turn events are delivered.
+      // After a stop() the old SSE connection was intentionally cancelled and
+      // never reconnected; without this, the new turn's events would be lost.
+      if (!isSubscribedRef.current && activeThreadId) {
+        void subscribe(activeThreadId);
+      }
     },
-    [ensureThread],
+    [ensureThread, subscribe],
   );
 
   // --- stop ---
@@ -1165,7 +1171,18 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     // Force isLoading=false immediately.
     setIsLoading(false);
     syncState();
-  }, [syncState]);
+    // Re-establish the SSE subscription so subsequent submits deliver events.
+    // The abort above marks the old connection as intentionally cancelled,
+    // which prevents auto-reconnect. We must manually resubscribe.
+    if (tid && mountedRef.current) {
+      isSubscribedRef.current = false;
+      setTimeout(() => {
+        if (mountedRef.current && threadIdRef.current === tid) {
+          void subscribe(tid);
+        }
+      }, 200);
+    }
+  }, [syncState, subscribe]);
 
   // --- joinStream (reconnect to existing turn) ---
   const joinStream = useCallback(
