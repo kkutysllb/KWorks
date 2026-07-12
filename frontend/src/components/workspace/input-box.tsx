@@ -9,6 +9,7 @@ import {
   GraduationCapIcon,
   LightbulbIcon,
   PaperclipIcon,
+  TrendingUpIcon,
   UsersIcon,
   ZapIcon,
 } from "lucide-react";
@@ -212,6 +213,9 @@ function getWorkModeIcon(
   const icon = workMode.icon?.toLowerCase() ?? "";
   if (workMode.id === "coding" || icon.includes("code")) {
     return Code2Icon;
+  }
+  if (workMode.id === "finance" || icon.includes("chart")) {
+    return TrendingUpIcon;
   }
   return ZapIcon;
 }
@@ -487,6 +491,13 @@ export function InputBox({
           contextForWorkMode(context, nextWorkModeId, supportThinking),
         );
         router.push("/workspace/coding");
+        return;
+      }
+      if (isNewThread && nextWorkModeId === "finance") {
+        onContextChange?.(
+          contextForWorkMode(context, nextWorkModeId, supportThinking),
+        );
+        router.push("/workspace/finance");
         return;
       }
       onContextChange?.(

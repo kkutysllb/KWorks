@@ -295,6 +295,7 @@ function skillRootsFromKWorksRoot(root: string): string[] {
     join(root, 'builtin', 'core'),
     join(root, 'builtin', 'task'),
     join(root, 'builtin', 'coding'),
+    join(root, 'builtin', 'finance'),
     join(root, 'custom', 'shared')
   ]
   const legacy = [join(root, 'public'), join(root, 'custom')]

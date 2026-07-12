@@ -19,6 +19,9 @@ const DESKTOP_DIR = resolve(__dirname, "..");
 const REPO_ROOT = resolve(DESKTOP_DIR, "..");
 const FRONTEND_DIR = resolve(REPO_ROOT, "frontend");
 const QIONGQI_DIR = resolve(REPO_ROOT, "qiongqi");
+// Sibling KSkills repo (financial quant skill packages). May not exist in
+// all environments — checked with existsSync before use.
+const KSKILLS_DIR = resolve(REPO_ROOT, "..", "KSkills");
 const GATEWAY_PORT = process.env.GATEWAY_PORT ?? "19987";
 const DEV_SERVER_PORT = "18659";
 const DEV_SERVER_URL = `http://127.0.0.1:${DEV_SERVER_PORT}`;
@@ -295,6 +298,7 @@ function syncDesktopPublicSkills(skillsPath) {
   const builtinCoreTarget = join(skillsPath, "builtin", "core");
   const builtinTaskTarget = join(skillsPath, "builtin", "task");
   const builtinCodingTarget = join(skillsPath, "builtin", "coding");
+  const builtinFinanceTarget = join(skillsPath, "builtin", "finance");
 
   // Also create the writable custom/ directory so users can create skills
   // at runtime (mirrors backend.ts initSkills).
@@ -305,6 +309,7 @@ function syncDesktopPublicSkills(skillsPath) {
     builtinCoreTarget,
     builtinTaskTarget,
     builtinCodingTarget,
+    builtinFinanceTarget,
     customSharedTarget,
   ]) {
     mkdirSync(dir, { recursive: true });
@@ -349,11 +354,31 @@ function syncDesktopPublicSkills(skillsPath) {
     console.warn(`[dev] qiongqi built-in skills not found at ${qiongqiSkillRoot}`);
   }
 
+  // Sync financial quant skills from the sibling KSkills repo (stock + common).
+  let copiedFinance = 0;
+  if (existsSync(KSKILLS_DIR)) {
+    for (const category of ["stock", "common"]) {
+      const categoryDir = join(KSKILLS_DIR, category);
+      if (!existsSync(categoryDir)) continue;
+      for (const name of readdirSync(categoryDir)) {
+        const src = join(categoryDir, name);
+        if (!statSync(src).isDirectory()) continue;
+        if (!existsSync(join(src, "SKILL.md"))) continue;
+        copiedFinance += copyMissingSkill(src, join(builtinFinanceTarget, name));
+      }
+    }
+  } else {
+    console.warn(`[dev] KSkills repo not found at ${KSKILLS_DIR} — finance skills will not be synced`);
+  }
+
   if (copiedPublic > 0) {
     console.log(`[dev] synced ${copiedPublic} public skill(s) to ${publicTarget}`);
   }
   if (copiedUnified > 0 || copiedQiongqi > 0) {
     console.log(`[dev] synced ${copiedUnified + copiedQiongqi} skill(s) into unified roots under ${skillsPath}`);
+  }
+  if (copiedFinance > 0) {
+    console.log(`[dev] synced ${copiedFinance} finance skill(s) to ${builtinFinanceTarget}`);
   }
 }
 

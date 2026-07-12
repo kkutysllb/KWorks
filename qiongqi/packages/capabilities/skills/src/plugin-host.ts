@@ -68,8 +68,8 @@ export type SkillPluginHostOptions = {
   builtinRoots?: string[]
 }
 
-const DEFAULT_ACTIVE_LIMIT = 3
-const DEFAULT_INSTRUCTION_BUDGET_BYTES = 24_000
+const DEFAULT_ACTIVE_LIMIT = 6
+const DEFAULT_INSTRUCTION_BUDGET_BYTES = 48_000
 const DEFAULT_CATALOG_BUDGET_BYTES = 12_000
 
 export class SkillPluginHost {
@@ -239,7 +239,17 @@ export class SkillPluginHost {
         workModeId: input.workModeId,
         effectiveSkillIds: input.effectiveSkillIds
       })) continue
-      if (!skill.manifest.activation.autoActivate && !this.isExplicitlyMentioned(skill, prompt) && !this.startsWithCommand(skill, lower)) continue
+      // Gate: a skill is a candidate if autoActivate is set, the prompt
+      // explicitly mentions it, the prompt starts with one of its commands,
+      // or the prompt contains a description keyword match (for legacy
+      // SKILL.md packages that have no explicit triggers).
+      const descKeyword = this.descriptionKeywordMatch(skill, prompt)
+      if (
+        !skill.manifest.activation.autoActivate &&
+        !this.isExplicitlyMentioned(skill, prompt) &&
+        !this.startsWithCommand(skill, lower) &&
+        !descKeyword
+      ) continue
       const explicit = this.explicitMention(skill, prompt)
       if (explicit) { matches.push({ skill, skillId: skill.id, reason: explicit, score: 1_000 + skill.manifest.priority }); continue }
       const command = skill.manifest.activation.commands.find((c) => lower.startsWith(c.toLowerCase()))
@@ -247,9 +257,43 @@ export class SkillPluginHost {
       const pattern = skill.manifest.activation.promptPatterns.find((p) => safePattern(p).test(prompt))
       if (pattern) { matches.push({ skill, skillId: skill.id, reason: `pattern:${pattern}`, score: 500 + skill.manifest.priority }); continue }
       const ft = skill.manifest.activation.fileTypes.find((t) => fileTypes.has(t.toLowerCase()))
-      if (ft) { matches.push({ skill, skillId: skill.id, reason: `fileType:${ft}`, score: 300 + skill.manifest.priority }) }
+      if (ft) { matches.push({ skill, skillId: skill.id, reason: `fileType:${ft}`, score: 300 + skill.manifest.priority }); continue }
+      if (descKeyword) { matches.push({ skill, skillId: skill.id, reason: `keyword:${descKeyword}`, score: 200 + skill.manifest.priority }) }
     }
     return matches.sort((a, b) => b.score - a.score || a.skill.id.localeCompare(b.skill.id))
+  }
+
+  /**
+   * Check whether the user prompt contains a meaningful keyword extracted from
+   * the skill's description. This is a fallback activation path for legacy
+   * SKILL.md packages that have no explicit triggers/commands/promptPatterns.
+   *
+   * Strategy:
+   * - CJK: extract 3+ char terms from the description, then check if any 3-char
+   *   substring of those terms appears in the prompt. This handles partial
+   *   matches (e.g. desc "市场联动分析引擎" matches prompt "市场联动分析").
+   * - English: extract 4+ char words (excluding stop words) and check inclusion.
+   */
+  private descriptionKeywordMatch(skill: LoadedSkillPlugin, prompt: string): string | undefined {
+    const desc = skill.manifest.description
+    if (!desc || desc.length < 4) return undefined
+    // CJK matching: 3-char substring overlap.
+    const cjkTerms = desc.match(/[\u4e00-\u9fff]{3,}/g) ?? []
+    for (const term of cjkTerms) {
+      for (let i = 0; i <= term.length - 3; i++) {
+        const sub = term.slice(i, i + 3)
+        if (prompt.includes(sub)) return sub
+      }
+    }
+    // English matching: 4+ char words.
+    const lowerPrompt = prompt.toLowerCase()
+    const STOP_WORDS = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'use', 'via', 'with', 'this', 'that', 'from', 'have', 'your', 'tool', 'data', 'based', 'engine', 'skill'])
+    const enTerms = (desc.toLowerCase().match(/[a-z]{4,}/g) ?? [])
+      .filter((w) => !STOP_WORDS.has(w))
+    for (const term of enTerms) {
+      if (lowerPrompt.includes(term)) return term
+    }
+    return undefined
   }
 
   private isExplicitlyMentioned(skill: LoadedSkillPlugin, prompt: string): boolean {
@@ -356,13 +400,53 @@ async function loadPlugin(root: string, allowLegacy: boolean, official: boolean)
   }
 }
 
+/**
+ * Parse YAML frontmatter from a SKILL.md file. Handles simple `key: value`
+ * pairs as well as YAML block scalars (`|` literal, `>` folded) — which are
+ * common in KSkills packages where multi-line descriptions use `description: |`.
+ *
+ * This is intentionally a minimal parser, not a full YAML implementation.
+ */
 function readFrontmatter(entry: string): Record<string, string> {
   const match = /^---\n([\s\S]*?)\n---/.exec(entry)
   const out: Record<string, string> = {}
   if (!match) return out
-  for (const line of match[1].split('\n')) {
+  const lines = match[1].split('\n')
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
     const idx = line.indexOf(':')
-    if (idx > 0) out[line.slice(0, idx).trim()] = line.slice(idx + 1).trim()
+    if (idx <= 0 || line.startsWith(' ') || line.startsWith('\t')) {
+      // Skip indented lines (they're block-scalar content, handled below)
+      i++
+      continue
+    }
+    const key = line.slice(0, idx).trim()
+    let value = line.slice(idx + 1).trim()
+    // Handle YAML block scalars: `key: |` or `key: >` — content is on
+    // subsequent indented lines.
+    if (value === '|' || value === '>') {
+      const blockLines: string[] = []
+      i++
+      while (i < lines.length) {
+        const blockLine = lines[i]!
+        // Block content must be indented (starts with space or tab)
+        if (blockLine.startsWith(' ') || blockLine.startsWith('\t')) {
+          // Strip one level of indentation
+          blockLines.push(blockLine.replace(/^[ \t]{1,2}/, ''))
+          i++
+        } else {
+          break
+        }
+      }
+      value = value === '>'
+        ? blockLines.join(' ').replace(/\s+/g, ' ').trim()
+        : blockLines.join('\n').trim()
+      out[key] = value
+      continue
+    }
+    out[key] = value
+    i++
   }
   return out
 }

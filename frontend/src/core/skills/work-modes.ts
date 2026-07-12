@@ -20,6 +20,15 @@ export const SYSTEM_WORK_MODES: readonly WorkMode[] = [
     editable: false,
     skills: [],
   },
+  {
+    id: "finance",
+    name: "金融量化",
+    description: "金融财经分析",
+    icon: "chart",
+    builtin: true,
+    editable: false,
+    skills: [],
+  },
 ];
 
 export interface WorkModeSkillView {
@@ -38,6 +47,7 @@ export function visibleWorkModeSkills(
 
 export function workModeDisplayName(mode: Pick<WorkMode, "id" | "name">) {
   if (mode.id === "office") return "日常办公";
+  if (mode.id === "finance") return "金融量化";
   return mode.name || mode.id;
 }
 
@@ -58,6 +68,7 @@ export function workModeDisplayNameById(
 function workModeOrder(mode: Pick<WorkMode, "id">): number {
   if (mode.id === "office") return 0;
   if (mode.id === "coding") return 1;
+  if (mode.id === "finance") return 2;
   return 100;
 }
 

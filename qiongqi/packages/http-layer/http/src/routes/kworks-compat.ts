@@ -16,7 +16,8 @@ import {
   type RuntimeEvent,
   type ThreadRecord,
   type ThreadSummary,
-  type TurnItem
+  type TurnItem,
+  DEFAULT_WORK_MODES
 } from '@qiongqi/contracts'
 import {
   DEFAULT_LOCKED_SKILL_IDS,
@@ -2302,6 +2303,42 @@ function normalizeLegacyTaskWorkMode(config: QiongqiConfig): QiongqiConfig {
   }
 }
 
+/**
+ * Ensure all built-in work modes from DEFAULT_WORK_MODES exist in the stored
+ * config. Old per-user snapshots persisted before a new built-in mode (e.g.
+ * `finance`) was added will be missing it — without this, the mode is invisible
+ * to the SkillPluginHost and its skills never load.
+ *
+ * Only adds modes that are completely absent; it never overwrites a mode the
+ * user has explicitly customized.
+ */
+function ensureBuiltinWorkModes(config: QiongqiConfig): QiongqiConfig {
+  const skills = config.capabilities?.skills
+  const workModes = skills?.workModes
+  const modes = workModes?.modes
+  if (!modes) return config
+  const builtinIds = Object.keys(DEFAULT_WORK_MODES)
+  const missing = builtinIds.filter((id) => !modes[id])
+  if (missing.length === 0) return config
+  const mergedModes = { ...modes }
+  for (const id of missing) {
+    const builtin = DEFAULT_WORK_MODES[id as keyof typeof DEFAULT_WORK_MODES]
+    if (builtin) {
+      mergedModes[id] = { ...builtin }
+    }
+  }
+  return {
+    ...config,
+    capabilities: {
+      ...(config.capabilities ?? {}),
+      skills: {
+        ...skills!,
+        workModes: { ...workModes!, modes: mergedModes }
+      }
+    }
+  }
+}
+
 async function readEffectiveRuntimeConfig(runtime: ServerRuntime, actor?: AuthActor): Promise<QiongqiConfig> {
   let config = await readUserScopedCapabilityConfig(runtime, await readRuntimeConfig(runtime), actor)
   // Skills are a core capability of the KWorks desktop app (enabled at startup
@@ -2325,6 +2362,10 @@ async function readEffectiveRuntimeConfig(runtime: ServerRuntime, actor?: AuthAc
   // this, the frontend renders both `task` and `office` as separate "日常办公"
   // entries. Rename the key and fix defaultModeId so only one entry survives.
   config = normalizeLegacyTaskWorkMode(config)
+  // Ensure all built-in work modes exist. Old per-user snapshots persisted
+  // before a new built-in mode (e.g. `finance`) was added will be missing it —
+  // without this, the mode and its skills are invisible at runtime.
+  config = ensureBuiltinWorkModes(config)
   const owner = ownerUserId(actor)
   if (!owner || !runtime.kworksUserDataStore) return config
   const userModels = await runtime.kworksUserDataStore.listModelProfiles(owner)

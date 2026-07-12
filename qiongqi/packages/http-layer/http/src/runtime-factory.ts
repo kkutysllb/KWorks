@@ -31,6 +31,7 @@ import { buildWebToolProviders } from '@qiongqi/adapter-tools'
 import { LocalWorkspaceInspector } from '@qiongqi/adapter-storage'
 import { createImmutablePrefix } from '@qiongqi/cache'
 import {
+  DEFAULT_WORK_MODES,
   buildRuntimeCapabilityManifest,
   type QiongqiCapabilitiesConfig
 } from '@qiongqi/contracts'
@@ -739,7 +740,9 @@ export async function createToolMatrix(
     const currentCapabilities = withRuntimeMountedSkillRoots(current.capabilities, runtimeMountedSkillRoots)
     // Normalize legacy "task" work-mode to "office" before reloading the skill
     // host, so effectiveSkillIds resolves correctly for the office mode.
-    const normalizedSkills = normalizeLegacyTaskSkills(currentCapabilities?.skills)
+    const normalizedSkills = ensureBuiltinWorkModes(
+      normalizeLegacyTaskSkills(currentCapabilities?.skills)
+    )
     await skillRuntime.reload(normalizedSkills)
     await skillPluginHost.reload(normalizedSkills)
     skillMcpServers = collectSkillMcpServers(
@@ -967,6 +970,31 @@ function normalizeLegacyTaskSkills(skills: QiongqiCapabilitiesConfig['skills'] |
     ...skills,
     workModes: { ...skills.workModes, defaultModeId: nextDefault, modes: nextModes as typeof modes },
     modeSkillOverrides: cleanOverrides as typeof skills.modeSkillOverrides
+  }
+}
+
+/**
+ * Ensure all built-in work modes from DEFAULT_WORK_MODES exist in the skills
+ * config. Old per-user snapshots persisted before a new built-in mode (e.g.
+ * `finance`) was added will be missing it — without this the SkillPluginHost
+ * never sees the mode and its skills are invisible.
+ */
+function ensureBuiltinWorkModes(skills: QiongqiCapabilitiesConfig['skills'] | undefined): QiongqiCapabilitiesConfig['skills'] | undefined {
+  if (!skills?.workModes?.modes) return skills
+  const modes = skills.workModes.modes as Record<string, Record<string, unknown>>
+  const builtinIds = Object.keys(DEFAULT_WORK_MODES)
+  const missing = builtinIds.filter((id) => !modes[id])
+  if (missing.length === 0) return skills
+  const merged = { ...modes }
+  for (const id of missing) {
+    const builtin = DEFAULT_WORK_MODES[id as keyof typeof DEFAULT_WORK_MODES]
+    if (builtin) {
+      merged[id] = { ...builtin } as Record<string, unknown>
+    }
+  }
+  return {
+    ...skills,
+    workModes: { ...skills.workModes, modes: merged as typeof modes }
   }
 }
 

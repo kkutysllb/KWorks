@@ -938,6 +938,17 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (!actor) return ERRORS.unauthorized()
     return usageJsonResponse(request, runtime, actorOwner(actor) ? actor : undefined, { defaultWindow: 'month' })
   })
+  // Finance credential status — checks whether the two data-source API keys
+  // required by the finance work mode's KSkills packages are present in the
+  // process environment. Read-only, no secrets are returned.
+  router.add('GET', '/api/finance/credentials/status', async (request) => {
+    const actor = await authenticateOrInternal(request, runtime)
+    if (!actor) return ERRORS.unauthorized()
+    return jsonResponse({
+      iwencai: Boolean(process.env.IWENCAI_API_KEY?.trim()),
+      tushare: Boolean(process.env.TUSHARE_TOKEN?.trim()),
+    })
+  })
   return router
 }
 

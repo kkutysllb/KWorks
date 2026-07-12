@@ -347,6 +347,7 @@ describe('cli', () => {
         '/Users/tester/.kworks-workspace/skills/builtin/core',
         '/Users/tester/.kworks-workspace/skills/builtin/task',
         '/Users/tester/.kworks-workspace/skills/builtin/coding',
+        '/Users/tester/.kworks-workspace/skills/builtin/finance',
         '/Users/tester/.kworks-workspace/skills/custom/shared'
       ]
     })
@@ -370,6 +371,7 @@ describe('cli', () => {
         join(dir, 'builtin', 'core'),
         join(dir, 'builtin', 'task'),
         join(dir, 'builtin', 'coding'),
+        join(dir, 'builtin', 'finance'),
         join(dir, 'custom', 'shared'),
         join(dir, 'public', 'deep-research')
       ])
@@ -397,6 +399,7 @@ describe('cli', () => {
         join(dir, 'builtin', 'core'),
         join(dir, 'builtin', 'task'),
         join(dir, 'builtin', 'coding'),
+        join(dir, 'builtin', 'finance'),
         join(dir, 'custom', 'shared')
       ])
     } finally {

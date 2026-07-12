@@ -46,7 +46,7 @@ describe('work mode skill contracts', () => {
 
     expect(cfg.skills.lockedSkillIds).toEqual(DEFAULT_LOCKED_SKILL_IDS)
     expect(cfg.skills.workModes.defaultModeId).toBe('office')
-    expect(Object.keys(cfg.skills.workModes.modes).sort()).toEqual(['coding', 'office'])
+    expect(Object.keys(cfg.skills.workModes.modes).sort()).toEqual(['coding', 'finance', 'office'])
   })
 
   it('enables every bundled coding skill in the coding work mode by default', () => {
