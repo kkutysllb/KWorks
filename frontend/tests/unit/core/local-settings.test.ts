@@ -35,7 +35,7 @@ describe("local settings", () => {
         context: {
           model_name: "MiniMax-M3",
           workspaceRoot: "/Users/libing/kk_Projects/MongoDBAgent",
-          workModeId: "task",
+          workModeId: "office",
         },
       }),
     );
@@ -44,7 +44,7 @@ describe("local settings", () => {
 
     expect(getBaseSettingsSnapshot().context).toMatchObject({
       model_name: "MiniMax-M3",
-      workModeId: "task",
+      workModeId: "office",
     });
     expect(getBaseSettingsSnapshot().context.workspaceRoot).toBeUndefined();
   });

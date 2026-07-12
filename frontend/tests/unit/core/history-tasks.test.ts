@@ -28,7 +28,7 @@ describe("history task grouping", () => {
         {
           thread_id: "task-1",
           updated_at: "2026-06-01T10:00:00Z",
-          context: { workModeId: "task" },
+          context: { workModeId: "office" },
           values: { title: "Write report" },
         },
         {
@@ -43,7 +43,7 @@ describe("history task grouping", () => {
 
     expect(groups.map((group) => [group.id, group.label, group.count])).toEqual(
       [
-        ["task", "日常办公", 2],
+        ["office", "日常办公", 2],
         ["coding", "Coding 模式", 1],
         ["research", "研究模式", 1],
       ],
@@ -119,7 +119,7 @@ describe("history task grouping", () => {
             thinking_enabled: false,
             is_plan_mode: false,
             subagent_enabled: false,
-            workModeId: "task",
+            workModeId: "office",
           },
           values: { title: "你好", messages: [], artifacts: [] },
           interrupts: {},

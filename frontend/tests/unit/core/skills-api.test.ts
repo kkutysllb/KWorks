@@ -35,7 +35,7 @@ describe("skills API", () => {
         installed: true,
         skill_id: "report-search",
         skill_name: "report-search",
-        workModeId: "task",
+        workModeId: "office",
         root: "/tmp/kun/skills/custom/shared/report-search",
         message: "技能 report-search 已创建并绑定到 task",
       }),
@@ -49,12 +49,12 @@ describe("skills API", () => {
         trigger: "用户需要搜索研报或整理证券研究资料",
         output: "Markdown 摘要，包含来源、要点和后续问题",
         procedure: "1. 明确主题和范围\n2. 检索资料",
-        workModeId: "task",
+        workModeId: "office",
       }),
     ).resolves.toMatchObject({
       success: true,
       skill_id: "report-search",
-      workModeId: "task",
+      workModeId: "office",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -69,7 +69,7 @@ describe("skills API", () => {
           trigger: "用户需要搜索研报或整理证券研究资料",
           output: "Markdown 摘要，包含来源、要点和后续问题",
           procedure: "1. 明确主题和范围\n2. 检索资料",
-          workModeId: "task",
+          workModeId: "office",
         }),
       },
     );
@@ -145,7 +145,7 @@ describe("skills API", () => {
     await expect(
       createSkillDraft({
         mode: "scripts",
-        workModeId: "task",
+        workModeId: "office",
         files: [file],
       }),
     ).resolves.toMatchObject({
@@ -162,7 +162,7 @@ describe("skills API", () => {
     );
     const [, init] = fetchMock.mock.calls[0] as [string, { body: FormData }];
     expect(init.body.get("mode")).toBe("scripts");
-    expect(init.body.get("workModeId")).toBe("task");
+    expect(init.body.get("workModeId")).toBe("office");
     expect(init.body.getAll("files")).toHaveLength(1);
   });
 
@@ -188,7 +188,7 @@ describe("skills API", () => {
 
     await createSkillDraft({
       mode: "package",
-      workModeId: "task",
+      workModeId: "office",
       files: [file],
     });
 
@@ -236,14 +236,14 @@ describe("skills API", () => {
         success: true,
         installed: true,
         skill_id: "convert",
-        workModeId: "task",
+        workModeId: "office",
         root: "/tmp/kun/skills/custom/shared/convert",
       }),
     });
 
     await expect(
       installSkillDraft("draft_abc123", {
-        workModeId: "task",
+        workModeId: "office",
         metadata: {
           id: "convert",
           name: "Convert",
@@ -268,7 +268,7 @@ describe("skills API", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workModeId: "task",
+          workModeId: "office",
           metadata: {
             id: "convert",
             name: "Convert",

@@ -305,7 +305,7 @@ function SubmitContextOverrideHarness({ threadId }: { threadId: string }) {
     threadId,
     context: {
       mode: undefined,
-      workModeId: "task",
+      workModeId: "office",
       executionProfile: "fast",
     },
     isMock: false,
@@ -375,7 +375,7 @@ function NewThreadFileSubmitHarness({
   const [isNewThread, setIsNewThread] = React.useState(true);
   const { sendMessage } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
-    context: { mode: undefined, workModeId: "task" },
+    context: { mode: undefined, workModeId: "office" },
     isMock: false,
     onSend: (createdThreadId) => {
       setThreadId(createdThreadId);
@@ -1096,7 +1096,7 @@ describe("useThreadStream cache bridge", () => {
     expect(ensureThreadMock).toHaveBeenCalledWith(
       "placeholder-thread",
       expect.objectContaining({
-        workModeId: "task",
+        workModeId: "office",
         thread_id: "placeholder-thread",
       }),
     );

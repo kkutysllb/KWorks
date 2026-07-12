@@ -16,8 +16,8 @@ export type HistoryTaskGroup<Thread extends HistoryTaskThread> = {
   threads: Thread[];
 };
 
-const DEFAULT_WORK_MODE_ID = "task";
-const BUILTIN_WORK_MODE_ORDER = ["task", "coding"] as const;
+const DEFAULT_WORK_MODE_ID = "office";
+const BUILTIN_WORK_MODE_ORDER = ["office", "coding"] as const;
 
 export function groupHistoryTasksByWorkMode<Thread extends HistoryTaskThread>(
   threads: Thread[],

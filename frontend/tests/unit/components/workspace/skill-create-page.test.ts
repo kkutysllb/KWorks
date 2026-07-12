@@ -53,12 +53,12 @@ vi.mock("@/core/skills/hooks", () => ({
     isPending: false,
   }),
   useWorkModes: () => ({
-    defaultModeId: "task",
+    defaultModeId: "office",
     isLoading: false,
     error: null,
     workModes: [
       {
-        id: "task",
+        id: "office",
         name: "日常办公",
         description: "",
         skills: [],

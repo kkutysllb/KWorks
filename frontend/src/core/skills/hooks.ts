@@ -41,7 +41,7 @@ export function useWorkModes() {
     queryFn: () => loadWorkModes(),
   });
   return {
-    defaultModeId: data?.defaultModeId ?? "task",
+    defaultModeId: data?.defaultModeId ?? "office",
     lockedSkillIds: data?.lockedSkillIds ?? [],
     workModes: data?.workModes ?? [],
     isLoading,
@@ -52,7 +52,7 @@ export function useWorkModes() {
 export function useWorkModeSkills(workModeId: string | undefined) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["work-mode-skills", workModeId],
-    queryFn: () => loadWorkModeSkills(workModeId ?? "task"),
+    queryFn: () => loadWorkModeSkills(workModeId ?? "office"),
     enabled: Boolean(workModeId),
   });
   return { skills: data ?? [], isLoading, error };

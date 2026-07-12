@@ -96,6 +96,36 @@ test.describe("Thread history", () => {
     await expect(page).toHaveURL(new RegExp(MOCK_THREAD_ID));
   });
 
+  test("clicking new task after a history task clears the historical chat surface", async ({
+    page,
+  }) => {
+    mockRuntimeAPI(page, { threads: THREADS, projects: PROJECTS });
+
+    await page.goto("/workspace/chats/new");
+
+    const sidebar = page.locator("[data-sidebar='sidebar']");
+    const firstThread = sidebar.getByRole("button", {
+      name: /First conversation/,
+    });
+    await expect(firstThread).toBeVisible({ timeout: 15_000 });
+
+    await firstThread.click();
+    await page.waitForURL(`**/workspace/chats/${MOCK_THREAD_ID}`);
+    await expect(
+      page.getByText("Response in thread First conversation"),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await sidebar.getByRole("link", { name: "新任务", exact: true }).click();
+
+    await page.waitForURL("**/workspace/chats/new");
+    await expect(page.getByText("欢迎使用 KWorks")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByText("Response in thread First conversation"),
+    ).toHaveCount(0);
+  });
+
   test("clicking a coding history task opens the coding workbench", async ({
     page,
   }) => {

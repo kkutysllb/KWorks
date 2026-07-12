@@ -66,7 +66,7 @@ const EMPTY_FORM: SkillCreateFormState = {
   trigger: "",
   output: "",
   procedure: "",
-  workModeId: "task",
+  workModeId: "office",
 };
 
 export function SkillCreatePage() {
@@ -91,7 +91,7 @@ export function SkillCreatePage() {
   );
   const [form, setForm] = useState<SkillCreateFormState>(() => ({
     ...EMPTY_FORM,
-    workModeId: requestedWorkModeId ?? defaultModeId ?? "task",
+    workModeId: requestedWorkModeId ?? defaultModeId ?? "office",
   }));
   const [draftId, setDraftId] = useState<string | null>(null);
   const [scriptFiles, setScriptFiles] = useState<File[]>([]);
@@ -111,8 +111,8 @@ export function SkillCreatePage() {
           ? workModes
           : [
               {
-                id: form.workModeId || defaultModeId || "task",
-                name: form.workModeId || "task",
+                id: form.workModeId || defaultModeId || "office",
+                name: form.workModeId || "office",
                 skills: [],
               },
             ],

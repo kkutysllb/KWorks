@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useI18n } from "@/core/i18n/hooks";
+import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
 
 export function CommandPalette() {
@@ -35,7 +36,9 @@ export function CommandPalette() {
   const [isMac, setIsMac] = useState(false);
 
   const handleNewChat = useCallback(() => {
-    router.push("/workspace/chats/new");
+    if (!navigateWorkspaceInPlace("/workspace/chats/new")) {
+      router.push("/workspace/chats/new");
+    }
     setOpen(false);
   }, [router]);
 

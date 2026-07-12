@@ -29,11 +29,11 @@ describe("work modes API", () => {
       ok: true,
       status: 200,
       json: async () => ({
-        defaultModeId: "task",
+        defaultModeId: "office",
         lockedSkillIds: ["bootstrap"],
         workModes: [
           {
-            id: "task",
+            id: "office",
             name: "任务模式",
             skills: [],
           },
@@ -52,7 +52,7 @@ describe("work modes API", () => {
       "http://127.0.0.1:19987/api/work-modes",
     );
     expect(result.workModes.map((mode) => [mode.id, mode.name])).toEqual([
-      ["task", "日常办公"],
+      ["office", "日常办公"],
       ["coding", "Coding 模式"],
     ]);
   });
@@ -62,11 +62,11 @@ describe("work modes API", () => {
       ok: true,
       status: 200,
       json: async () => ({
-        defaultModeId: "task",
+        defaultModeId: "office",
         lockedSkillIds: [],
         workModes: [
           {
-            id: "task",
+            id: "office",
             name: "日常办公",
             skills: [],
           },
@@ -77,7 +77,7 @@ describe("work modes API", () => {
     const result = await loadWorkModes();
 
     expect(result.workModes.map((mode) => [mode.id, mode.name])).toEqual([
-      ["task", "日常办公"],
+      ["office", "日常办公"],
       ["coding", "Coding 模式"],
     ]);
   });

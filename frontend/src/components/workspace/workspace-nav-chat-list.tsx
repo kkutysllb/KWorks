@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
 import {
   SidebarGroup,
@@ -23,7 +23,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useWorkspacePathname } from "@/core/navigation/workspace-route";
+import {
+  navigateWorkspaceInPlace,
+  useWorkspacePathname,
+} from "@/core/navigation/workspace-route";
 import { useProjects } from "@/core/projects";
 import {
   codingProjectNewTaskPath,
@@ -45,6 +48,15 @@ import {
 export function WorkspaceSpacesSection() {
   const routerPathname = usePathname();
   const pathname = useWorkspacePathname(routerPathname) ?? "";
+  const handleNewTaskClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (navigateWorkspaceInPlace("/workspace/chats/new")) {
+        event.preventDefault();
+      }
+    },
+    [],
+  );
+
   return (
     <SidebarGroup className="pt-1">
       <SidebarGroupLabel>功能区</SidebarGroupLabel>
@@ -54,7 +66,11 @@ export function WorkspaceSpacesSection() {
             isActive={pathname === "/workspace/chats/new"}
             asChild
           >
-            <Link className="text-muted-foreground" href="/workspace/chats/new">
+            <Link
+              className="text-muted-foreground"
+              href="/workspace/chats/new"
+              onClick={handleNewTaskClick}
+            >
               <PlusSquareIcon className="text-sky-500" />
               <span>新任务</span>
             </Link>

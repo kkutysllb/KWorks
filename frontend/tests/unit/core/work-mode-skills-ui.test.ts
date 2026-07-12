@@ -47,7 +47,7 @@ describe("work mode skills UI", () => {
   test("groups enabled readonly skills into builtin and per-work-mode tabs", () => {
     const workModes: WorkMode[] = [
       {
-        id: "task",
+        id: "office",
         name: "任务模式",
         skills: [
           skill("bootstrap", { locked: true }),
@@ -70,14 +70,14 @@ describe("work mode skills UI", () => {
 
     expect(views.map((view) => [view.id, view.label])).toEqual([
       ["builtin", "内置"],
-      ["task", "日常办公"],
+      ["office", "日常办公"],
       ["coding", "Coding 模式"],
     ]);
     expect(
       views.find((view) => view.id === "builtin")?.skills.map(skillId),
     ).toEqual(["bootstrap"]);
     expect(
-      views.find((view) => view.id === "task")?.skills.map(skillId),
+      views.find((view) => view.id === "office")?.skills.map(skillId),
     ).toEqual(["data-analysis"]);
     expect(
       views.find((view) => view.id === "coding")?.skills.map(skillId),
@@ -86,7 +86,7 @@ describe("work mode skills UI", () => {
   });
 
   test("normalizes the built-in task work mode display name", () => {
-    expect(workModeDisplayName({ id: "task", name: "任务模式" })).toBe(
+    expect(workModeDisplayName({ id: "office", name: "任务模式" })).toBe(
       "日常办公",
     );
   });
@@ -95,17 +95,17 @@ describe("work mode skills UI", () => {
     const workModes: WorkMode[] = [
       { id: "coding", name: "Coding 模式", skills: [] },
       { id: "finance-review", name: "财经研判", skills: [] },
-      { id: "task", name: "日常办公", skills: [] },
+      { id: "office", name: "日常办公", skills: [] },
     ];
 
     expect(orderedWorkModes(workModes).map((mode) => mode.id)).toEqual([
-      "task",
+      "office",
       "coding",
       "finance-review",
     ]);
     expect(buildWorkModeSkillViews(workModes).map((view) => view.id)).toEqual([
       "builtin",
-      "task",
+      "office",
       "coding",
       "finance-review",
     ]);

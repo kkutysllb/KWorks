@@ -25,13 +25,13 @@ vi.mock("@/components/workspace/chats", () => ({
 
 vi.mock("@/core/skills/hooks", () => ({
   useWorkModes: () => ({
-    defaultModeId: "task",
+    defaultModeId: "office",
     lockedSkillIds: [],
     isLoading: false,
     error: null,
     workModes: [
       {
-        id: "task",
+        id: "office",
         name: "日常办公",
         skills: [],
       },
@@ -141,7 +141,7 @@ describe("ThreadTitle", () => {
           threadId: "thread-task",
           thread: streamWithValues({
             title: "New Chat",
-            workModeId: "task",
+            workModeId: "office",
             messages: [
               {
                 type: "human",

@@ -124,11 +124,11 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          defaultModeId: "task",
+          defaultModeId: "office",
           lockedSkillIds: [],
           workModes: [
             {
-              id: "task",
+              id: "office",
               name: "日常办公",
               description: "General task mode",
               icon: "briefcase",
@@ -175,7 +175,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
             workspace: t.workspaceRoot ?? "/tmp/kworks",
             model: "test-model",
             mode: "agent",
-            workModeId: t.workModeId ?? "task",
+            workModeId: t.workModeId ?? "office",
             status: "idle",
             createdAt: "2025-01-01T00:00:00Z",
             updatedAt: t.updated_at ?? "2025-01-01T00:00:00Z",
@@ -191,7 +191,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
           threadToQiongqiRecord({
             thread_id: MOCK_THREAD_ID,
             title: "Untitled",
-            workModeId: "task",
+            workModeId: "office",
           }),
         ),
       });
@@ -259,7 +259,7 @@ export function mockRuntimeAPI(page: Page, options?: MockAPIOptions) {
       status: "idle",
       values: { title: t.title ?? "Untitled" },
       context: {
-        workModeId: t.workModeId ?? "task",
+        workModeId: t.workModeId ?? "office",
         ...(t.workspaceRoot ? { workspaceRoot: t.workspaceRoot } : {}),
       },
     }));
@@ -652,7 +652,7 @@ function threadToQiongqiRecord(thread: MockThread) {
     workspace: thread.workspaceRoot ?? "/tmp/kworks",
     model: "test-model",
     mode: "agent",
-    workModeId: thread.workModeId ?? "task",
+    workModeId: thread.workModeId ?? "office",
     status: "idle",
     createdAt,
     updatedAt,

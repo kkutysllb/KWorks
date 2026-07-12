@@ -250,7 +250,7 @@ export default function ChatPage() {
                   <InputBox
                     className="bg-background/5 w-full"
                     isNewThread={isNewThread}
-                    initialWorkModeId={searchParams.get("workModeId") ?? "task"}
+                    initialWorkModeId={searchParams.get("workModeId") ?? "office"}
                     threadId={threadId}
                     autoFocus={isNewThread}
                     status={

@@ -74,7 +74,7 @@ test("derives user-visible work mode labels for thread titles", () => {
   expect(
     workModeLabelOfThread({
       thread_id: "thread-task",
-      context: { workModeId: "task" },
+      context: { workModeId: "office" },
     }),
   ).toBe("日常办公");
   expect(

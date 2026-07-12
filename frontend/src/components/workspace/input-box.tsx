@@ -184,7 +184,7 @@ export function resolveWorkModeId(
   if (trimmed && !SYSTEM_WORK_MODES.some((mode) => mode.id === trimmed)) {
     return trimmed;
   }
-  return workModes[0]?.id ?? "task";
+  return workModes[0]?.id ?? "office";
 }
 
 function contextForWorkMode(
@@ -223,7 +223,7 @@ export function InputBox({
   isNewThread,
   threadId,
   initialValue,
-  initialWorkModeId = "task",
+  initialWorkModeId = "office",
   onContextChange,
   onSubmit,
   onStop,

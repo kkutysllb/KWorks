@@ -46,6 +46,28 @@ describe("workspace workbench layout", () => {
     expect(historyTaskList).not.toContain("window.location.assign");
   });
 
+  test("new task nav re-enters the chat shell through in-place navigation", () => {
+    const nav = readFileSync(
+      resolve(repoRoot, "src/components/workspace/workspace-nav-chat-list.tsx"),
+      "utf8",
+    );
+
+    expect(nav).toContain("navigateWorkspaceInPlace");
+    expect(nav).toContain('navigateWorkspaceInPlace("/workspace/chats/new")');
+  });
+
+  test("command palette new task action also re-enters the chat shell in place", () => {
+    const commandPalette = readFileSync(
+      resolve(repoRoot, "src/components/workspace/command-palette.tsx"),
+      "utf8",
+    );
+
+    expect(commandPalette).toContain("navigateWorkspaceInPlace");
+    expect(commandPalette).toContain(
+      'navigateWorkspaceInPlace("/workspace/chats/new")',
+    );
+  });
+
   test("workspace root redirects to the new task surface instead of rendering a workbench", () => {
     const workspacePage = readFileSync(
       resolve(repoRoot, "src/app/workspace/page.tsx"),

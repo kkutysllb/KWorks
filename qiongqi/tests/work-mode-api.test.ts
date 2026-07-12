@@ -27,12 +27,12 @@ describe('work mode skill APIs', () => {
         skills: Array<{ id: string; enabled: boolean; locked: boolean }>
       }>
     }
-    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'task'])
-    expect(body.workModes.find((mode) => mode.id === 'task')).toMatchObject({
+    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'office'])
+    expect(body.workModes.find((mode) => mode.id === 'office')).toMatchObject({
       builtin: true,
       editable: true
     })
-    expect(body.workModes.find((mode) => mode.id === 'task')?.skills).toEqual(
+    expect(body.workModes.find((mode) => mode.id === 'office')?.skills).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'web', enabled: true, locked: true }),
         expect.objectContaining({ id: 'xlsx-creator', enabled: true, locked: false })
@@ -43,23 +43,23 @@ describe('work mode skill APIs', () => {
   it('rejects deleting built-in work modes and locked mode skills', async () => {
     const h = buildSkillHarness()
 
-    const deleteMode = await api(h, '/api/work-modes/task', { method: 'DELETE' })
+    const deleteMode = await api(h, '/api/work-modes/office', { method: 'DELETE' })
     expect(deleteMode.status).toBe(403)
 
-    const removeLockedSkill = await api(h, '/api/work-modes/task/skills/web', { method: 'DELETE' })
+    const removeLockedSkill = await api(h, '/api/work-modes/office/skills/web', { method: 'DELETE' })
     expect(removeLockedSkill.status).toBe(403)
   })
 
   it('rejects user edits to mode-scoped skills', async () => {
     const h = buildSkillHarness()
 
-    const add = await api(h, '/api/work-modes/task/skills/custom-research', { method: 'PUT' })
+    const add = await api(h, '/api/work-modes/office/skills/custom-research', { method: 'PUT' })
     expect(add.status).toBe(403)
     await expect(readJson(add)).resolves.toMatchObject({
       detail: 'Work mode skills are read-only'
     })
 
-    const remove = await api(h, '/api/work-modes/task/skills/xlsx-creator', { method: 'DELETE' })
+    const remove = await api(h, '/api/work-modes/office/skills/xlsx-creator', { method: 'DELETE' })
     expect(remove.status).toBe(403)
     await expect(readJson(remove)).resolves.toMatchObject({
       detail: 'Work mode skills are read-only'
@@ -126,7 +126,7 @@ describe('work mode skill APIs', () => {
     expect(list.status).toBe(200)
     const listed = await readJson(list) as { workModes: Array<{ id: string; name: string; builtin: boolean }> }
     expect(listed.workModes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'task', builtin: true }),
+      expect.objectContaining({ id: 'office', builtin: true }),
       expect.objectContaining({ id: 'coding', builtin: true }),
       expect.objectContaining({ id: 'finance-review', name: '财经分析', builtin: false })
     ]))
@@ -137,7 +137,7 @@ describe('work mode skill APIs', () => {
 
     const afterDelete = await api(h, '/api/work-modes')
     const body = await readJson(afterDelete) as { workModes: Array<{ id: string }> }
-    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'task'])
+    expect(body.workModes.map((mode) => mode.id).sort()).toEqual(['coding', 'office'])
   })
 
   it('requires custom work modes to have an agent instruction and a simple lowercase id', async () => {

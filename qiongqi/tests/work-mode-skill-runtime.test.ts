@@ -56,9 +56,9 @@ describe('work mode skill runtime filtering', () => {
 
     const requested = await h.turns.startTurn({
       threadId: h.threadId,
-      request: { prompt: 'please use the shared trigger', workModeId: 'task' }
+      request: { prompt: 'please use the shared trigger', workModeId: 'office' }
     })
-    expect((await h.turns.getTurn(h.threadId, requested.turnId))?.workModeId).toBe('task')
+    expect((await h.turns.getTurn(h.threadId, requested.turnId))?.workModeId).toBe('office')
   })
 
   it('injects only the active work mode skills when building a model request', async () => {
@@ -214,10 +214,10 @@ describe('work mode skill runtime filtering', () => {
         roots: [root],
         lockedSkillIds: [],
         workModes: {
-          defaultModeId: 'task',
+          defaultModeId: 'office',
           modes: {
             task: {
-              id: 'task',
+              id: 'office',
               name: 'Task',
               builtin: true,
               editable: true,
@@ -243,10 +243,10 @@ describe('work mode skill runtime filtering', () => {
         roots: [root],
         lockedSkillIds: [],
         workModes: {
-          defaultModeId: 'task',
+          defaultModeId: 'office',
           modes: {
             task: {
-              id: 'task',
+              id: 'office',
               name: 'Task',
               builtin: true,
               editable: true,

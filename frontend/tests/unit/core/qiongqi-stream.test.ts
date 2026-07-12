@@ -429,7 +429,7 @@ describe("useQiongqiStream /v1 contract", () => {
 
   test("updates an existing thread to the user-selected work mode before starting a turn", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "task" })))
+      .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "office" })))
       .mockResolvedValueOnce(sseResponse())
       .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "coding" })))
       .mockResolvedValueOnce(
@@ -454,7 +454,7 @@ describe("useQiongqiStream /v1 contract", () => {
     });
 
     const output = container.querySelector("output");
-    expect(output?.getAttribute("data-work-mode-id")).toBe("task");
+    expect(output?.getAttribute("data-work-mode-id")).toBe("office");
 
     const button = container.querySelector("button");
     expect(button).not.toBeNull();
