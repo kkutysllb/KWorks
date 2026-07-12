@@ -110,6 +110,9 @@ export const FINANCE_MODULES: readonly FinanceModule[] = [
       "kk-event-query",
       "kk-earnings-forecast",
       "kk-earnings-revision",
+      "kk-mcf",
+      "kk-report-search",
+      "kk-announcement-search",
     ],
     promptHint: "输入股票代码或名称，如「600519 贵州茅台」",
     examples: [
@@ -177,9 +180,6 @@ export const FINANCE_SHARED_SKILL_IDS = [
   "kk-common",
   "analysis-report",
   "chart-visualization",
-  "kk-mcf",
-  "kk-report-search",
-  "kk-announcement-search",
   "md-to-html-converter",
 ] as const;
 
