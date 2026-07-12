@@ -10,10 +10,17 @@ test("renderer runs with node disabled, context isolation, and sandbox enabled",
   assert.match(mainSource, /sandbox:\s*true/);
 });
 
-test("packaged app protocol serves html with a content security policy", () => {
+test("packaged app protocol uses a constrained content security policy", () => {
   assert.match(mainSource, /Content-Security-Policy/);
-  assert.match(mainSource, /script-src 'self' 'unsafe-inline'/);
+  assert.match(
+    mainSource,
+    /"script-src 'self' 'unsafe-inline' https:\/\/cdn\.tailwindcss\.com https:\/\/cdn\.jsdelivr\.net"/,
+  );
+  assert.doesNotMatch(mainSource, /script-src[^"\n]*\shttps:(?=\s|")/);
+  assert.doesNotMatch(mainSource, /script-src[^"\n]*\shttp:(?=\s|")/);
   assert.doesNotMatch(mainSource, /unsafe-eval/);
+  assert.match(mainSource, /"frame-src 'self' blob:"/);
+  assert.match(mainSource, /"object-src 'none'"/);
 });
 
 test("tray uses a small dedicated icon instead of the app icon", () => {
