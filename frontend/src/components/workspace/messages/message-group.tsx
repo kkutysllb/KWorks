@@ -163,8 +163,8 @@ export function MessageGroup({
         </Collapsible>
       )}
       {reasoningText && (
-        <div className="px-4 pb-2">
-          <Reasoning isStreaming={isLoading} defaultOpen={false}>
+        <div className="px-4 py-2">
+          <Reasoning isStreaming={isLoading} defaultOpen={false} className="mb-0">
             <ReasoningTrigger />
             <ReasoningContent>{reasoningText}</ReasoningContent>
           </Reasoning>

@@ -4,6 +4,7 @@ import { emptyUsageSnapshot, type UsageSnapshot } from '@qiongqi/contracts'
 import { isToolResultBridgeItem, repairModelHistoryItems } from '@qiongqi/domain'
 import { repairToolArguments } from './tool-argument-repair.js'
 import { sanitizeModelText } from './special-tokens.js'
+import { InlineReasoningExtractor } from './inline-reasoning-extractor.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
@@ -775,6 +776,7 @@ export class ModelCompatClient implements ModelClient {
     let finishReason: string | null = null
     let sawDone = false
     const idleTimeoutMs = normalizeStreamIdleTimeoutMs(this.config.streamIdleTimeoutMs)
+    const reasoningExtractor = new InlineReasoningExtractor()
     try {
       while (!signal.aborted) {
         const read = await readStreamChunk(reader, signal, idleTimeoutMs)
@@ -822,7 +824,8 @@ export class ModelCompatClient implements ModelClient {
             completedToolCalls,
             textAccumulator,
             reasoningAccumulator,
-            endpointFormat
+            endpointFormat,
+            reasoningExtractor
           )
           textAccumulator = result.text
           reasoningAccumulator = result.reasoning
@@ -842,6 +845,20 @@ export class ModelCompatClient implements ModelClient {
     if (signal.aborted) {
       yield { kind: 'error', message: 'request was aborted' }
       return
+    }
+    // Flush any trailing state from the inline-reasoning extractor (e.g. an
+    // unclosed opener whose reasoning accumulated to stream end).
+    const flushed = reasoningExtractor.flush()
+    if (flushed.text) {
+      const cleaned = sanitizeModelText(flushed.text)
+      if (cleaned) {
+        textAccumulator += cleaned
+        yield { kind: 'assistant_text_delta', text: cleaned }
+      }
+    }
+    if (flushed.reasoning) {
+      reasoningAccumulator += flushed.reasoning
+      yield { kind: 'assistant_reasoning_delta', text: flushed.reasoning }
     }
     if (usage) yield { kind: 'usage', usage }
     stopReason = ((): ModelStopReason => {
@@ -866,7 +883,8 @@ export class ModelCompatClient implements ModelClient {
     completedToolCalls: Set<string>,
     textAccumulator: string,
     reasoningAccumulator: string,
-    endpointFormat: ModelEndpointFormat
+    endpointFormat: ModelEndpointFormat,
+    reasoningExtractor: InlineReasoningExtractor
   ): {
     chunks: ModelStreamChunk[]
     text: string
@@ -905,10 +923,22 @@ export class ModelCompatClient implements ModelClient {
       if (delta && typeof delta === 'object') {
         const content = delta.content
         if (typeof content === 'string' && content.length > 0) {
-          const cleaned = sanitizeModelText(content)
-          if (cleaned) {
-            text += cleaned
-            chunks.push({ kind: 'assistant_text_delta', text: cleaned })
+          // Extract inline reasoning tags (e.g. MiniMax <mm:think>) across
+          // chunk boundaries before sanitizing the visible text. This routes
+          // inlined thinking to the same `assistant_reasoning_delta` channel
+          // as dedicated `reasoning_content` fields, so all models converge on
+          // the same reasoning UI without per-model frontend adaptation.
+          const extracted = reasoningExtractor.push(content)
+          if (extracted.reasoning) {
+            reasoning += extracted.reasoning
+            chunks.push({ kind: 'assistant_reasoning_delta', text: extracted.reasoning })
+          }
+          if (extracted.text) {
+            const cleaned = sanitizeModelText(extracted.text)
+            if (cleaned) {
+              text += cleaned
+              chunks.push({ kind: 'assistant_text_delta', text: cleaned })
+            }
           }
         }
         const reasoningContent = delta.reasoning_content ?? delta.reasoning

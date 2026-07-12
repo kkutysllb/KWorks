@@ -46,7 +46,7 @@ export class TurnService {
     const thread = await this.deps.threadStore.get(input.threadId)
     if (!thread) throw new Error(`thread not found: ${input.threadId}`)
     const turnId = this.deps.ids.next('turn')
-    const workModeId = input.request.workModeId ?? thread.workModeId ?? 'task'
+    const workModeId = input.request.workModeId ?? thread.workModeId ?? 'office'
     const turn = createTurnRecord({
       id: turnId,
       threadId: input.threadId,

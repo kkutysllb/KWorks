@@ -6,7 +6,6 @@ import {
   GlobeIcon,
   NetworkIcon,
   PaletteIcon,
-  SparklesIcon,
   UserIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -153,7 +152,6 @@ function useSettingsSections(): SettingsSectionItem[] {
       { id: "qiongqi-models", label: "模型 Profiles", icon: CpuIcon },
       { id: "qiongqi-mcp", label: "MCP", icon: NetworkIcon },
       { id: "qiongqi-web", label: "Web 能力", icon: GlobeIcon },
-      { id: "qiongqi-skills", label: "技能", icon: SparklesIcon },
       { id: "work-modes", label: "工作模式", icon: WorkflowIcon },
       { id: "qiongqi-subagents", label: "智能体协作", icon: BoxIcon },
     ];

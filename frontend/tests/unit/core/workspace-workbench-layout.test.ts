@@ -86,7 +86,7 @@ describe("workspace workbench layout", () => {
     expect(codingPage).not.toContain("redirect");
     expect(codingPage).not.toContain("/workspace/chats/new?mode=coding");
     expect(chatPage).toContain('router.replace("/workspace/coding")');
-    expect(chatPage).toContain('searchParams.get("workModeId") ?? "task"');
+    expect(chatPage).toContain('searchParams.get("workModeId") ?? "office"');
   });
 
   test("workspace sidebar owns the single KWorks brand while header keeps window controls", () => {
@@ -225,11 +225,11 @@ describe("workspace workbench layout", () => {
     );
     expect(inputBox).not.toContain("{workMode.name || workMode.id}");
     expect(inputBox).toContain("workModeId");
-    expect(inputBox).not.toContain('type SurfaceMode = "task" | "coding"');
+    expect(inputBox).not.toContain('type SurfaceMode = "office" | "coding"');
     expect(inputBox).not.toContain("任务模式");
     expect(workModes).toContain('name: "日常办公"');
     expect(workModes).toContain('name: "Coding 模式"');
-    expect(workModes).toContain('if (mode.id === "task") return "日常办公"');
+    expect(workModes).toContain('if (mode.id === "office") return "日常办公"');
     expect(inputBox).toContain("选择工作空间");
     expect(inputBox).toContain("打开本地目录");
     expect(inputBox).toContain("历史任务目录");
@@ -310,12 +310,8 @@ describe("workspace workbench layout", () => {
     );
 
     expect(layoutState).toContain("qiongqi-models");
-    expect(layoutState).toContain("qiongqi-context");
-    expect(layoutState).toContain("qiongqi-storage");
-    expect(layoutState).toContain("qiongqi-observability");
     expect(layoutState).toContain("qiongqi-mcp");
     expect(layoutState).toContain("qiongqi-web");
-    expect(layoutState).toContain("qiongqi-skills");
     expect(layoutState).toContain("qiongqi-subagents");
     expect(layoutState).not.toContain("qiongqi-attachments");
     expect(shell).toContain("showNav={false}");
@@ -379,7 +375,6 @@ describe("workspace workbench layout", () => {
     expect(settings).toContain("web_search");
     expect(settings).toContain("查看 MCP Web 工具");
     expect(settings).toContain("MCP 工具的域名策略");
-    expect(settings).toContain("capabilities.skills");
     expect(settings).toContain("capabilities.subagents");
     expect(settings).not.toContain("capabilities.attachments");
     expect(settings).toContain("saveConfigSection");

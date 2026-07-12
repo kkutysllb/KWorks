@@ -186,8 +186,8 @@ export const WorkModeConfig = z.object({
 export type WorkModeConfig = z.infer<typeof WorkModeConfig>
 
 export const DEFAULT_WORK_MODES = {
-  task: {
-    id: 'task',
+  office: {
+    id: 'office',
     name: '日常办公',
     builtin: true,
     editable: true,
@@ -292,7 +292,7 @@ export const DEFAULT_WORK_MODES = {
 } satisfies Record<string, WorkModeConfig>
 
 export const WorkModesConfig = z.object({
-  defaultModeId: SkillId.default('task'),
+  defaultModeId: SkillId.default('office'),
   modes: z.record(SkillId, WorkModeConfig).default(() => DEFAULT_WORK_MODES)
 }).strict()
 export type WorkModesConfig = z.infer<typeof WorkModesConfig>

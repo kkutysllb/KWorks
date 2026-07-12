@@ -9,7 +9,6 @@ import {
   Loader2Icon,
   NetworkIcon,
   Settings2Icon,
-  SparklesIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -131,7 +130,7 @@ const DEFAULT_CONFIG: QiongqiConfig = {
       denyDomains: [],
     },
     skills: {
-      enabled: false,
+      enabled: true,
       roots: [],
       legacySkillMd: true,
       marketplace: { autoUpdate: false },
@@ -159,12 +158,6 @@ const nav: Array<{
   },
   { id: "mcp", label: "MCP", path: "capabilities.mcp", icon: NetworkIcon },
   { id: "web", label: "Web 能力", path: "capabilities.web", icon: GlobeIcon },
-  {
-    id: "skills",
-    label: "技能",
-    path: "capabilities.skills",
-    icon: SparklesIcon,
-  },
   {
     id: "subagents",
     label: "智能体协作",
@@ -591,15 +584,6 @@ export function ConfigSettingsPage({
           <CapabilityWeb
             value={merged.capabilities?.web ?? {}}
             onChange={(value) => updateCapability("web", value)}
-          />
-        );
-      case "skills":
-        return (
-          <JsonOnlySection
-            title="技能"
-            path="capabilities.skills"
-            value={merged.capabilities?.skills ?? {}}
-            onChange={(value) => updateCapability("skills", value)}
           />
         );
       case "subagents":

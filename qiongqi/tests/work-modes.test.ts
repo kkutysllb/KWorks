@@ -45,8 +45,8 @@ describe('work mode skill contracts', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({})
 
     expect(cfg.skills.lockedSkillIds).toEqual(DEFAULT_LOCKED_SKILL_IDS)
-    expect(cfg.skills.workModes.defaultModeId).toBe('task')
-    expect(Object.keys(cfg.skills.workModes.modes).sort()).toEqual(['coding', 'task'])
+    expect(cfg.skills.workModes.defaultModeId).toBe('office')
+    expect(Object.keys(cfg.skills.workModes.modes).sort()).toEqual(['coding', 'office'])
   })
 
   it('enables every bundled coding skill in the coding work mode by default', () => {
@@ -55,20 +55,20 @@ describe('work mode skill contracts', () => {
     expect(cfg.skills.workModes.modes.coding?.defaultSkillIds.slice().sort()).toEqual(bundledCodingSkillIds())
   })
 
-  it('enables every bundled public task skill in the task work mode by default', () => {
+  it('enables every bundled public task skill in the office work mode by default', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({})
 
-    expect(cfg.skills.workModes.modes.task?.defaultSkillIds.slice().sort()).toEqual(bundledTaskSkillIds())
+    expect(cfg.skills.workModes.modes.office?.defaultSkillIds.slice().sort()).toEqual(bundledTaskSkillIds())
   })
 
   it('merges bundled coding skills into stale persisted coding mode configs', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({
       skills: {
         workModes: {
-          defaultModeId: 'task',
+          defaultModeId: 'office',
           modes: {
             task: {
-              id: 'task',
+              id: 'office',
               name: 'Task',
               builtin: true,
               editable: true,
@@ -98,10 +98,10 @@ describe('work mode skill contracts', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({
       skills: {
         workModes: {
-          defaultModeId: 'task',
+          defaultModeId: 'office',
           modes: {
             task: {
-              id: 'task',
+              id: 'office',
               name: 'Task',
               builtin: true,
               editable: true,
@@ -112,7 +112,7 @@ describe('work mode skill contracts', () => {
       }
     })
 
-    expect(resolveEffectiveSkillIds(cfg.skills, 'task').sort()).toEqual([
+    expect(resolveEffectiveSkillIds(cfg.skills, 'office').sort()).toEqual([
       ...new Set([
         ...DEFAULT_LOCKED_SKILL_IDS,
         ...bundledTaskSkillIds()
@@ -188,7 +188,7 @@ describe('work mode skill contracts', () => {
       }
     })
 
-    expect(resolveEffectiveSkillIds(cfg.skills, 'task')).toEqual(
+    expect(resolveEffectiveSkillIds(cfg.skills, 'office')).toEqual(
       expect.arrayContaining([
         'data-analysis',
         'chart-visualization',
@@ -212,7 +212,7 @@ describe('work mode skill contracts', () => {
       }
     })
 
-    expect(resolveEffectiveSkillIds(cfg.skills, 'task')).toEqual(
+    expect(resolveEffectiveSkillIds(cfg.skills, 'office')).toEqual(
       expect.arrayContaining(['deep-research'])
     )
   })

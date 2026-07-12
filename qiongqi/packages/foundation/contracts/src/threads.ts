@@ -97,7 +97,7 @@ export const ThreadSchema = z.object({
   workspace: z.string(),
   model: z.string(),
   mode: ThreadMode,
-  workModeId: z.string().min(1).default('task'),
+  workModeId: z.string().min(1).default('office'),
   status: ThreadStatus,
   approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY),
   sandboxMode: SandboxModeSchema.default(DEFAULT_SANDBOX_MODE),

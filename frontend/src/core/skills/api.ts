@@ -30,15 +30,20 @@ export async function loadWorkModes(): Promise<WorkModesResponse> {
     throw new Error(`Failed to load work modes (${response.status})`);
   }
   const json = (await response.json()) as Partial<WorkModesResponse>;
+  const rawDefaultId = json.defaultModeId === "task" ? "office" : (json.defaultModeId ?? "office");
   return {
-    defaultModeId: json.defaultModeId ?? "task",
+    defaultModeId: rawDefaultId,
     lockedSkillIds: json.lockedSkillIds ?? [],
     workModes: withSystemWorkModes(
-      (json.workModes ?? []).map((mode) => ({
-        ...mode,
-        skills: mode.skills ?? [],
-        name: workModeDisplayName(mode),
-      })),
+      (json.workModes ?? [])
+        // Filter out the legacy "task" mode (renamed to "office"); the backend
+        // normalizes it, but defend here to avoid duplicate "日常办公" entries.
+        .filter((mode) => mode.id !== "task")
+        .map((mode) => ({
+          ...mode,
+          skills: mode.skills ?? [],
+          name: workModeDisplayName(mode),
+        })),
     ),
   };
 }

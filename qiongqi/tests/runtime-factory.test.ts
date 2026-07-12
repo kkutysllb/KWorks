@@ -55,6 +55,56 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe('runtime info().model follows live configStore serve.model', () => {
+  it('reflects an activate-style serve.model write without a restart', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-dynamic-model-'))
+    const dataDir = join(dir, 'data')
+    const configPath = join(dir, 'qiongqi-config.json')
+    let runtime: Awaited<ReturnType<typeof createAgent>> | undefined
+
+    try {
+      runtime = await createAgent({
+        host: '127.0.0.1',
+        port: 0,
+        configPath,
+        dataDir,
+        runtimeToken: 'tok',
+        apiKey: '',
+        baseUrl: 'https://api.example.test/v1',
+        endpointFormat: 'chat_completions',
+        model: 'deepseek-chat',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        tokenEconomyMode: false,
+        insecure: true,
+        storage: { backend: 'file' }
+      })
+
+      // At startup info().model equals the option.
+      expect(runtime.info().model).toBe('deepseek-chat')
+
+      // Simulate an `activateModel` write (single-machine/runtime-token path):
+      // the fallback branch of kworksActivateModel rewrites serve.model via
+      // configStore.write(). info().model must pick up the new value on the
+      // next call, without a process restart.
+      const current = runtime.configStore?.snapshot()
+      expect(current).toBeTruthy()
+      await runtime.configStore?.write({
+        ...(current as NonNullable<typeof current>),
+        serve: {
+          ...(current as NonNullable<typeof current>).serve,
+          model: 'glm-5.2'
+        }
+      })
+
+      expect(runtime.info().model).toBe('glm-5.2')
+    } finally {
+      await runtime?.shutdown?.()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('runtime model adapter tuning', () => {
   it('passes runtime modelStreamIdleTimeoutMs into routed model profiles', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>

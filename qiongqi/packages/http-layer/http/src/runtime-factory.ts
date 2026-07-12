@@ -1179,7 +1179,11 @@ async function assembleRuntime(input: {
       port: options.port,
       configPath: options.configPath,
       dataDir: options.dataDir,
-      model: options.model,
+      // Dynamic: prefer the live serve.model from the config store so that
+      // `activateModel` (which writes serve.model) is reflected without a
+      // restart. Falls back to the startup option when no store/snapshot/model
+      // is available, preserving the previous behaviour.
+      model: configStore?.snapshot()?.serve?.model ?? options.model,
       endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
       approvalPolicy: options.approvalPolicy,
       sandboxMode: options.sandboxMode,

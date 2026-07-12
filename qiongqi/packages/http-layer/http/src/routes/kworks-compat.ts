@@ -2264,8 +2264,67 @@ async function readRuntimeConfig(runtime: ServerRuntime): Promise<QiongqiConfig>
   })
 }
 
+/**
+ * Rename a legacy `task` work-mode entry to `office` in persisted skill configs.
+ * Old per-user snapshots may carry `modes.task` alongside the new `modes.office`,
+ * causing the UI to render two "日常办公" entries. This merges them: if both
+ * exist, `office` wins (it's the current built-in); if only `task` exists, it's
+ * renamed in place. `defaultModeId` is fixed up too.
+ */
+function normalizeLegacyTaskWorkMode(config: QiongqiConfig): QiongqiConfig {
+  const skills = config.capabilities?.skills
+  const workModes = skills?.workModes
+  const modes = workModes?.modes
+  if (!modes || !('task' in modes)) return config
+
+  const { task: _task, ...rest } = modes
+  // If `office` already exists, drop the stale `task` entry; otherwise rename it.
+  const nextModes = 'office' in rest
+    ? rest
+    : { ...rest, office: { ...(_task as Record<string, unknown>), id: 'office' } }
+  const nextDefault = workModes!.defaultModeId === 'task' ? 'office' : workModes!.defaultModeId
+  // Also fix up modeSkillOverrides: move any `task` overrides to `office`.
+  const overrides = skills?.modeSkillOverrides ?? {}
+  const nextOverrides = 'task' in overrides
+    ? { ...overrides, office: { ...(overrides.office ?? {}), ...(overrides.task as Record<string, unknown>) } }
+    : overrides
+  const { task: _dropOverride, ...cleanOverrides } = nextOverrides as Record<string, unknown>
+  return {
+    ...config,
+    capabilities: {
+      ...(config.capabilities ?? {}),
+      skills: {
+        ...skills!,
+        workModes: { ...workModes!, defaultModeId: nextDefault, modes: nextModes },
+        modeSkillOverrides: cleanOverrides
+      }
+    }
+  }
+}
+
 async function readEffectiveRuntimeConfig(runtime: ServerRuntime, actor?: AuthActor): Promise<QiongqiConfig> {
-  const config = await readUserScopedCapabilityConfig(runtime, await readRuntimeConfig(runtime), actor)
+  let config = await readUserScopedCapabilityConfig(runtime, await readRuntimeConfig(runtime), actor)
+  // Skills are a core capability of the KWorks desktop app (enabled at startup
+  // via KWorks_SKILLS_PATH). The live SkillPluginHost reflects the startup
+  // intent — if it reports skills as enabled, per-user/per-section config
+  // overrides (which can set enabled=false) must not be able to disable them.
+  // Without this guard the model silently loses visibility of all work-mode-
+  // bound skills ("运行时上下文中没有显式枚举技能列表").
+  const liveSkills = await runtime.skillsV2?.()
+  if (liveSkills?.enabled && config.capabilities?.skills && !config.capabilities.skills.enabled) {
+    config = {
+      ...config,
+      capabilities: {
+        ...(config.capabilities ?? {}),
+        skills: { ...config.capabilities.skills, enabled: true }
+      }
+    }
+  }
+  // Normalize legacy work-mode id "task" → "office" in persisted per-user
+  // skill configs. Old snapshots may still carry a `modes.task` entry; without
+  // this, the frontend renders both `task` and `office` as separate "日常办公"
+  // entries. Rename the key and fix defaultModeId so only one entry survives.
+  config = normalizeLegacyTaskWorkMode(config)
   const owner = ownerUserId(actor)
   if (!owner || !runtime.kworksUserDataStore) return config
   const userModels = await runtime.kworksUserDataStore.listModelProfiles(owner)
@@ -3243,8 +3302,10 @@ function parseWorkModeRequestBody(
 
 function normalizeWorkModeId(id: string | undefined): string | undefined {
   const fromId = id?.trim()
-  if (fromId) return fromId.toLowerCase()
-  return undefined
+  if (!fromId) return undefined
+  const lower = fromId.toLowerCase()
+  // Legacy alias: "task" was renamed to "office".
+  return lower === 'task' ? 'office' : lower
 }
 
 function isValidCustomWorkModeId(id: string): boolean {

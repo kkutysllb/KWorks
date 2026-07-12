@@ -3,7 +3,7 @@ import type { WorkMode, WorkModeSkill } from "./type";
 export const BUILTIN_SKILL_VIEW_ID = "builtin";
 export const SYSTEM_WORK_MODES: readonly WorkMode[] = [
   {
-    id: "task",
+    id: "office",
     name: "日常办公",
     description: "日常办公任务",
     icon: "zap",
@@ -37,7 +37,7 @@ export function visibleWorkModeSkills(
 }
 
 export function workModeDisplayName(mode: Pick<WorkMode, "id" | "name">) {
-  if (mode.id === "task") return "日常办公";
+  if (mode.id === "office") return "日常办公";
   return mode.name || mode.id;
 }
 
@@ -45,8 +45,10 @@ export function workModeDisplayNameById(
   workModeId: string | null | undefined,
   workModes?: readonly Pick<WorkMode, "id" | "name">[],
 ): string | null {
-  const id = workModeId?.trim();
-  if (!id) return null;
+  const raw = workModeId?.trim();
+  if (!raw) return null;
+  // Legacy alias: "task" was renamed to "office".
+  const id = raw === "task" ? "office" : raw;
   const mode =
     workModes?.find((candidate) => candidate.id === id) ??
     SYSTEM_WORK_MODES.find((candidate) => candidate.id === id);
@@ -54,7 +56,7 @@ export function workModeDisplayNameById(
 }
 
 function workModeOrder(mode: Pick<WorkMode, "id">): number {
-  if (mode.id === "task") return 0;
+  if (mode.id === "office") return 0;
   if (mode.id === "coding") return 1;
   return 100;
 }

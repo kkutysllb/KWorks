@@ -230,7 +230,7 @@ export class HybridThreadStore implements ThreadStore {
         workspace TEXT NOT NULL,
         model TEXT NOT NULL,
         mode TEXT NOT NULL,
-        work_mode_id TEXT NOT NULL DEFAULT 'task',
+        work_mode_id TEXT NOT NULL DEFAULT 'office',
         status TEXT NOT NULL,
         approval_policy TEXT NOT NULL,
         sandbox_mode TEXT NOT NULL,
@@ -266,7 +266,7 @@ export class HybridThreadStore implements ThreadStore {
       CREATE INDEX IF NOT EXISTS threads_relation_updated_idx
         ON threads(relation, updated_at_ms DESC, id DESC);
     `)
-    addColumnIfMissing(this.db, 'threads', "work_mode_id TEXT NOT NULL DEFAULT 'task'")
+    addColumnIfMissing(this.db, 'threads', "work_mode_id TEXT NOT NULL DEFAULT 'office'")
     addColumnIfMissing(this.db, 'threads', 'todos_json TEXT')
   }
 
@@ -765,7 +765,7 @@ function summaryFromRow(row: ThreadRow): ThreadSummary {
     workspace: row.workspace,
     model: row.model,
     mode: row.mode,
-    workModeId: row.work_mode_id || 'task',
+    workModeId: row.work_mode_id === 'task' ? 'office' : (row.work_mode_id || 'office'),
     status: row.status,
     ...(row.cost_budget_usd !== null ? { costBudgetUsd: row.cost_budget_usd } : {}),
     ...(row.cost_budget_warning_sent !== null ? { costBudgetWarningSent: Boolean(row.cost_budget_warning_sent) } : {}),

@@ -950,7 +950,10 @@ function containsUnsafeAbsolutePath(markdown: string): boolean {
 
 function normalizeWorkModeId(id: string | undefined): string | undefined {
   const fromId = id?.trim()
-  return fromId ? fromId.toLowerCase() : undefined
+  if (!fromId) return undefined
+  const lower = fromId.toLowerCase()
+  // Legacy alias: "task" was renamed to "office".
+  return lower === 'task' ? 'office' : lower
 }
 
 function isValidCustomSkillId(id: string): boolean {

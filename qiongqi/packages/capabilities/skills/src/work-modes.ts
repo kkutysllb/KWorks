@@ -6,14 +6,30 @@ import {
 
 export const DEFAULT_LOCKED_SKILL_IDS = [...CONTRACT_LOCKED_SKILL_IDS]
 
+/**
+ * Legacy alias: the built-in "日常办公" mode was originally named `task`. It
+ * was renamed to `office` to avoid confusion with agent/A2A task execution.
+ * Old threads, URLs, and persisted data may still carry `task`; normalize it
+ * here so they map to `office` seamlessly.
+ */
+const WORK_MODE_ALIASES: Record<string, string> = {
+  task: 'office'
+}
+
+function normalizeWorkModeId(id: string): string {
+  return WORK_MODE_ALIASES[id] ?? id
+}
+
 export function resolveWorkModeId(
   config: Pick<SkillsCapabilityConfig, 'workModes'>,
   requested?: string
 ): string {
   const modes = config.workModes.modes
-  if (requested && modes[requested]) return requested
-  if (modes[config.workModes.defaultModeId]) return config.workModes.defaultModeId
-  return 'task'
+  const normalized = requested ? normalizeWorkModeId(requested) : undefined
+  if (normalized && modes[normalized]) return normalized
+  const defaultId = normalizeWorkModeId(config.workModes.defaultModeId)
+  if (modes[defaultId]) return defaultId
+  return 'office'
 }
 
 export function resolveEffectiveSkillIds(
