@@ -184,7 +184,6 @@ function ModelSection({
   outputTokens,
   totalTokens,
   totalCalls,
-  totalLlmCalls,
 }: {
   model: string;
   colorIdx: number;
@@ -193,7 +192,6 @@ function ModelSection({
   outputTokens: number;
   totalTokens: number;
   totalCalls: number;
-  totalLlmCalls: number;
 }) {
   const color = MODEL_COLORS[colorIdx % MODEL_COLORS.length];
 
@@ -234,7 +232,6 @@ function ModelSection({
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span>Tokens: <span className="font-mono font-medium text-foreground">{fmtNum(totalTokens)}</span></span>
           <span>任务: <span className="font-mono font-medium text-foreground">{fmtNum(totalCalls)}</span></span>
-          <span>API 调用: <span className="font-mono font-medium text-foreground">{fmtNum(totalLlmCalls)}</span></span>
           <span className="hidden sm:inline">
             输入: <span className="font-mono font-medium text-foreground">{fmtNum(inputTokens)}</span>
           </span>
@@ -246,18 +243,14 @@ function ModelSection({
 
       {/* Charts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* API calls & task runs dual-axis chart */}
+        {/* Task runs chart */}
         <div>
-          <div className="text-xs text-muted-foreground mb-1">API 调用 / 任务完成次数</div>
+          <div className="text-xs text-muted-foreground mb-1">任务完成次数</div>
           {tsData.length > 0 ? (
             <div className="h-[200px] min-h-[200px] w-full min-w-0">
               <ResponsiveContainer width="100%" height={200} minWidth={0}>
                 <ComposedChart data={tsData} margin={{ top: 4, right: 8, bottom: bottomMargin, left: 0 }}>
                   <defs>
-                    <linearGradient id={`area-calls-${colorIdx}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
                     <linearGradient id={`area-runs-${colorIdx}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
@@ -272,23 +265,11 @@ function ModelSection({
                     interval={labelInterval}
                     tickFormatter={formatShortDate}
                   />
-                  {/* 左 Y 轴：API 调用次数 */}
                   <YAxis
-                    yAxisId="left"
                     tick={{ ...chartTickStyle, fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
                     width={40}
-                    tickFormatter={(v: number) => fmtNum(v)}
-                  />
-                  {/* 右 Y 轴：任务完成次数 */}
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ ...chartTickStyle, fontSize: 10, fill: "#10b981" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={36}
                     tickFormatter={(v: number) => fmtNum(v)}
                   />
                   <Tooltip
@@ -297,30 +278,11 @@ function ModelSection({
                     labelStyle={{ color: "var(--foreground)" }}
                     labelFormatter={formatShortDate}
                     formatter={(value, name) => {
-                      if (name === "llm_call_count") return [String(value), "API 调用次数"];
                       if (name === "run_count") return [String(value), "任务完成"];
                       return [String(value), name];
                     }}
                   />
-                  <Legend
-                    wrapperStyle={{ fontSize: 10, paddingTop: 2 }}
-                    iconSize={8}
-                    formatter={(value) =>
-                      value === "llm_call_count" ? "API 调用" : "任务完成"
-                    }
-                  />
                   <Area
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="llm_call_count"
-                    stroke="#f59e0b"
-                    strokeWidth={2}
-                    fill={`url(#area-calls-${colorIdx})`}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "#f59e0b" }}
-                  />
-                  <Area
-                    yAxisId="right"
                     type="monotone"
                     dataKey="run_count"
                     stroke="#10b981"
@@ -652,13 +614,6 @@ export function TokenUsagePage() {
             accent="bg-indigo-500/10"
           />
           <SummaryCard
-            label="API 调用次数"
-            value={fmtNum(stats.total_llm_call_count)}
-            sub={filterLabel}
-            icon={<Zap className="w-5 h-5 text-violet-400" />}
-            accent="bg-violet-500/10"
-          />
-          <SummaryCard
             label="输入 Tokens"
             value={fmtNum(stats.total_input_tokens)}
             icon={<ArrowDownIcon className="w-5 h-5 text-cyan-400" />}
@@ -691,7 +646,6 @@ export function TokenUsagePage() {
                 outputTokens={data.output_tokens}
                 totalTokens={data.tokens}
                 totalCalls={data.runs}
-                totalLlmCalls={data.llm_call_count}
               />
             ))}
           </div>
