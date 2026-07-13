@@ -7,6 +7,12 @@ import { sanitizeModelText } from './special-tokens.js'
 import { InlineReasoningExtractor } from './inline-reasoning-extractor.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import {
+  compatibilityProfileForModel,
+  isBigModelProvider,
+  isGlmCodingPlanModel,
+  isThinkingProducerModel
+} from './provider-compatibility.js'
+import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   modelEndpointPath,
   normalizeModelEndpointFormat,
@@ -369,6 +375,11 @@ export class ModelCompatClient implements ModelClient {
     const endpointFormat = this.endpointFormat()
     const includeReasoning = options.includeReasoning !== false
     const messages = this.collectMessages(request, model, endpointFormat, { includeReasoning })
+    const compatibility = compatibilityProfileForModel({
+      baseUrl: this.config.baseUrl,
+      model,
+      endpointFormat
+    })
     if (endpointFormat === 'responses') {
       return this.buildResponsesRequestBody(request, model, messages, stream)
     }
@@ -385,7 +396,7 @@ export class ModelCompatClient implements ModelClient {
     // null/empty/whitespace/empty-array content. sanitizeEmptyMessageContent
     // already ran in collectMessages, but we re-run here as a belt-and-braces
     // guard against any transformation between collect and build.
-    const finalMessages = sanitizeEmptyMessageContent(messages, this.config.baseUrl)
+    const finalMessages = sanitizeEmptyMessageContent(messages, this.config.baseUrl, model)
     body.messages = finalMessages
     // Diagnostic: surface any message that STILL looks empty after sanitization
     // (should never happen, but if it does we want to know the exact shape).
@@ -405,20 +416,19 @@ export class ModelCompatClient implements ModelClient {
     if (stream && options.includeStreamUsage !== false) {
       body.stream_options = { include_usage: true }
     }
-    const thinkingDialect = thinkingDialectForProvider(this.config.baseUrl, model)
-    if (includeReasoning && supportsReasoningEffortForProvider(this.config.baseUrl, model)) {
+    const thinkingDialect = requestThinkingDialect(compatibility.thinkingDialect)
+    if (includeReasoning && compatibility.supportsReasoningEffort) {
       applyReasoningEffort(body, request.reasoningEffort, { thinkingDialect })
     }
     if (
       includeReasoning &&
-      thinkingDialect === 'deepseek' &&
-      isDeepSeekHost(this.config.baseUrl) &&
+      compatibility.requestFlags.deepseekThinking &&
       !Object.prototype.hasOwnProperty.call(body, 'thinking') &&
       isThinkingProducerModel(model)
     ) {
       body.thinking = { type: 'enabled' }
     }
-    if (isMiniMaxProvider(this.config.baseUrl, model) && isMiniMaxM3Model(model)) {
+    if (compatibility.requestFlags.reasoningSplit) {
       // MiniMax M3's official OpenAI-compatible API documents
       // `reasoning_split: true` as the way to split reasoning from visible
       // content. Without it, compatible gateways can leak model-native
@@ -435,7 +445,7 @@ export class ModelCompatClient implements ModelClient {
           parameters: tool.inputSchema
         }
       }))
-      if (stream && shouldEnableZaiToolStream(this.config.baseUrl, model)) {
+      if (stream && compatibility.requestFlags.zaiToolStream) {
         body.tool_stream = true
       }
     }
@@ -524,6 +534,11 @@ export class ModelCompatClient implements ModelClient {
     options: { includeReasoning?: boolean } = {}
   ): ChatMessage[] {
     const out: ChatMessage[] = []
+    const compatibility = compatibilityProfileForModel({
+      baseUrl: this.config.baseUrl,
+      model,
+      endpointFormat
+    })
     if (request.systemPrompt) {
       out.push({ role: 'system', content: request.systemPrompt })
     }
@@ -543,13 +558,13 @@ export class ModelCompatClient implements ModelClient {
       endpointFormat === 'messages'
         ? supportsMessagesThinkingBlocks(this.config.baseUrl) &&
           (isThinkingMode(request.reasoningEffort) || hasAssistantReasoning(repairedItems))
-        : !isGlmProviderRequest(this.config.baseUrl, endpointFormat, model) &&
+        : !compatibility.foldToolHistory &&
           requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
     )
     out.push(...this.itemsToMessages(
       repairedItems,
       thinkingMode,
-      { foldToolHistory: isGlmProviderRequest(this.config.baseUrl, endpointFormat, model) }
+      { foldToolHistory: compatibility.foldToolHistory }
     ))
     if (request.attachments?.length) {
       attachImagesToLatestUserMessage(out, request.attachments)
@@ -564,7 +579,7 @@ export class ModelCompatClient implements ModelClient {
     // messagesToAnthropic silently drops empty-block messages, which breaks
     // user/assistant alternation (Zhipu 1214). Sanitizing here ensures every
     // path gets a non-empty content shape before provider-specific conversion.
-    const sanitized = sanitizeEmptyMessageContent(healed, this.config.baseUrl)
+    const sanitized = sanitizeEmptyMessageContent(healed, this.config.baseUrl, model)
     // MiniMax (chat_completions/responses) rejects a request that contains
     // only system messages ("chat content is empty"). After aggressive
     // compaction the conversation can be folded into a single system summary
@@ -576,7 +591,7 @@ export class ModelCompatClient implements ModelClient {
       endpointFormat === 'messages'
         ? sanitized
         : ensureUserMessagePresent(sanitized)
-    return isGlmProviderRequest(this.config.baseUrl, endpointFormat, model)
+    return compatibility.foldToolHistory
       ? normalizeGlmMessages(withUser)
       : withUser
   }
@@ -1778,37 +1793,6 @@ function sanitizeEndpointUrl(url: string): string {
   }
 }
 
-function isBigModelProvider(baseUrl: string): boolean {
-  try {
-    const host = new URL(baseUrl).hostname.toLowerCase()
-    return host === 'open.bigmodel.cn' || host === 'api.z.ai' || host.endsWith('.bigmodel.cn') || host.endsWith('.z.ai')
-  } catch {
-    return /\b(?:open\.bigmodel\.cn|api\.z\.ai)\b/i.test(baseUrl)
-  }
-}
-
-function isGlmCodingPlanModel(model: string | undefined): boolean {
-  const normalized = normalizeModelId(model)
-  return normalized === 'glm-5.2' || normalized.startsWith('glm-5.2-') || normalized.startsWith('glm-5-')
-}
-
-function isGlmModel(model: string | undefined): boolean {
-  return normalizeModelId(model).startsWith('glm-')
-}
-
-function isGlmProviderRequest(
-  _baseUrl: string,
-  _endpointFormat: ModelEndpointFormat,
-  model: string | undefined
-): boolean {
-  // GLM models need tool-history folding and message normalization on ALL
-  // endpoint formats, not just chat_completions. Previously this was gated on
-  // endpointFormat === 'chat_completions', so GLM on the Anthropic-compatible
-  // (messages) path sent raw tool_use/tool_result blocks that Zhipu rejected
-  // with 1214. Folding into a system text block avoids that on both paths.
-  return isGlmModel(model)
-}
-
 function supportsAnthropicThinkingBlocks(baseUrl: string): boolean {
   try {
     const host = new URL(baseUrl).hostname.toLowerCase()
@@ -1991,6 +1975,12 @@ function applyReasoningEffort(
 
 type ThinkingDialect = 'deepseek' | 'minimax' | 'zai' | 'none'
 
+function requestThinkingDialect(dialect: string): ThinkingDialect {
+  return dialect === 'deepseek' || dialect === 'minimax' || dialect === 'zai'
+    ? dialect
+    : 'none'
+}
+
 function applyThinking(
   body: Record<string, unknown>,
   dialect: ThinkingDialect,
@@ -2042,49 +2032,6 @@ function isGenericZhipuMessages1214Error(text: string): boolean {
   return /\b1214\b/.test(text) && /messages/i.test(text) && /参数非法|invalid/i.test(text)
 }
 
-function isAzureOpenAiEndpoint(baseUrl: string): boolean {
-  try {
-    const url = new URL(baseUrl)
-    const host = url.hostname.toLowerCase()
-    return host.endsWith('.openai.azure.com') || host.endsWith('.cognitiveservices.azure.com')
-  } catch {
-    return /\.openai\.azure\.com\b|\.cognitiveservices\.azure\.com\b/i.test(baseUrl)
-  }
-}
-
-function thinkingDialectForProvider(baseUrl: string, model: string | undefined): ThinkingDialect {
-  if (isAzureOpenAiEndpoint(baseUrl)) return 'none'
-  if (isDeepSeekHost(baseUrl)) return 'deepseek'
-  if (isMiniMaxProvider(baseUrl, model)) return 'minimax'
-  if (isBigModelProvider(baseUrl) && isGlmCodingPlanModel(model)) return 'zai'
-  return 'none'
-}
-
-function shouldEnableZaiToolStream(baseUrl: string, model: string | undefined): boolean {
-  return isBigModelProvider(baseUrl) && isGlmCodingPlanModel(model)
-}
-
-function supportsReasoningEffortForProvider(baseUrl: string, model: string | undefined): boolean {
-  if (isBigModelProvider(baseUrl)) return !isGlmModel(model) || isGlmCodingPlanModel(model)
-  return true
-}
-
-function isMiniMaxProvider(baseUrl: string, model: string | undefined): boolean {
-  const normalizedModel = normalizeModelId(model)
-  if (normalizedModel.includes('minimax')) return true
-  try {
-    const host = new URL(baseUrl).hostname.toLowerCase()
-    return host.includes('minimax') || host.includes('minimaxi')
-  } catch {
-    return /\bminimax\b|\bminimaxi\b/i.test(baseUrl)
-  }
-}
-
-function isMiniMaxM3Model(model: string | undefined): boolean {
-  const normalized = normalizeModelId(model)
-  return normalized === 'minimax-m3' || normalized.startsWith('minimax-m3-')
-}
-
 function isThinkingMode(effort: string | undefined): boolean {
   const normalized = effort?.trim().toLowerCase()
   if (!normalized) return false
@@ -2108,16 +2055,6 @@ function requiresReasoningRoundTrip(
   return isThinkingMode(effort) || (isDeepSeekHost(baseUrl) && isThinkingProducerModel(model))
 }
 
-function isThinkingProducerModel(model: string | undefined): boolean {
-  const normalized = normalizeModelId(model)
-  if (!normalized) return false
-  return normalized === 'deepseek-v4-pro' ||
-    normalized === 'deepseek-v4-flash' ||
-    normalized.includes('deepseek-reasoner') ||
-    normalized.endsWith('/deepseek-v4-pro') ||
-    normalized.endsWith('/deepseek-v4-flash')
-}
-
 function reasoningContentOrSpace(text: string): string {
   return text.trim() ? text : ' '
 }
@@ -2136,13 +2073,16 @@ function reasoningContentOrSpace(text: string): string {
  * content before the emptiness check. Messages with real content are left
  * untouched.
  */
-function sanitizeEmptyMessageContent(messages: ChatMessage[], baseUrl?: string): ChatMessage[] {
+function sanitizeEmptyMessageContent(messages: ChatMessage[], baseUrl?: string, model?: string): ChatMessage[] {
   // Some providers (notably MiniMax, error 2013 "chat content is empty") reject
   // a missing/empty content field on assistant messages even when tool_calls
   // are present. For those providers we must supply a placeholder. For others,
   // the OpenAI-spec-compliant shape (omit content) is preferred because a
   // visible placeholder can pollute the conversation the model sees.
-  const requireAssistantContent = baseUrl ? isMiniMaxProvider(baseUrl, undefined) : false
+  const requireAssistantContent = compatibilityProfileForModel({
+    baseUrl: baseUrl ?? '',
+    model
+  }).requiresAssistantContentForToolCalls
   return messages.map((message) => {
     if (!isEmptyContent(message.content)) return message
     if (message.role === 'assistant') {
@@ -2475,10 +2415,6 @@ function canonicalizeSchema(value: unknown): Record<string, unknown> {
   return canonical && typeof canonical === 'object' && !Array.isArray(canonical)
     ? canonical as Record<string, unknown>
     : {}
-}
-
-function normalizeModelId(model: string | undefined): string {
-  return model?.trim().toLowerCase() ?? ''
 }
 
 function normalizeStreamIdleTimeoutMs(value: number | undefined): number {

@@ -80,6 +80,26 @@ grep -i "error\|apikey\|unauthorized" logs/langgraph.log | tail -20
 
 ---
 
+### 本地 vLLM MiniMax-M3 泄漏工具协议文本
+
+**症状**：使用本地 vLLM 部署 MiniMax-M3 时，主界面出现 `<action>run</action>`、`<timeout>`、`tool call` 或大段工具执行文本，而不是正常工具调用结果。
+
+**原因**：MiniMax-M3 的工具调用和思考内容需要由服务端 parser 解析成 OpenAI 兼容的 `tool_calls` / reasoning 字段。如果本地 vLLM 没有启用 MiniMax-M3 专用 parser，模型原生协议会被当作普通正文流出。
+
+**解决**：启动 vLLM 时按官方 recipe 带上 MiniMax-M3 parser 参数：
+
+```bash
+vllm serve MiniMaxAI/MiniMax-M3 \
+  --tool-call-parser minimax_m3 \
+  --reasoning-parser minimax_m3 \
+  --enable-auto-tool-choice \
+  --block-size 128
+```
+
+KWorks 会在本地 vLLM + MiniMax-M3 profile 中自动启用 `reasoning_split`，并在模型设置页和 `/api/models` 中给出兼容性提示；但 parser 必须由 vLLM 服务端启用。
+
+---
+
 ### 沙箱权限问题
 
 **症状**：工具报"文件未找到"或权限错误，即使 Agent 声称已创建文件。

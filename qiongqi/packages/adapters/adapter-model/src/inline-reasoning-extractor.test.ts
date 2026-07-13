@@ -75,8 +75,8 @@ describe('InlineReasoningExtractor', () => {
   it('supports all known tag names', () => {
     for (const tag of ['think', 'thinking', 'reasoning', 'reflection', 'mm:think', 'ask']) {
       const result = runChunks([`<${tag}>inner</${tag}>outer`])
-      expect(result.text).toBe('outer', `tag <${tag}>`)
-      expect(result.reasoning).toBe('inner', `tag <${tag}>`)
+      expect(result.text).toBe('outer')
+      expect(result.reasoning).toBe('inner')
     }
   })
 

@@ -32,6 +32,7 @@ import {
   VISION_MODEL_CAPABILITY_DEFAULTS,
   inferModelCapabilityDefaults
 } from '@qiongqi/loop'
+import { compatibilityProfileForModel } from '@qiongqi/adapter-model'
 
 const execFileAsync = promisify(execFile)
 
@@ -1342,7 +1343,7 @@ function nativeCodingReviewFromThread(threadId: string, thread: ThreadRecord | n
   if (!latest) return null
 
   const item = latest.item
-  const output = isObject(item.output) ? item.output : {}
+  const output: Record<string, unknown> = isObject(item.output) ? item.output : {}
   const rawFindings = Array.isArray(output.findings) ? output.findings : []
   const findings = rawFindings
     .map((finding, index) => nativeReviewFindingFromOutput(finding, index, threadId, item.id))
@@ -1399,19 +1400,19 @@ function nativeReviewFindingFromOutput(
 ): CodingReviewFinding | null {
   if (!isObject(value)) return null
   const location = isObject(value.codeLocation) ? value.codeLocation : {}
-  const lineRange = isObject(location.lineRange) ? lineRangeObject(location.lineRange) : {}
+  const lineRange: Record<string, unknown> = isObject(location.lineRange) ? lineRangeObject(location.lineRange) : {}
   const priority = numberValue(value.priority) ?? 3
   const confidence = numberValue(value.confidenceScore)
   const title = stringValue(value.title) || `Review finding ${index + 1}`
-  const body = stringValue(value.body)
+  const body = stringValue(value.body) ?? ''
   const file = stringValue(location.absoluteFilePath) || null
-  const line = numberValue(lineRange.start)
+  const line = numberValue(lineRange.start) ?? null
   return {
     id: `${reviewItemId}_finding_${index + 1}`,
     severity: severityFromReviewPriority(priority),
     category: 'native_review',
     file,
-    line: line > 0 ? line : null,
+    line: line !== null && line > 0 ? line : null,
     task_id: threadId,
     message: title,
     suggestion: body,
@@ -2399,21 +2400,21 @@ async function readRuntimeConfig(runtime: ServerRuntime): Promise<QiongqiConfig>
 function normalizeLegacyTaskWorkMode(config: QiongqiConfig): QiongqiConfig {
   const skills = config.capabilities?.skills
   const workModes = skills?.workModes
-  const modes = workModes?.modes
+  const modes = workModes?.modes as Record<string, WorkModeConfigValue> | undefined
   if (!modes || !('task' in modes)) return config
 
   const { task: _task, ...rest } = modes
   // If `office` already exists, drop the stale `task` entry; otherwise rename it.
-  const nextModes = 'office' in rest
+  const nextModes: Record<string, WorkModeConfigValue> = 'office' in rest
     ? rest
-    : { ...rest, office: { ...(_task as Record<string, unknown>), id: 'office' } }
+    : { ...rest, office: { ..._task, id: 'office' } }
   const nextDefault = workModes!.defaultModeId === 'task' ? 'office' : workModes!.defaultModeId
   // Also fix up modeSkillOverrides: move any `task` overrides to `office`.
-  const overrides = skills?.modeSkillOverrides ?? {}
+  const overrides = (skills?.modeSkillOverrides ?? {}) as SkillsConfig['modeSkillOverrides']
   const nextOverrides = 'task' in overrides
-    ? { ...overrides, office: { ...(overrides.office ?? {}), ...(overrides.task as Record<string, unknown>) } }
+    ? { ...overrides, office: { ...(overrides.office ?? { addedSkillIds: [], removedSkillIds: [] }), ...overrides.task } }
     : overrides
-  const { task: _dropOverride, ...cleanOverrides } = nextOverrides as Record<string, unknown>
+  const { task: _dropOverride, ...cleanOverrides } = nextOverrides
   return {
     ...config,
     capabilities: {
@@ -2804,28 +2805,53 @@ function modelFromProfile(
   const inputModalities = profile.inputModalities ?? inferred.inputModalities
   const outputModalities = profile.outputModalities ?? inferred.outputModalities
   const messageParts = profile.messageParts ?? inferred.messageParts
+  const model = profile.providerModel ?? name
+  const baseUrl = profile.baseUrl ?? (config.serve?.model === name ? config.serve?.baseUrl : null) ?? null
+  const endpointFormat = profile.endpointFormat ?? (config.serve?.model === name ? config.serve?.endpointFormat : undefined)
+  const supportsToolCalling = profile.supportsToolCalling ?? true
+  const compatibility = compatibilityProfileForModel({
+    baseUrl: baseUrl ?? '',
+    model,
+    endpointFormat,
+    supportsToolCalling
+  })
   return {
     id: name,
     name,
     use: 'qiongqi',
-    model: profile.providerModel ?? name,
+    model,
     display_name: name,
     description: 'QiongQi model profile',
     api_key: profile.apiKey ?? (config.serve?.model === name ? config.serve?.apiKey : null) ?? null,
-    base_url: profile.baseUrl ?? (config.serve?.model === name ? config.serve?.baseUrl : null) ?? null,
-    endpoint_format: profile.endpointFormat ?? (config.serve?.model === name ? config.serve?.endpointFormat : undefined),
+    base_url: baseUrl,
+    endpoint_format: endpointFormat,
     active: config.serve?.model === name,
     aliases: profile.aliases ?? [],
     context_window_tokens: profile.contextWindowTokens ?? null,
     context_compaction: profile.contextCompaction ?? null,
     input_modalities: inputModalities,
     output_modalities: outputModalities,
-    supports_tool_calling: profile.supportsToolCalling ?? true,
+    supports_tool_calling: supportsToolCalling,
     message_parts: messageParts,
     supports_vision: inputModalities.includes('image'),
     supports_thinking: true,
-    supports_reasoning_effort: true,
-    reasoning_effort_values: ['auto', 'off', 'low', 'medium', 'high', 'max']
+    supports_reasoning_effort: compatibility.supportsReasoningEffort,
+    reasoning_effort_values: ['auto', 'off', 'low', 'medium', 'high', 'max'],
+    provider_compatibility: {
+      provider: compatibility.provider,
+      thinking_dialect: compatibility.thinkingDialect,
+      tool_call_protocol: compatibility.toolCallProtocol,
+      request_flags: {
+        deepseek_thinking: compatibility.requestFlags.deepseekThinking,
+        reasoning_split: compatibility.requestFlags.reasoningSplit,
+        zai_tool_stream: compatibility.requestFlags.zaiToolStream
+      },
+      fold_tool_history: compatibility.foldToolHistory,
+      requires_assistant_content_for_tool_calls: compatibility.requiresAssistantContentForToolCalls,
+      requires_user_message: compatibility.requiresUserMessage,
+      requires_strict_alternation: compatibility.requiresStrictAlternation
+    },
+    compatibility_warnings: compatibility.warnings
   }
 }
 

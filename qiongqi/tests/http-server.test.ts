@@ -844,6 +844,51 @@ describe('HTTP server', () => {
     }))
   })
 
+  it('exposes provider compatibility diagnostics for local vLLM MiniMax M3 profiles', async () => {
+    const h = buildHarness()
+    const save = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/api/config/models', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            profiles: {
+              'local-minimax-m3': {
+                providerModel: 'MiniMax-M3',
+                baseUrl: 'http://127.0.0.1:8000/v1',
+                endpointFormat: 'chat_completions',
+                supportsToolCalling: true
+              }
+            }
+          }
+        })
+      })
+    )
+    expect(save.status).toBe(200)
+
+    const models = await dispatchRequest(h.router, new Request('http://localhost/api/models', {
+      headers: { authorization: 'Bearer tok-1' }
+    }))
+    expect(models.status).toBe(200)
+    const body = await readJson(models) as { models: Array<Record<string, unknown>> }
+    expect(body.models).toContainEqual(expect.objectContaining({
+      name: 'local-minimax-m3',
+      model: 'MiniMax-M3',
+      provider_compatibility: expect.objectContaining({
+        provider: 'vllm',
+        thinking_dialect: 'minimax',
+        tool_call_protocol: 'server-parser-required',
+        request_flags: expect.objectContaining({
+          reasoning_split: true
+        })
+      }),
+      compatibility_warnings: [
+        expect.stringContaining('--tool-call-parser minimax_m3')
+      ]
+    }))
+  })
+
   it('uses the authenticated user active model when native threads and turns omit a model', async () => {
     const h = buildHarness()
     const session = await h.runtime.authService?.initialize({

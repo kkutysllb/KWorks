@@ -88,6 +88,10 @@ import {
   type ModelEndpointFormat
 } from '@qiongqi/contracts'
 import { SkillRuntime } from '@qiongqi/skills'
+
+type RuntimeSkillsConfig = NonNullable<QiongqiCapabilitiesConfig['skills']>
+type RuntimeWorkModeConfig = RuntimeSkillsConfig['workModes']['modes'][string]
+type RuntimeModeSkillOverride = RuntimeSkillsConfig['modeSkillOverrides'][string]
 import { SkillPluginHost } from '@qiongqi/skills'
 import { buildSkillToolProvider, type SkillToolExecutor } from '@qiongqi/skills'
 import { createBashLocalTool } from '@qiongqi/adapter-tools'
@@ -957,19 +961,25 @@ function uniqueStrings(values: readonly string[]): string[] {
  */
 function normalizeLegacyTaskSkills(skills: QiongqiCapabilitiesConfig['skills'] | undefined): QiongqiCapabilitiesConfig['skills'] | undefined {
   if (!skills?.workModes?.modes) return skills
-  const modes = skills.workModes.modes as Record<string, Record<string, unknown>>
+  const modes = skills.workModes.modes as Record<string, RuntimeWorkModeConfig>
   if (!('task' in modes)) return skills
   const { task, ...rest } = modes
-  const nextModes = 'office' in rest ? rest : { ...rest, office: { ...(task as Record<string, unknown>), id: 'office' } }
+  const nextModes: Record<string, RuntimeWorkModeConfig> = 'office' in rest
+    ? rest
+    : { ...rest, office: { ...task, id: 'office' } }
   const nextDefault = skills.workModes.defaultModeId === 'task' ? 'office' : skills.workModes.defaultModeId
-  const overrides = (skills.modeSkillOverrides ?? {}) as Record<string, unknown>
-  const { task: _drop, ...cleanOverrides } = 'task' in overrides
-    ? { ...overrides, office: { ...(overrides.office ?? {}), ...overrides.task } }
-    : overrides
+  const overrides = { ...((skills.modeSkillOverrides ?? {}) as Record<string, RuntimeModeSkillOverride>) }
+  if (overrides.task) {
+    overrides.office = {
+      ...(overrides.office ?? { addedSkillIds: [], removedSkillIds: [] }),
+      ...overrides.task
+    }
+    delete overrides.task
+  }
   return {
     ...skills,
-    workModes: { ...skills.workModes, defaultModeId: nextDefault, modes: nextModes as typeof modes },
-    modeSkillOverrides: cleanOverrides as typeof skills.modeSkillOverrides
+    workModes: { ...skills.workModes, defaultModeId: nextDefault, modes: nextModes },
+    modeSkillOverrides: overrides
   }
 }
 
@@ -981,7 +991,7 @@ function normalizeLegacyTaskSkills(skills: QiongqiCapabilitiesConfig['skills'] |
  */
 function ensureBuiltinWorkModes(skills: QiongqiCapabilitiesConfig['skills'] | undefined): QiongqiCapabilitiesConfig['skills'] | undefined {
   if (!skills?.workModes?.modes) return skills
-  const modes = skills.workModes.modes as Record<string, Record<string, unknown>>
+  const modes = skills.workModes.modes as Record<string, RuntimeWorkModeConfig>
   const builtinIds = Object.keys(DEFAULT_WORK_MODES)
   const missing = builtinIds.filter((id) => !modes[id])
   if (missing.length === 0) return skills
@@ -989,12 +999,12 @@ function ensureBuiltinWorkModes(skills: QiongqiCapabilitiesConfig['skills'] | un
   for (const id of missing) {
     const builtin = DEFAULT_WORK_MODES[id as keyof typeof DEFAULT_WORK_MODES]
     if (builtin) {
-      merged[id] = { ...builtin } as Record<string, unknown>
+      merged[id] = { ...builtin }
     }
   }
   return {
     ...skills,
-    workModes: { ...skills.workModes, modes: merged as typeof modes }
+    workModes: { ...skills.workModes, modes: merged }
   }
 }
 
@@ -1243,7 +1253,7 @@ async function assembleRuntime(input: {
       // `activateModel` (which writes serve.model) is reflected without a
       // restart. Falls back to the startup option when no store/snapshot/model
       // is available, preserving the previous behaviour.
-      model: configStore?.snapshot()?.serve?.model ?? options.model,
+      model: configStore?.snapshot?.()?.serve?.model ?? options.model,
       endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
       approvalPolicy: options.approvalPolicy,
       sandboxMode: options.sandboxMode,

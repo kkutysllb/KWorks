@@ -83,6 +83,26 @@ The agent reports an error like `"No chat models are configured"` or `"model not
 
 ---
 
+### Local vLLM MiniMax-M3 leaks tool protocol text
+
+Symptoms: when using MiniMax-M3 behind local vLLM, the main chat shows text such as `<action>run</action>`, `<timeout>`, `tool call`, or long tool execution payloads instead of normal tool-call results.
+
+Cause: MiniMax-M3 tool calls and reasoning content must be parsed by the server into OpenAI-compatible `tool_calls` / reasoning fields. Without the MiniMax-M3 parser, vLLM streams the model-native protocol as ordinary assistant text.
+
+Start vLLM with the official MiniMax-M3 parser flags:
+
+```bash
+vllm serve MiniMaxAI/MiniMax-M3 \
+  --tool-call-parser minimax_m3 \
+  --reasoning-parser minimax_m3 \
+  --enable-auto-tool-choice \
+  --block-size 128
+```
+
+KWorks automatically enables `reasoning_split` for local vLLM + MiniMax-M3 profiles and surfaces compatibility warnings in the model settings page and `/api/models`, but the parser flags must be enabled on the vLLM server.
+
+---
+
 ### Frontend build fails with `BETTER_AUTH_SECRET`
 
 ```

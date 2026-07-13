@@ -1804,6 +1804,57 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[0]?.reasoning_split).toBe(true)
   })
 
+  it('enables MiniMax M3 compatibility mode behind local vLLM', async () => {
+    const response = {
+      id: 'local-minimax-m3',
+      model: 'MiniMax-M3',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }]
+    }
+    const sentBodies: Array<{ reasoning_split?: unknown; messages?: Array<Record<string, unknown>> }> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'http://127.0.0.1:8000/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    request.history = [
+      makeToolCallItem({
+        id: 'call_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        arguments: { text: 'a' }
+      }),
+      makeToolResultItem({
+        id: 'result_a',
+        turnId: 'turn_1',
+        threadId: 'thr_1',
+        callId: 'call_a',
+        toolName: 'echo',
+        output: 'a'
+      })
+    ]
+
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    const assistantMessage = sentBodies[0]?.messages?.find((message) => Array.isArray(message.tool_calls))
+    expect(sentBodies[0]?.reasoning_split).toBe(true)
+    expect(assistantMessage?.content).toBe('(tool call)')
+  })
+
   it('uses MiniMax disabled thinking schema when reasoning is disabled', async () => {
     const response = {
       id: 'minimax-off',

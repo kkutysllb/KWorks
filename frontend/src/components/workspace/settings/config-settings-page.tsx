@@ -247,6 +247,10 @@ export function ConfigSettingsPage({
   const currentModel = currentModelName
     ? (profiles[currentModelName] ?? {})
     : {};
+  const currentModelCompatibilityWarnings = useMemo(
+    () => modelProfileCompatibilityWarnings(currentModel),
+    [currentModel],
+  );
 
   useEffect(() => {
     if (selectedProfile && profiles[selectedProfile]) return;
@@ -504,6 +508,16 @@ export function ConfigSettingsPage({
                 服务地址可填写服务根地址或完整接口地址；后端会按协议自动拼接对应端点。模型能力、图片输入格式和上下文压缩会优先使用内置模型画像，包含 GLM-5.2/GLM-5 Coding Plan。
               </p>
             </FieldGrid>
+            {currentModelCompatibilityWarnings.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-medium">模型兼容性提示</p>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {currentModelCompatibilityWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <AdvancedModelProfileFields
               model={currentModel}
               onChange={updateModel}
@@ -1274,6 +1288,41 @@ function normalizeNewModelProfile(): JsonObject {
   return {
     endpointFormat: "openai_compatible",
   };
+}
+
+function modelProfileCompatibilityWarnings(model: JsonObject): string[] {
+  const modelId = str(model.providerModel);
+  const baseUrl = str(model.baseUrl);
+  const supportsToolCalling = boolWithDefault(model.supportsToolCalling, true);
+  if (
+    supportsToolCalling &&
+    isMiniMaxM3Model(modelId) &&
+    isLocalOpenAiCompatibleUrl(baseUrl)
+  ) {
+    return [
+      "本地 vLLM 部署 MiniMax-M3 并启用工具调用时，请按官方 recipe 使用 --tool-call-parser minimax_m3、--reasoning-parser minimax_m3、--enable-auto-tool-choice、--block-size 128 启动；否则模型原生工具协议可能泄漏到正文。",
+    ];
+  }
+  return [];
+}
+
+function isMiniMaxM3Model(modelId: string): boolean {
+  const normalized = modelId.trim().toLowerCase();
+  return normalized === "minimax-m3" || normalized.startsWith("minimax-m3-");
+}
+
+function isLocalOpenAiCompatibleUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host.endsWith(".local")
+    );
+  } catch {
+    return /(?:localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(baseUrl);
+  }
 }
 
 function normalizeConfigForSave(config: QiongqiConfig): QiongqiConfig {

@@ -30,4 +30,20 @@ describe("model profile settings", () => {
     expect(settings).not.toContain('<ListField label="messageParts"');
     expect(settings).not.toContain('<JsonEditor label="contextCompaction"');
   });
+
+  test("warns when local vLLM MiniMax-M3 needs official parser startup flags", () => {
+    const settings = readFileSync(
+      resolve(
+        repoRoot,
+        "src/components/workspace/settings/config-settings-page.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(settings).toContain("MiniMax-M3");
+    expect(settings).toContain("--tool-call-parser minimax_m3");
+    expect(settings).toContain("--reasoning-parser minimax_m3");
+    expect(settings).toContain("--enable-auto-tool-choice");
+    expect(settings).toContain("--block-size 128");
+  });
 });
