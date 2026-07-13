@@ -1774,6 +1774,36 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[0]?.thinking).toEqual({ type: 'adaptive' })
   })
 
+  it('enables MiniMax M3 official reasoning/tool-call split mode', async () => {
+    const response = {
+      id: 'minimax-m3',
+      model: 'MiniMax-M3',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }]
+    }
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+
+    expect(sentBodies[0]?.reasoning_split).toBe(true)
+  })
+
   it('uses MiniMax disabled thinking schema when reasoning is disabled', async () => {
     const response = {
       id: 'minimax-off',

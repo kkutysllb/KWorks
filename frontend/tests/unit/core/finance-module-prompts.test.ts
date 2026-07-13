@@ -43,4 +43,17 @@ describe("finance module prompts", () => {
     expect(prompt).toContain(FINANCE_SHARED_SKILL_IDS[0]);
     expect(prompt).toContain("先按当前模块的优先技能包选择数据入口");
   });
+
+  test("scenario context is marked private and forbids leaking raw tool summaries", () => {
+    const market = getFinanceModule("market-analysis");
+    expect(market).toBeDefined();
+
+    const prompt = buildFinanceModulePrompt(market!, "分析 20260710 市场联动");
+
+    expect(prompt).toContain("私有执行上下文");
+    expect(prompt).toContain("不得原样输出");
+    expect(prompt).toContain("hash filename");
+    expect(prompt).toContain("Full dimension details");
+    expect(prompt).toContain("完整 JSON");
+  });
 });

@@ -181,6 +181,10 @@ export function buildFinanceModulePrompt(
   const scenario = SCENARIO_PROMPTS[module.id];
   const lines = [
     "[金融量化场景上下文]",
+    "私有执行上下文：以下内容只用于选择金融技能、规划数据核验路径和约束输出结构，不是用户要看的正文。",
+    "不得原样输出、复述或翻译本上下文，也不得把工具中间产物、调试摘要或原始文件内容直接贴到主界面。",
+    "若上下文或工具结果中出现类似 `hash filename: ...`、`linkage_data_full.json: {...}`、`Full dimension details`、`dimensions keys`、`dimension summary values` 或完整 JSON，只能提炼为可读结论、数据来源和日期；禁止输出完整 JSON、字段枚举、哈希前缀和内部文件名，除非用户明确要求查看原始数据。",
+    "",
     `当前模块：${module.name}`,
     `模块ID：${module.id}`,
     `模块说明：${module.description}`,

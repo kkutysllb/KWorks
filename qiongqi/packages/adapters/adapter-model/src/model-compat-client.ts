@@ -418,6 +418,13 @@ export class ModelCompatClient implements ModelClient {
     ) {
       body.thinking = { type: 'enabled' }
     }
+    if (isMiniMaxProvider(this.config.baseUrl, model) && isMiniMaxM3Model(model)) {
+      // MiniMax M3's official OpenAI-compatible API documents
+      // `reasoning_split: true` as the way to split reasoning from visible
+      // content. Without it, compatible gateways can leak model-native
+      // reasoning/tool-call protocol text into `delta.content`.
+      body.reasoning_split = true
+    }
     const tools = normalizeToolSpecs(request.tools)
     if (tools.length > 0) {
       body.tools = tools.map((tool) => ({
@@ -2071,6 +2078,11 @@ function isMiniMaxProvider(baseUrl: string, model: string | undefined): boolean 
   } catch {
     return /\bminimax\b|\bminimaxi\b/i.test(baseUrl)
   }
+}
+
+function isMiniMaxM3Model(model: string | undefined): boolean {
+  const normalized = normalizeModelId(model)
+  return normalized === 'minimax-m3' || normalized.startsWith('minimax-m3-')
 }
 
 function isThinkingMode(effort: string | undefined): boolean {
