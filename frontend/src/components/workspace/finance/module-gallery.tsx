@@ -17,6 +17,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import { useFinanceCredentials } from "@/core/finance/credentials";
+import { financeModulePath } from "@/core/finance/navigation";
 import { FINANCE_MODULES, type FinanceModuleIcon } from "@/core/finance/modules";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +38,7 @@ export function FinanceModuleGallery() {
   const { data: credStatus } = useFinanceCredentials();
 
   const navigateToModule = (moduleId: string) => {
-    router.push(`/workspace/finance/${moduleId}`);
+    router.push(financeModulePath(moduleId, { newTask: true }));
   };
 
   return (
@@ -171,4 +172,3 @@ function CredentialBadge({ label, ok }: { label: string; ok: boolean }) {
     </span>
   );
 }
-

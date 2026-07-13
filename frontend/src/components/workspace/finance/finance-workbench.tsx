@@ -14,11 +14,12 @@ import {
   TrendingUpIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { TodoList } from "@/components/workspace/todo-list";
 import { getFinanceModule, type FinanceModuleIcon } from "@/core/finance/modules";
+import { financeModulePath } from "@/core/finance/navigation";
 import type { Todo } from "@/core/todos";
 import { cn } from "@/lib/utils";
 
@@ -38,9 +39,13 @@ const ICON_MAP: Record<FinanceModuleIcon, LucideIcon> = {
 
 interface FinanceWorkbenchProps {
   moduleId: string;
+  startNewTask?: boolean;
 }
 
-export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
+export function FinanceWorkbench({
+  moduleId,
+  startNewTask = false,
+}: FinanceWorkbenchProps) {
   const router = useRouter();
   const currentModule = getFinanceModule(moduleId);
   const [agentTodos, setAgentTodos] = useState<Todo[]>([]);
@@ -48,6 +53,11 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
   const navigateToPath = (path: string) => {
     router.push(path);
   };
+
+  useEffect(() => {
+    if (!startNewTask || !currentModule) return;
+    router.replace(financeModulePath(currentModule.id));
+  }, [currentModule, router, startNewTask]);
 
   if (!currentModule) {
     return (
@@ -113,6 +123,7 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
         <div className="min-h-0 flex-1 overflow-hidden">
           <FinanceAgentPanel
             module={currentModule}
+            startNewTask={startNewTask}
             onTodosChange={setAgentTodos}
             avoidRightFloatingPanels={showFloatingTodos}
           />

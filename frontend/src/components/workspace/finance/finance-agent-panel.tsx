@@ -36,6 +36,7 @@ const FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS = "xl:pr-[336px]";
 
 interface FinanceAgentPanelProps {
   module: FinanceModule;
+  startNewTask?: boolean;
   onTodosChange?: (todos: Todo[]) => void;
   /** When true, chat content gets right-padding so the floating TodoList
    *  panel doesn't overlap messages and the input box. */
@@ -55,6 +56,7 @@ interface FinanceAgentPanelProps {
  */
 export function FinanceAgentPanel({
   module,
+  startNewTask = false,
   onTodosChange,
   avoidRightFloatingPanels = false,
 }: FinanceAgentPanelProps) {
@@ -63,6 +65,7 @@ export function FinanceAgentPanel({
       <PromptInputProvider>
         <FinanceAgentPanelInner
           module={module}
+          startNewTask={startNewTask}
           onTodosChange={onTodosChange}
           avoidRightFloatingPanels={avoidRightFloatingPanels}
         />
@@ -73,14 +76,22 @@ export function FinanceAgentPanel({
 
 function FinanceAgentPanelInner({
   module,
+  startNewTask = false,
   onTodosChange,
   avoidRightFloatingPanels = false,
 }: FinanceAgentPanelProps) {
   const threadIdStorageKey = `finance:thread:${module.id}`;
   const [threadId, setThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
+    if (startNewTask) return undefined;
     return window.localStorage.getItem(threadIdStorageKey) ?? undefined;
   });
+  useEffect(() => {
+    if (!startNewTask || typeof window === "undefined") return;
+    window.localStorage.removeItem(threadIdStorageKey);
+    initialThreadIdRef.current = undefined;
+    setThreadId(undefined);
+  }, [startNewTask, threadIdStorageKey]);
   useEffect(() => {
     if (threadId) {
       window.localStorage.setItem(threadIdStorageKey, threadId);
@@ -98,7 +109,7 @@ function FinanceAgentPanelInner({
   // query cache hasn't propagated them yet, which would cause a false "stale"
   // reset and silently kill the outgoing stream.
   const initialThreadIdRef = useRef<string | undefined>(
-    typeof window !== "undefined"
+    typeof window !== "undefined" && !startNewTask
       ? (window.localStorage.getItem(threadIdStorageKey) ?? undefined)
       : undefined,
   );

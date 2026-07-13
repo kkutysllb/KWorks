@@ -1,8 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { FinanceWorkbench } from "@/components/workspace/finance/finance-workbench";
+import { isFinanceNewTaskRequest } from "@/core/finance/navigation";
 import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 
 /**
@@ -26,7 +27,13 @@ function parseModuleIdFromPath(pathname: string | null): string {
 
 export default function FinanceModulePage() {
   const routerPathname = usePathname();
+  const searchParams = useSearchParams();
   const pathname = useWorkspacePathname(routerPathname);
   const moduleId = parseModuleIdFromPath(pathname);
-  return <FinanceWorkbench moduleId={moduleId} />;
+  return (
+    <FinanceWorkbench
+      moduleId={moduleId}
+      startNewTask={isFinanceNewTaskRequest(searchParams)}
+    />
+  );
 }

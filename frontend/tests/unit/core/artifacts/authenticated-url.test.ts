@@ -111,6 +111,29 @@ describe("desktop authenticated artifact URLs", () => {
     expect(clickSpy).toHaveBeenCalledOnce();
   });
 
+  test("downloads unprotected artifact URLs with an anchor instead of opening a blank tab", async () => {
+    setDesktopMode(false);
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    let clickedHref = "";
+    let clickedDownload = "";
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function click(this: HTMLAnchorElement) {
+        clickedHref = this.href;
+        clickedDownload = this.download;
+      });
+
+    await downloadArtifactUrl(
+      "http://127.0.0.1:19987/v1/threads/t1/artifacts/content?path=%2Fmnt%2Fqiongqi%2Foutputs%2Freport.md&download=true",
+      "report.md",
+    );
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(clickedHref).toBe("blob:artifact");
+    expect(clickedDownload).toBe("report.md");
+  });
+
   test("desktop open respects backend attachment disposition for active artifact content", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response("<script>alert(1)</script>", {

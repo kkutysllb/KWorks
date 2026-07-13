@@ -153,15 +153,21 @@ export async function downloadArtifactUrl(
   url: string,
   filename?: string,
 ): Promise<void> {
+  if (isArtifactApiUrl(url)) {
+    const { objectUrl } = await fetchAuthenticatedArtifactBlob(url);
+    triggerDownload(objectUrl, filename ?? filenameFromUrl(url));
+    setTimeout(() => revokeIfObjectUrl(objectUrl), 1_000);
+    return;
+  }
+
   if (!requiresAuthenticatedArtifactFetch(url)) {
-    const opened = window.open(url, "_blank", "noopener,noreferrer");
-    if (opened) opened.opener = null;
+    triggerDownload(url, filename ?? filenameFromUrl(url));
     return;
   }
 
   const objectUrl = await createAuthenticatedArtifactObjectUrl(url);
   triggerDownload(objectUrl, filename ?? filenameFromUrl(url));
-  setTimeout(() => revokeIfObjectUrl(objectUrl), 0);
+  setTimeout(() => revokeIfObjectUrl(objectUrl), 1_000);
 }
 
 function triggerDownload(url: string, filename: string): void {
