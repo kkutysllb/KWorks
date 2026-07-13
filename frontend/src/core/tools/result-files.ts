@@ -29,7 +29,9 @@ const RESULT_FILE_EXTENSIONS = new Set([
 function filePathFromArgs(args: Record<string, unknown>): string | undefined {
   for (const key of ["path", "file_path", "filepath"]) {
     const value = args[key]
-    if (typeof value === "string" && value.trim()) return value.trim()
+    if (typeof value === "string" && value.trim()) {
+      return sanitizeResultFilePath(value.trim())
+    }
   }
   return undefined
 }
@@ -50,11 +52,61 @@ function filePathsFromBashCommand(command: unknown): string[] {
     if (path) {
       const ext = path.slice(path.lastIndexOf(".")).toLowerCase()
       if (RESULT_FILE_EXTENSIONS.has(ext)) {
-        paths.push(path)
+        paths.push(sanitizeResultFilePath(path))
       }
     }
   }
   return paths
+}
+
+function resultFilesByToolCallId(messages: Message[]): Map<string, string[]> {
+  const byCallId = new Map<string, string[]>()
+  for (const message of messages) {
+    if (message.type !== "tool" || !message.tool_call_id) continue
+    const files = resultFilesFromToolMessage(message.content)
+    if (files.length > 0) byCallId.set(message.tool_call_id, files)
+  }
+  return byCallId
+}
+
+function resultFilesFromToolMessage(content: Message["content"]): string[] {
+  if (typeof content !== "string" || !content.trim()) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    return []
+  }
+  if (!parsed || typeof parsed !== "object") return []
+  const resultFiles = (parsed as { result_files?: unknown }).result_files
+  if (!Array.isArray(resultFiles)) return []
+  return resultFiles
+    .map((file) => {
+      if (!file || typeof file !== "object") return undefined
+      const relativePath = (file as { relative_path?: unknown }).relative_path
+      if (typeof relativePath === "string" && relativePath.trim()) {
+        return relativePath.trim()
+      }
+      const path = (file as { path?: unknown }).path
+      return typeof path === "string" && path.trim()
+        ? sanitizeResultFilePath(path.trim())
+        : undefined
+    })
+    .filter((path): path is string => Boolean(path))
+}
+
+function sanitizeResultFilePath(path: string): string {
+  const normalized = path.replaceAll("\\", "/")
+  if (
+    normalized.startsWith("/tmp/") ||
+    normalized.startsWith("/private/tmp/") ||
+    normalized.startsWith("/var/tmp/") ||
+    normalized.startsWith("/var/folders/") ||
+    normalized.startsWith("/mnt/")
+  ) {
+    return normalized.split("/").filter(Boolean).at(-1) ?? path
+  }
+  return path
 }
 
 /**
@@ -72,9 +124,22 @@ function filePathsFromBashCommand(command: unknown): string[] {
 export function collectResultFiles(messages: Message[]): string[] {
   const seen = new Set<string>()
   const files: string[] = []
+  const materializedFilesByCallId = resultFilesByToolCallId(messages)
   for (const message of messages) {
     if (message.type !== "ai" || !message.tool_calls) continue
     for (const toolCall of message.tool_calls) {
+      const materializedFiles = toolCall.id
+        ? materializedFilesByCallId.get(toolCall.id)
+        : undefined
+      if (materializedFiles) {
+        for (const path of materializedFiles) {
+          if (!seen.has(path)) {
+            seen.add(path)
+            files.push(path)
+          }
+        }
+        continue
+      }
       // Standard write/edit tools
       if (FILE_PRODUCING_TOOLS.has(toolCall.name)) {
         const path = filePathFromArgs(toolCall.args ?? {})

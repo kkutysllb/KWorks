@@ -65,6 +65,52 @@ describe("collectResultFiles", () => {
     expect(collectResultFiles(messages)).toEqual(["/workspace/out.txt"]);
   });
 
+  it("prefers materialized bash result files over tmp redirect paths", () => {
+    const messages: Message[] = [
+      aiMessage([
+        {
+          id: "call_bash",
+          name: "bash",
+          args: {
+            command: "printf linkage > /tmp/market_linkage_daily.txt",
+          },
+        },
+      ]),
+      {
+        id: "tool_1",
+        type: "tool",
+        role: "tool",
+        tool_call_id: "call_bash",
+        content: JSON.stringify({
+          result_files: [
+            {
+              path: "/workspace/market_linkage_daily.txt",
+              relative_path: "market_linkage_daily.txt",
+              source_path: "/tmp/market_linkage_daily.txt",
+            },
+          ],
+        }),
+      } as Message,
+    ];
+
+    expect(collectResultFiles(messages)).toEqual(["market_linkage_daily.txt"]);
+  });
+
+  it("sanitizes tmp redirect paths while a bash result is still pending", () => {
+    const messages: Message[] = [
+      aiMessage([
+        {
+          name: "bash",
+          args: {
+            command: "printf linkage > /tmp/market_linkage_daily.txt",
+          },
+        },
+      ]),
+    ];
+
+    expect(collectResultFiles(messages)).toEqual(["market_linkage_daily.txt"]);
+  });
+
   it("deduplicates paths written multiple times", () => {
     const messages: Message[] = [
       aiMessage([
