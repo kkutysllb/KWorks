@@ -61,6 +61,14 @@ describe('work mode skill contracts', () => {
     expect(cfg.skills.workModes.modes.office?.defaultSkillIds.slice().sort()).toEqual(bundledTaskSkillIds())
   })
 
+  it('finance mode distinguishes lightweight answers from full report deliverables', () => {
+    const cfg = QiongqiCapabilitiesConfig.parse({})
+    const description = cfg.skills.workModes.modes.finance?.description ?? ''
+
+    expect(description).toContain('短问快答、单指标查询、条件解释和轻量筛选')
+    expect(description).toContain('完整分析、复盘、研究、回测和看板请求')
+  })
+
   it('merges bundled coding skills into stale persisted coding mode configs', () => {
     const cfg = QiongqiCapabilitiesConfig.parse({
       skills: {

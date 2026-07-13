@@ -237,6 +237,7 @@ export function InputBox({
   onSteerPending,
   onRemovePending,
   onPreviewResultFile,
+  placeholder,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
   status?: ChatStatus;
@@ -259,6 +260,7 @@ export function InputBox({
    *  the shared ArtifactsContext (used by the coding workbench to open the
    *  file in its own results panel). */
   onPreviewResultFile?: (filepath: string) => void;
+  placeholder?: string;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -645,7 +647,7 @@ export function InputBox({
           <PromptInputTextarea
             className={cn("size-full")}
             disabled={disabled}
-            placeholder={t.inputBox.placeholder}
+            placeholder={placeholder ?? t.inputBox.placeholder}
             autoFocus={autoFocus}
             defaultValue={initialValue}
           />

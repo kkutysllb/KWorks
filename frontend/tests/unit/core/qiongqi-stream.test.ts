@@ -195,6 +195,38 @@ function SubmitHarness({ context }: { context: Record<string, unknown> }) {
   );
 }
 
+function PromptOverrideSubmitHarness() {
+  const stream = useQiongqiStream<HarnessState>({ threadId: "thread-a" });
+  return React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        void stream.submit(
+          {
+            messages: [
+              {
+                type: "human",
+                content: [{ type: "text", text: "贵州茅台全面分析" }],
+                additional_kwargs: {
+                  qiongqi_prompt_override:
+                    "[金融量化场景上下文]\n当前模块：个股分析\n\n用户原始问题：贵州茅台全面分析",
+                  displayText: "贵州茅台全面分析",
+                },
+              },
+            ],
+          },
+          {
+            threadId: "thread-a",
+            context: { workModeId: "finance" },
+          },
+        );
+      },
+    },
+    "submit",
+  );
+}
+
 function NewThreadSubmitHarness({
   requestedThreadId,
   modelName = "minimax-m2",
@@ -554,6 +586,53 @@ describe("useQiongqiStream /v1 contract", () => {
     expect(payload).not.toHaveProperty("sandboxMode");
     expect(payload).not.toHaveProperty("context");
     expect(payload).not.toHaveProperty("attachments");
+  });
+
+  test("can send an augmented prompt while preserving the visible display text", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeThread({ workModeId: "finance" })))
+      .mockResolvedValueOnce(sseResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            threadId: "thread-a",
+            turnId: "turn-a",
+            userMessageItemId: "item-a",
+          },
+          { status: 202 },
+        ),
+      );
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(React.createElement(PromptOverrideSubmitHarness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const startTurnBody = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith("/v1/threads/thread-a/turns") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    )?.[1] as RequestInit | undefined;
+    expect(parseRequestBody(startTurnBody)).toMatchObject({
+      prompt:
+        "[金融量化场景上下文]\n当前模块：个股分析\n\n用户原始问题：贵州茅台全面分析",
+      displayText: "贵州茅台全面分析",
+      workModeId: "finance",
+    });
   });
 
   test("normalizes todo update events to the array shape expected by workspace UI", () => {

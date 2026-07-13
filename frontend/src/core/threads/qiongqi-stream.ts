@@ -516,6 +516,20 @@ function attachmentIdsFromAdditionalKwargs(
     .filter((path): path is string => path !== null);
 }
 
+function promptOverrideFromAdditionalKwargs(
+  additionalKwargs: Record<string, unknown>,
+): string | undefined {
+  const value = additionalKwargs.qiongqi_prompt_override;
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function displayTextFromAdditionalKwargs(
+  additionalKwargs: Record<string, unknown>,
+): string | undefined {
+  const value = additionalKwargs.displayText ?? additionalKwargs.display_text;
+  return typeof value === "string" ? value : undefined;
+}
+
 function workspaceRootFromContext(
   context: Record<string, unknown>,
 ): string | undefined {
@@ -1091,6 +1105,8 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       const turnWorkModeId = workModeIdRef.current;
 
       const attachmentIds = attachmentIdsFromAdditionalKwargs(additionalKwargs);
+      const promptOverride = promptOverrideFromAdditionalKwargs(additionalKwargs);
+      const displayText = displayTextFromAdditionalKwargs(additionalKwargs);
 
       // Handle multitask conflict: if interrupt strategy is requested,
       // abort any in-flight turn before starting a new one.
@@ -1113,14 +1129,18 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       // Start turn
       const modelName = qiongqiModelFromContext(context);
       const result = await qiongqiClient.startTurn(activeThreadId, {
-        prompt: text,
+        prompt: promptOverride ?? text,
         ...(modelName ? { model: modelName } : {}),
         mode: qiongqiModeFromContext(context),
         workModeId: turnWorkModeId,
         reasoningEffort: qiongqiReasoningEffortFromContext(context),
         approvalPolicy: qiongqiApprovalPolicyFromContext(context),
         ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
-        ...(additionalKwargs.hide_from_ui === true ? { displayText: "" } : {}),
+        ...(displayText !== undefined
+          ? { displayText }
+          : additionalKwargs.hide_from_ui === true
+            ? { displayText: "" }
+            : {}),
       });
 
       currentTurnIdRef.current = result.turnId;

@@ -2,7 +2,7 @@
  * Finance analysis module definitions for the 金融量化 workbench.
  *
  * Each module maps to a set of KSkills packages that are prioritized when the
- * user works within that module. All 29 finance skills are loaded under the
+ * user works within that module. All 30 finance skills are loaded under the
  * finance work mode regardless of module; these groupings help the UI present
  * focused entry points and guide the agent toward the relevant skills.
  */
@@ -43,7 +43,7 @@ export const FINANCE_MODULES: readonly FinanceModule[] = [
     icon: "trending-up",
     skillIds: [
       "kk-market-linkage-engine",
-      "news-search",
+      "kk-news-search",
       "kk-macro-query",
       "kk-zhishu-query",
     ],

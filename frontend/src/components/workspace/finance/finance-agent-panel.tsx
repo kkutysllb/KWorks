@@ -17,6 +17,7 @@ import {
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { buildFinanceModulePrompt } from "@/core/finance/module-prompts";
 import type { FinanceModule } from "@/core/finance/modules";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
@@ -171,6 +172,13 @@ function FinanceAgentPanelInner({
   const handleSubmit = useCallback(
     (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
       void sendMessage(threadId, message, {
+        additionalKwargs: {
+          qiongqi_prompt_override: buildFinanceModulePrompt(
+            module,
+            message.text.trim(),
+          ),
+          displayText: message.text.trim(),
+        },
         context: {
           ...submitContext,
           workModeId: "finance",
@@ -179,7 +187,7 @@ function FinanceAgentPanelInner({
         },
       });
     },
-    [sendMessage, threadId],
+    [module, sendMessage, threadId],
   );
 
   const handleStop = useCallback(async () => {
@@ -233,6 +241,7 @@ function FinanceAgentPanelInner({
                       className="bg-background/5 min-h-28 w-full min-w-0 [&_[data-slot=input-group-control]]:min-h-16 [&_[data-slot=input-group]]:min-h-28"
                       threadId={uiThreadId}
                       autoFocus={false}
+                      placeholder={module.promptHint}
                       status={status}
                       context={settings.context}
                       onContextChange={(context) =>
