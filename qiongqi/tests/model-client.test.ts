@@ -1852,7 +1852,7 @@ describe('DeepseekCompatModelClient', () => {
 
     const assistantMessage = sentBodies[0]?.messages?.find((message) => Array.isArray(message.tool_calls))
     expect(sentBodies[0]?.reasoning_split).toBe(true)
-    expect(assistantMessage?.content).toBe('(tool call)')
+    expect(assistantMessage?.content).toBe('\u200b')
   })
 
   it('uses MiniMax disabled thinking schema when reasoning is disabled', async () => {
@@ -3224,7 +3224,7 @@ describe('DeepseekCompatModelClient', () => {
     // entirely (a visible placeholder would pollute the conversation), and the
     // empty tool result gets an unambiguous placeholder string.
     expect(!('content' in (assistantMessage ?? {}))).toBe(true)
-    expect(toolMessage?.content).toBe('(tool returned no output)')
+    expect(toolMessage?.content).toBe('\u200b')
   })
 
   it('MiniMax coerces empty tool-call assistant content to a placeholder', async () => {
@@ -3282,8 +3282,9 @@ describe('DeepseekCompatModelClient', () => {
     const messages = sentBodies[0]?.messages ?? []
     const assistantMessage = messages.find((message) => message.role === 'assistant' && Array.isArray(message.tool_calls))
     // MiniMax rejects a missing/empty content field (error 2013); we supply a
-    // minimal placeholder instead of omitting the content key.
-    expect(assistantMessage?.content).toBe('(tool call)')
+    // non-empty invisible placeholder instead of a visible token the model can
+    // echo back into the transcript.
+    expect(assistantMessage?.content).toBe('\u200b')
   })
 
   it('MiniMax injects a user message when the request has only system messages', async () => {
@@ -3545,6 +3546,210 @@ describe('DeepseekCompatModelClient', () => {
     expect(complete && complete.kind === 'tool_call_complete' ? complete.callId : '').toBe('call_1')
     expect(complete && complete.kind === 'tool_call_complete' ? complete.arguments : {}).toEqual({ text: 'hi' })
     expect(chunks.find((c) => c.kind === 'usage')).toBeDefined()
+  })
+
+  it('does not emit official MiniMax tool-call protocol content as assistant text while streaming tool calls', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"echo","arguments":"{\\"score\\":"}}],"content":"(tool call)]score\\"|\\"bias\\"|\\"name\\""}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"80}"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl
+    })
+
+    const chunks = []
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const text = chunks
+      .filter((c) => c.kind === 'assistant_text_delta')
+      .map((c) => (c as { text: string }).text)
+      .join('')
+    const complete = chunks.find((c) => c.kind === 'tool_call_complete')
+    expect(text).toBe('')
+    expect(complete && complete.kind === 'tool_call_complete' ? complete.arguments : {}).toEqual({ score: 80 })
+    expect(chunks.find((c) => c.kind === 'completed')).toMatchObject({ stopReason: 'tool_calls' })
+  })
+
+  it('converts official MiniMax inline JSON tool-call text into a real tool call', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"(tool call bash: {\\"action\\":\\"run\\",\\"command\\":\\"cat /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/generate_radar_chart.md && echo === && cat /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/generate_bar_chart.md\\"}) name=\\"bash\\">"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl
+    })
+
+    const chunks = []
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const text = chunks
+      .filter((c) => c.kind === 'assistant_text_delta')
+      .map((c) => (c as { text: string }).text)
+      .join('')
+    const complete = chunks.find((c) => c.kind === 'tool_call_complete')
+    expect(text).toBe('')
+    expect(complete).toMatchObject({
+      kind: 'tool_call_complete',
+      toolName: 'bash',
+      arguments: {
+        action: 'run',
+        command: expect.stringContaining('generate_radar_chart.md')
+      }
+    })
+    expect(chunks.find((c) => c.kind === 'completed')).toMatchObject({ stopReason: 'tool_calls' })
+  })
+
+  it('converts official MiniMax inline action-tag tool-call text into a real tool call', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"(tool call ] <action>run][</action>]ls /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/ | sort]"}}]}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl
+    })
+
+    const chunks = []
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const complete = chunks.find((c) => c.kind === 'tool_call_complete')
+    expect(chunks.some((c) => c.kind === 'assistant_text_delta')).toBe(false)
+    expect(complete).toMatchObject({
+      kind: 'tool_call_complete',
+      toolName: 'bash',
+      arguments: {
+        action: 'run',
+        command: 'ls /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/ | sort'
+      }
+    })
+    expect(chunks.find((c) => c.kind === 'completed')).toMatchObject({ stopReason: 'tool_calls' })
+  })
+
+  it('converts official MiniMax inline invoke-command text into a real tool call', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"(tool call)[<invoke name=\\"bash\\">][<command>ls /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/ | sort</command>][</invoke>]"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl
+    })
+
+    const chunks = []
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    const complete = chunks.find((c) => c.kind === 'tool_call_complete')
+    expect(chunks.some((c) => c.kind === 'assistant_text_delta')).toBe(false)
+    expect(complete).toMatchObject({
+      kind: 'tool_call_complete',
+      toolName: 'bash',
+      arguments: {
+        action: 'run',
+        command: 'ls /Users/libing/.kworks-workspace/skills/builtin/finance/chart-visualization/references/ | sort'
+      }
+    })
+    expect(chunks.find((c) => c.kind === 'completed')).toMatchObject({ stopReason: 'tool_calls' })
+  })
+
+  it('does not mistake MiniMax parameter names for tool names when parsing inline tool calls', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"(tool call)[<parameter name=\\"command\\">pwd]"}}]}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'k',
+      model: 'MiniMax-M3',
+      fetchImpl
+    })
+
+    const chunks = []
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'MiniMax-M3'
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks.find((c) => c.kind === 'tool_call_complete')).toMatchObject({
+      kind: 'tool_call_complete',
+      toolName: 'bash',
+      arguments: { command: 'pwd' }
+    })
   })
 
   it('keeps reading streamed usage sent after finish_reason', async () => {

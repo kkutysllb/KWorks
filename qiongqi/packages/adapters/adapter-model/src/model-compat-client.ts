@@ -154,6 +154,10 @@ type PendingToolCall = {
   name?: string
   arguments: string
 }
+type InlineToolCallState = {
+  buffer: string
+  nextId: number
+}
 type StreamReadResult =
   | { kind: 'chunk'; value?: Uint8Array; done: boolean }
   | { kind: 'timeout' }
@@ -163,6 +167,7 @@ type StreamReadResult =
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 120_000
 const DEFAULT_MESSAGES_MAX_TOKENS = 4096
 const REDACTED_THINKING_SIGNATURE_PREFIX = 'redacted:'
+const STRICT_PROVIDER_EMPTY_CONTENT_PLACEHOLDER = '\u200b'
 
 /**
  * Provider-agnostic model compatibility client.
@@ -791,6 +796,7 @@ export class ModelCompatClient implements ModelClient {
     const pendingArguments = new Map<string, PendingToolCall>()
     const pendingByIndex = new Map<number, string>()
     const completedToolCalls = new Set<string>()
+    const inlineToolCallState: InlineToolCallState = { buffer: '', nextId: 1 }
     let usage: UsageSnapshot | null = null
     let textAccumulator = ''
     let reasoningAccumulator = ''
@@ -847,12 +853,13 @@ export class ModelCompatClient implements ModelClient {
             textAccumulator,
             reasoningAccumulator,
             endpointFormat,
-            reasoningExtractor
+            reasoningExtractor,
+            inlineToolCallState
           )
           textAccumulator = result.text
           reasoningAccumulator = result.reasoning
           if (result.usage) usage = mergeUsageSnapshots(usage, result.usage)
-          if (result.finishReason) finishReason = result.finishReason
+          if (result.finishReason && finishReason !== 'tool_calls') finishReason = result.finishReason
           for (const chunk of result.chunks) yield chunk
         }
         if (sawDone) break
@@ -906,7 +913,8 @@ export class ModelCompatClient implements ModelClient {
     textAccumulator: string,
     reasoningAccumulator: string,
     endpointFormat: ModelEndpointFormat,
-    reasoningExtractor: InlineReasoningExtractor
+    reasoningExtractor: InlineReasoningExtractor,
+    inlineToolCallState: InlineToolCallState
   ): {
     chunks: ModelStreamChunk[]
     text: string
@@ -943,14 +951,38 @@ export class ModelCompatClient implements ModelClient {
     if (choice && typeof choice === 'object') {
       const delta = choice.delta as Record<string, unknown> | undefined
       if (delta && typeof delta === 'object') {
+        const toolCalls = delta.tool_calls as
+          | {
+              index?: number
+              id?: string
+              function?: { name?: string; arguments?: string }
+            }[]
+          | undefined
+        const suppressContentForToolCall = Array.isArray(toolCalls) || pendingArguments.size > 0
         const content = delta.content
-        if (typeof content === 'string' && content.length > 0) {
+        if (typeof content === 'string' && content.length > 0 && !suppressContentForToolCall) {
+          const inlineToolCall = consumeInlineToolCallContent(content, inlineToolCallState)
+          if (inlineToolCall.consumed) {
+            if (inlineToolCall.call) {
+              chunks.push({
+                kind: 'tool_call_complete',
+                callId: inlineToolCall.call.callId,
+                toolName: inlineToolCall.call.toolName,
+                arguments: inlineToolCall.call.arguments
+              })
+              finishReason = 'tool_calls'
+            }
+          }
+          const visibleContent = inlineToolCall.consumed ? inlineToolCall.visibleText : content
+          if (!visibleContent) {
+            // The chunk was entirely model-native tool-call protocol.
+          } else {
           // Extract inline reasoning tags (e.g. MiniMax <mm:think>) across
           // chunk boundaries before sanitizing the visible text. This routes
           // inlined thinking to the same `assistant_reasoning_delta` channel
           // as dedicated `reasoning_content` fields, so all models converge on
           // the same reasoning UI without per-model frontend adaptation.
-          const extracted = reasoningExtractor.push(content)
+          const extracted = reasoningExtractor.push(visibleContent)
           if (extracted.reasoning) {
             reasoning += extracted.reasoning
             chunks.push({ kind: 'assistant_reasoning_delta', text: extracted.reasoning })
@@ -962,19 +994,13 @@ export class ModelCompatClient implements ModelClient {
               chunks.push({ kind: 'assistant_text_delta', text: cleaned })
             }
           }
+          }
         }
         const reasoningContent = delta.reasoning_content ?? delta.reasoning
         if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
           reasoning += reasoningContent
           chunks.push({ kind: 'assistant_reasoning_delta', text: reasoningContent })
         }
-        const toolCalls = delta.tool_calls as
-          | {
-              index?: number
-              id?: string
-              function?: { name?: string; arguments?: string }
-            }[]
-          | undefined
         if (Array.isArray(toolCalls)) {
           for (const call of toolCalls) {
             const id = resolveToolCallDeltaId(call, pendingArguments)
@@ -995,7 +1021,7 @@ export class ModelCompatClient implements ModelClient {
           }
         }
       }
-      if (typeof choice.finish_reason === 'string') {
+      if (typeof choice.finish_reason === 'string' && finishReason !== 'tool_calls') {
         finishReason = choice.finish_reason
       }
     }
@@ -2088,8 +2114,9 @@ function sanitizeEmptyMessageContent(messages: ChatMessage[], baseUrl?: string, 
     if (message.role === 'assistant') {
       if (requireAssistantContent) {
         // Strict provider: supply a minimal non-whitespace placeholder that is
-        // unambiguous and unlikely to be echoed as conversation.
-        return { ...message, content: '(tool call)' }
+        // not visible if the model echoes conversation history. MiniMax M3 can
+        // otherwise leak a visible placeholder like "(tool call)" into content.
+        return { ...message, content: STRICT_PROVIDER_EMPTY_CONTENT_PLACEHOLDER }
       }
       // Spec-compliant: omit the content key entirely. Most providers accept an
       // assistant message carrying only tool_calls with content omitted.
@@ -2101,8 +2128,8 @@ function sanitizeEmptyMessageContent(messages: ChatMessage[], baseUrl?: string, 
     }
     if (message.role === 'tool') {
       // Tool messages require a non-empty content string; use a placeholder
-      // that is unambiguous to the model but not conversation-like.
-      return { ...message, content: '(tool returned no output)' }
+      // that is invisible if the model echoes conversation history.
+      return { ...message, content: STRICT_PROVIDER_EMPTY_CONTENT_PLACEHOLDER }
     }
     // user/system should never reach here with empty content; leave as-is so
     // any upstream bug surfaces instead of being masked.
@@ -2350,6 +2377,157 @@ function normalizeThinkingAssistantMessages(
     }
     return next
   })
+}
+
+type InlineToolCallParseResult = {
+  toolName: string
+  arguments: Record<string, unknown>
+}
+
+function consumeInlineToolCallContent(
+  content: string,
+  state: InlineToolCallState
+): {
+  consumed: boolean
+  visibleText: string
+  call?: { callId: string; toolName: string; arguments: Record<string, unknown> }
+} {
+  const combined = state.buffer ? `${state.buffer}${content}` : content
+  const markerIndex = inlineToolCallMarkerIndex(combined)
+  if (markerIndex < 0) {
+    return { consumed: false, visibleText: content }
+  }
+  const visibleText = state.buffer ? '' : combined.slice(0, markerIndex)
+  const protocolText = combined.slice(markerIndex)
+  const parsed = parseInlineToolCallProtocol(protocolText)
+  if (!parsed) {
+    state.buffer = protocolText.slice(-32_768)
+    return { consumed: true, visibleText }
+  }
+  state.buffer = ''
+  const callId = `call_inline_${state.nextId++}`
+  return {
+    consumed: true,
+    visibleText,
+    call: {
+      callId,
+      toolName: parsed.toolName,
+      arguments: parsed.arguments
+    }
+  }
+}
+
+function inlineToolCallMarkerIndex(text: string): number {
+  const markers = [
+    /\(\s*tool\s+call\b/i,
+    /<function_calls>/i,
+    /<tool_call\b/i,
+    /<invoke\s+name=/i,
+    /<action>\s*\w+/i,
+    /\[<invoke\s+name=/i,
+    /\[<parameter\s+name=/i
+  ]
+  let index = -1
+  for (const marker of markers) {
+    const match = marker.exec(text)
+    if (!match) continue
+    index = index < 0 ? match.index : Math.min(index, match.index)
+  }
+  return index
+}
+
+function parseInlineToolCallProtocol(text: string): InlineToolCallParseResult | null {
+  const json = extractFirstBalancedJsonObject(text)
+  const explicitToolName = toolNameFromInlineToolCall(text)
+  if (json) {
+    const repaired = repairToolArguments(json).arguments
+    if (Object.keys(repaired).length > 0) {
+      return {
+        toolName: explicitToolName ?? 'bash',
+        arguments: repaired
+      }
+    }
+  }
+
+  const actionMatch = text.match(/<action>\s*([a-zA-Z0-9_-]+)\s*(?:\]\[)?<\/action>\]?\s*([\s\S]*)/i)
+  if (actionMatch?.[1]) {
+    const command = cleanInlineToolCommand(actionMatch[2] ?? '')
+    if (command) {
+      return {
+        toolName: explicitToolName ?? 'bash',
+        arguments: { action: actionMatch[1], command }
+      }
+    }
+  }
+
+  const commandMatch = text.match(/\[?<command>([\s\S]*?)(?:<\/command>\]?|\[<\/command>\]|$)/i)
+  if (commandMatch?.[1]) {
+    const command = cleanInlineToolCommand(commandMatch[1])
+    if (command) {
+      return {
+        toolName: explicitToolName ?? 'bash',
+        arguments: { action: 'run', command }
+      }
+    }
+  }
+
+  const bracketParameterMatch = text.match(/\[<parameter\s+name="([^"]+)">([\s\S]*?)(?:\]\s*(?:\[|$)|$)/i)
+  if (bracketParameterMatch?.[1]) {
+    const value = cleanInlineToolCommand(bracketParameterMatch[2] ?? '')
+    if (value) {
+      return {
+        toolName: explicitToolName ?? 'bash',
+        arguments: { [bracketParameterMatch[1]]: value }
+      }
+    }
+  }
+
+  return null
+}
+
+function toolNameFromInlineToolCall(text: string): string | undefined {
+  return text.match(/\(\s*tool\s+call\s+([a-zA-Z0-9_.-]+)\s*:/i)?.[1] ??
+    text.match(/\[?<invoke\s+name="([^"]+)">\]?/i)?.[1]
+}
+
+function extractFirstBalancedJsonObject(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start < 0) return null
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i]
+    if (inString) {
+      if (escape) {
+        escape = false
+      } else if (char === '\\') {
+        escape = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') depth += 1
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+function cleanInlineToolCommand(value: string): string {
+  return value
+    .replace(/\[<\/(?:action|command|parameter|invoke|tool_call|function_calls)>\]/gi, '')
+    .replace(/<\/(?:action|command|parameter|invoke|tool_call|function_calls)>/gi, '')
+    .replace(/<\]minimax\[>/gi, '')
+    .replace(/\]\s*$/g, '')
+    .trim()
 }
 
 /**

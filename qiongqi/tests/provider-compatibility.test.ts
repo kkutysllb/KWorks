@@ -33,6 +33,17 @@ describe('model provider compatibility profiles', () => {
     expect(profile.requiresAssistantContentForToolCalls).toBe(true)
   })
 
+  it('does not show vLLM parser warnings for official MiniMax M3', () => {
+    const warnings = modelCompatibilityWarnings({
+      baseUrl: 'https://api.minimaxi.com/v1',
+      model: 'MiniMax-M3',
+      endpointFormat: 'chat_completions',
+      supportsToolCalling: true
+    })
+
+    expect(warnings).toEqual([])
+  })
+
   it('warns when local vLLM MiniMax M3 needs server-side tool parsers', () => {
     const profile = compatibilityProfileForModel({
       baseUrl: 'http://127.0.0.1:8000/v1',
@@ -53,6 +64,26 @@ describe('model provider compatibility profiles', () => {
     expect(profile.requestFlags.reasoningSplit).toBe(true)
     expect(warnings.join('\n')).toContain('--tool-call-parser minimax_m3')
     expect(warnings.join('\n')).toContain('--enable-auto-tool-choice')
+  })
+
+  it('does not show MiniMax parser warnings for local vLLM DeepSeek v4 flash', () => {
+    const profile = compatibilityProfileForModel({
+      baseUrl: 'http://127.0.0.1:8000/v1',
+      model: 'DeepSeek-v4-flash',
+      endpointFormat: 'chat_completions',
+      supportsToolCalling: true
+    })
+    const warnings = modelCompatibilityWarnings({
+      baseUrl: 'http://127.0.0.1:8000/v1',
+      model: 'DeepSeek-v4-flash',
+      endpointFormat: 'chat_completions',
+      supportsToolCalling: true
+    })
+
+    expect(profile.provider).toBe('vllm')
+    expect(profile.requestFlags.reasoningSplit).toBe(false)
+    expect(profile.toolCallProtocol).toBe('openai')
+    expect(warnings).toEqual([])
   })
 
   it('does not apply MiniMax thinking dialect to unrelated local vLLM models', () => {

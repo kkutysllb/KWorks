@@ -83,13 +83,13 @@ The agent reports an error like `"No chat models are configured"` or `"model not
 
 ---
 
-### Local vLLM MiniMax-M3 leaks tool protocol text
+### MiniMax-M3 leaks tool protocol text
 
-Symptoms: when using MiniMax-M3 behind local vLLM, the main chat shows text such as `<action>run</action>`, `<timeout>`, `tool call`, or long tool execution payloads instead of normal tool-call results.
+Symptoms: when using MiniMax-M3, the main chat shows text such as `<action>run</action>`, `<timeout>`, `tool call`, `[<invoke name="bash">]`, or long tool execution payloads instead of normal tool-call results. The task can also stop after this content appears.
 
-Cause: MiniMax-M3 tool calls and reasoning content must be parsed by the server into OpenAI-compatible `tool_calls` / reasoning fields. Without the MiniMax-M3 parser, vLLM streams the model-native protocol as ordinary assistant text.
+Cause: the official MiniMax-M3 OpenAI-compatible API should return standard `tool_calls`, and requests should enable `reasoning_split` to separate reasoning content. KWorks enables `reasoning_split` automatically and includes a fallback parser for the rare responses that still stream model-native tool protocol inside `delta.content`, converting them into internal tool calls instead of showing them in the main chat.
 
-Start vLLM with the official MiniMax-M3 parser flags:
+If you are actually self-hosting MiniMax-M3 with local vLLM, also start vLLM with the official MiniMax-M3 parser flags:
 
 ```bash
 vllm serve MiniMaxAI/MiniMax-M3 \
@@ -99,7 +99,7 @@ vllm serve MiniMaxAI/MiniMax-M3 \
   --block-size 128
 ```
 
-KWorks automatically enables `reasoning_split` for local vLLM + MiniMax-M3 profiles and surfaces compatibility warnings in the model settings page and `/api/models`, but the parser flags must be enabled on the vLLM server.
+Note: the official MiniMax-M3 API does not use these vLLM server flags. They only apply when the `baseUrl` points to a local vLLM server that is actually hosting MiniMax-M3; a local vLLM deployment of DeepSeek-v4-flash does not use this MiniMax-M3 parser rule.
 
 ---
 

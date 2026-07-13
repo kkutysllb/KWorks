@@ -76,7 +76,7 @@ export function modelCompatibilityWarnings(input: CompatibilityInput): string[] 
     input.supportsToolCalling !== false
   ) {
     warnings.push(
-      '本地 vLLM 部署 MiniMax-M3 并启用工具调用时，服务端必须使用 `--tool-call-parser minimax_m3 --reasoning-parser minimax_m3 --enable-auto-tool-choice --block-size 128`；否则模型原生工具协议会作为正文泄漏。'
+      '仅当这个本地 OpenAI 兼容地址实际部署的是 MiniMax-M3 时，服务端必须使用 `--tool-call-parser minimax_m3 --reasoning-parser minimax_m3 --enable-auto-tool-choice --block-size 128`；官方 MiniMax-M3 API 不需要这些 vLLM 参数。'
     )
   }
   return warnings

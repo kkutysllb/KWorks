@@ -1300,7 +1300,7 @@ function modelProfileCompatibilityWarnings(model: JsonObject): string[] {
     isLocalOpenAiCompatibleUrl(baseUrl)
   ) {
     return [
-      "本地 vLLM 部署 MiniMax-M3 并启用工具调用时，请按官方 recipe 使用 --tool-call-parser minimax_m3、--reasoning-parser minimax_m3、--enable-auto-tool-choice、--block-size 128 启动；否则模型原生工具协议可能泄漏到正文。",
+      "仅当这个本地地址实际部署的是 MiniMax-M3 时：请按 vLLM 官方 recipe 使用 --tool-call-parser minimax_m3、--reasoning-parser minimax_m3、--enable-auto-tool-choice、--block-size 128 启动；官方 MiniMax-M3 API 不需要这些 vLLM 参数。",
     ];
   }
   return [];
