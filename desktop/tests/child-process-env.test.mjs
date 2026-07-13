@@ -28,3 +28,13 @@ test("qiongqi backend and embedded terminals use the shared child process env", 
   assert.match(ipcSource, /buildChildProcessEnv\(process\.env\)/);
   assert.doesNotMatch(ipcSource, /DEFAULT_TERMINAL_PATH/);
 });
+
+test("desktop child env supplements finance credentials from the local login shell", () => {
+  assert.match(envSource, /FINANCE_CREDENTIAL_ENV_KEYS/);
+  assert.match(envSource, /IWENCAI_API_KEY/);
+  assert.match(envSource, /TUSHARE_TOKEN/);
+  assert.match(envSource, /readFinanceCredentialEnvFromLoginShell/);
+  assert.match(envSource, /spawnSync\(\s*shell,/);
+  assert.match(envSource, /KWORKS_ENV_START/);
+  assert.match(envSource, /KWORKS_ENV_END/);
+});
