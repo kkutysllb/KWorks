@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -14,7 +15,7 @@ import {
   Wand2Icon,
   SparklesIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   useApplyCodingReviewFix,
   useLatestCodingReview,
-  useRunCodingReview,
 } from "@/core/projects";
 import type { CodingReviewFinding } from "@/core/projects";
 import { qiongqiClient } from "@/core/threads/qiongqi-client";
@@ -80,18 +80,20 @@ export function ReviewPanel({
   threadId,
   onThreadCreated,
 }: ReviewPanelProps) {
+  const queryClient = useQueryClient();
   const { review, isLoading, isFetching, error, refetch } =
     useLatestCodingReview(threadId);
-  const runReview = useRunCodingReview();
   const applyFix = useApplyCodingReviewFix(projectId);
+  const [nativeReviewPending, setNativeReviewPending] = useState(false);
+  const [nativeReviewError, setNativeReviewError] = useState<string | null>(null);
   const [findingSeverityFilter, setFindingSeverityFilter] = useState<
     "all" | keyof typeof SEVERITY_CONFIG
   >("all");
   const [expandedPatchFindingId, setExpandedPatchFindingId] = useState<
     string | null
   >(null);
-  const pending = runReview.isPending;
-  const currentReview = runReview.data ?? review;
+  const pending = nativeReviewPending;
+  const currentReview = review;
   const prContext = getReviewPrContext(currentReview?.source);
   const filteredFindings = useMemo(() => {
     const findings = currentReview?.findings ?? [];
@@ -99,11 +101,10 @@ export function ReviewPanel({
     return findings.filter((finding) => finding.severity === findingSeverityFilter);
   }, [currentReview?.findings, findingSeverityFilter]);
   const reviewError =
-    runReview.error instanceof Error
-      ? runReview.error.message
-      : error instanceof Error
+    nativeReviewError ??
+    (error instanceof Error
         ? error.message
-        : null;
+        : null);
   const applyFixError =
     applyFix.error instanceof Error ? applyFix.error.message : null;
   const applyFixSuccess = applyFix.isSuccess ? applyFix.data : null;
@@ -126,16 +127,47 @@ export function ReviewPanel({
           // If thread creation fails, let the backend reject with its own error.
         }
       }
-      runReview.mutate({
-        project_id: projectId,
-        project_root: projectRoot,
-        thread_id: effectiveThreadId,
-        scope,
-        base_ref: undefined,
-      });
+      if (!effectiveThreadId) {
+        setNativeReviewError("无法创建或定位 Coding 审查线程。");
+        return;
+      }
+      setNativeReviewPending(true);
+      setNativeReviewError(null);
+      try {
+        const reviewRequest =
+          scope === "pr"
+            ? { target: { kind: "baseBranch", branch: "origin/main" } as const }
+            : { target: { kind: "uncommittedChanges" } as const };
+        await qiongqiClient.startReview(effectiveThreadId, reviewRequest);
+        void queryClient.invalidateQueries({
+          queryKey: ["thread", effectiveThreadId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["coding", "sessions", effectiveThreadId],
+          exact: false,
+        });
+        void refetch();
+      } catch (error) {
+        setNativeReviewError(
+          error instanceof Error ? error.message : String(error),
+        );
+        setNativeReviewPending(false);
+      }
     },
-    [threadId, projectId, projectRoot, runReview, onThreadCreated],
+    [threadId, projectRoot, onThreadCreated, queryClient, refetch],
   );
+
+  useEffect(() => {
+    if (!nativeReviewPending) return;
+    if (review || nativeReviewError) {
+      setNativeReviewPending(false);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      void refetch();
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [nativeReviewError, nativeReviewPending, refetch, review]);
 
   const reviewSummary = currentReview?.summary ?? null;
   const hasBlockingIssue =

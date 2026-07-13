@@ -520,7 +520,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/api/coding/sessions/:threadId/review', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksGetLatestCodingReview(ctx.params.threadId)
+    return kworksGetLatestCodingReview(runtime, ctx.params.threadId)
   })
   router.add('GET', '/api/coding/sessions/:threadId/roi/summary', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)

@@ -21,8 +21,9 @@ import {
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { buildCodingStagePrompt } from "@/core/coding/stage-prompts";
 import { useWorkspaceSearchParams } from "@/core/navigation/workspace-route";
-import { useProject } from "@/core/projects";
+import { useDeliveryStages, useProject, useProjectStage } from "@/core/projects";
 import { codingThreadStorageKey } from "@/core/projects/coding-thread-routes";
 import { useThreadSettings } from "@/core/settings";
 import { SubtasksProvider } from "@/core/tasks/context";
@@ -86,6 +87,8 @@ function AgentPanelInner({
   onFocusFile,
 }: AgentPanelProps) {
   const { project } = useProject(projectId);
+  const { stages: deliveryStages } = useDeliveryStages();
+  const { stage: projectStageState } = useProjectStage(project?.path);
   const queryClient = useQueryClient();
   const routerSearchParams = useSearchParams();
   const searchParams = useWorkspaceSearchParams(routerSearchParams);
@@ -309,6 +312,26 @@ function AgentPanelInner({
     (message: PromptInputMessage, submitContext: InputBoxSubmitContext) => {
       // Scope the coding agent to this project for file access and memory.
       const project_root = project?.path;
+      const currentStage = projectStageState?.current_stage
+        ? (deliveryStages.find(
+            (stage) => stage.id === projectStageState.current_stage,
+          ) ?? null)
+        : null;
+      const qiongqiPromptOverride = buildCodingStagePrompt({
+        userText: message.text,
+        projectRoot: project_root,
+        stage: currentStage,
+        stageState: projectStageState,
+      });
+      const promptOptions =
+        qiongqiPromptOverride !== message.text
+          ? {
+              additionalKwargs: {
+                qiongqi_prompt_override: qiongqiPromptOverride,
+                displayText: message.text,
+              },
+            }
+          : undefined;
       void sendMessage(
         threadId,
         message,
@@ -324,9 +347,17 @@ function AgentPanelInner({
               },
             }
           : submitContext,
+        promptOptions,
       );
     },
-    [sendMessage, threadId, project?.path, projectId],
+    [
+      deliveryStages,
+      project?.path,
+      projectId,
+      projectStageState,
+      sendMessage,
+      threadId,
+    ],
   );
 
   const handleStop = useCallback(async () => {

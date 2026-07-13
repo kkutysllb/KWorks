@@ -312,4 +312,28 @@ describe("coding workbench layout", () => {
     expect(panel).toContain("applyFix.mutate");
     expect(panel).toContain("applyFix.error");
   });
+
+  test("agent panel injects active workflow stage context through hidden prompt override", () => {
+    const panel = readFileSync(
+      resolve(repoRoot, "src/components/workspace/coding/agent-panel.tsx"),
+      "utf8",
+    );
+
+    expect(panel).toContain("buildCodingStagePrompt");
+    expect(panel).toContain("useDeliveryStages");
+    expect(panel).toContain("useProjectStage");
+    expect(panel).toContain("qiongqi_prompt_override");
+    expect(panel).toContain("displayText: message.text");
+  });
+
+  test("review panel starts native qiongqi review instead of only compat review summary", () => {
+    const panel = readFileSync(
+      resolve(repoRoot, "src/components/workspace/coding/review-panel.tsx"),
+      "utf8",
+    );
+
+    expect(panel).toContain("qiongqiClient.startReview");
+    expect(panel).toContain('target: { kind: "uncommittedChanges" }');
+    expect(panel).toContain('target: { kind: "baseBranch"');
+  });
 });

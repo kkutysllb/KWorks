@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   kworksGetCodingRoiSummary,
   kworksGetCodingSession,
+  kworksGetLatestCodingReview,
   kworksListCodingSessionEvents,
   kworksRunCodingReview
 } from '@qiongqi/http/routes/kworks-compat.js'
@@ -143,6 +144,81 @@ describe('KWorks coding session compatibility bridge', () => {
         })
       })
     ])
+  })
+
+  test('latest compat coding review can be hydrated from native qiongqi review items', async () => {
+    const runtime = runtimeWithThread({
+      id: 'thread_native_review',
+      workspace: '/tmp/project',
+      updatedAt: '2026-07-01T08:00:00.000Z',
+      workModeId: 'coding',
+      turns: [
+        {
+          id: 'turn_review',
+          threadId: 'thread_native_review',
+          status: 'completed',
+          prompt: '/review',
+          createdAt: '2026-07-01T07:59:00.000Z',
+          finishedAt: '2026-07-01T08:00:00.000Z',
+          workModeId: 'coding',
+          items: [
+            {
+              id: 'item_native_review',
+              kind: 'review',
+              threadId: 'thread_native_review',
+              turnId: 'turn_review',
+              status: 'completed',
+              target: { kind: 'uncommittedChanges' },
+              title: 'Review current changes',
+              reviewText: 'Found one blocking issue.',
+              createdAt: '2026-07-01T07:59:01.000Z',
+              finishedAt: '2026-07-01T08:00:00.000Z',
+              output: {
+                findings: [
+                  {
+                    title: '[P1] Guard missing env check',
+                    body: 'The patch reads an env var without checking whether it exists.',
+                    confidenceScore: 0.9,
+                    priority: 1,
+                    codeLocation: {
+                      absoluteFilePath: '/tmp/src/app.ts',
+                      lineRange: { start: 12, end: 14 }
+                    }
+                  }
+                ],
+                overallCorrectness: 'patch is incorrect',
+                overallExplanation: 'The change can fail at runtime.',
+                overallConfidenceScore: 0.85
+              }
+            }
+          ]
+        }
+      ]
+    })
+
+    const response = await kworksGetLatestCodingReview(runtime, 'thread_native_review')
+    const json = JSON.parse(response.body)
+
+    expect(json.review).toMatchObject({
+      thread_id: 'thread_native_review',
+      scope: 'project_diff',
+      decision: 'request_changes',
+      summary: {
+        critical: 0,
+        major: 1,
+        minor: 0,
+        nitpick: 0
+      },
+      findings: [
+        {
+          severity: 'major',
+          file: '/tmp/src/app.ts',
+          line: 12,
+          message: '[P1] Guard missing env check',
+          suggestion: 'The patch reads an env var without checking whether it exists.'
+        }
+      ]
+    })
   })
 })
 

@@ -27,6 +27,10 @@ describe("coding inspector API", () => {
       resolve(repoRoot, "src/core/projects/types.ts"),
       "utf8",
     );
+    const qiongqiClient = readFileSync(
+      resolve(repoRoot, "src/core/threads/qiongqi-client.ts"),
+      "utf8",
+    );
 
     expect(types).toContain("export interface QiongqiEvent");
     expect(types).toContain("export interface QiongqiSessionSnapshot");
@@ -54,6 +58,9 @@ describe("coding inspector API", () => {
     expect(api).toContain("/changes");
     expect(api).toContain("export async function runCodingReview");
     expect(api).toContain("/api/coding/reviews");
+    expect(qiongqiClient).toContain("async startReview");
+    expect(qiongqiClient).toContain("/v1/threads/${threadId}/review");
+    expect(qiongqiClient).toContain('kind: "uncommittedChanges"');
     expect(api).toContain("export async function getLatestCodingReview");
     expect(api).toContain("/review");
     expect(api).toContain("export async function applyCodingReviewFix");

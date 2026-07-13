@@ -89,6 +89,24 @@ export interface StartTurnResponse {
   userMessageItemId: string;
 }
 
+export type ReviewTarget =
+  | { kind: "uncommittedChanges" }
+  | { kind: "baseBranch"; branch: string }
+  | { kind: "commit"; sha: string }
+  | { kind: "custom"; instructions: string };
+
+export interface StartReviewPayload {
+  target: ReviewTarget;
+  model?: string;
+}
+
+export interface StartReviewResponse {
+  threadId: string;
+  turnId: string;
+  userMessageItemId: string;
+  reviewItemId: string;
+}
+
 export interface UserInputAnswer {
   id: string;
   label: string;
@@ -244,6 +262,19 @@ export const qiongqiClient = {
   ): Promise<StartTurnResponse> {
     return request<StartTurnResponse>(
       encodePath`/v1/threads/${threadId}/turns`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async startReview(
+    threadId: string,
+    payload: StartReviewPayload,
+  ): Promise<StartReviewResponse> {
+    return request<StartReviewResponse>(
+      encodePath`/v1/threads/${threadId}/review`,
       {
         method: "POST",
         body: JSON.stringify(payload),

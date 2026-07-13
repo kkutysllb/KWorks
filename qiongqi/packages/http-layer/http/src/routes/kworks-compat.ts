@@ -1245,8 +1245,12 @@ export async function kworksListCodingSessionChanges(runtime: ServerRuntime, thr
   return jsonResponse({ thread_id: threadId, changes: await codingChangesFromThread(threadId, thread) })
 }
 
-export async function kworksGetLatestCodingReview(threadId: string): Promise<JsonResponse> {
-  return jsonResponse({ thread_id: threadId, review: codingReviewsByThread.get(threadId) ?? null })
+export async function kworksGetLatestCodingReview(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+  const thread = await runtime.threadService.get(threadId)
+  return jsonResponse({
+    thread_id: threadId,
+    review: nativeCodingReviewFromThread(threadId, thread) ?? codingReviewsByThread.get(threadId) ?? null
+  })
 }
 
 export async function kworksRunCodingReview(
@@ -1327,6 +1331,126 @@ export async function kworksRunCodingReview(
   }
   codingReviewsByThread.set(threadId, review)
   return jsonResponse(review, 201)
+}
+
+function nativeCodingReviewFromThread(threadId: string, thread: ThreadRecord | null): CodingReview | null {
+  if (!thread) return null
+  const reviewItems = thread.turns
+    .flatMap((turn) => turn.items.map((item) => ({ turn, item })))
+    .filter((entry): entry is { turn: ThreadRecord['turns'][number]; item: Extract<TurnItem, { kind: 'review' }> } => entry.item.kind === 'review')
+  const latest = reviewItems.at(-1)
+  if (!latest) return null
+
+  const item = latest.item
+  const output = isObject(item.output) ? item.output : {}
+  const rawFindings = Array.isArray(output.findings) ? output.findings : []
+  const findings = rawFindings
+    .map((finding, index) => nativeReviewFindingFromOutput(finding, index, threadId, item.id))
+    .filter((finding): finding is CodingReviewFinding => Boolean(finding))
+  const summary = {
+    project_files: new Set(findings.map((finding) => finding.file).filter((file): file is string => Boolean(file))).size,
+    task_changes: 0,
+    qiongqi_events: codingEventsFromThread(threadId, thread).length,
+    commits: nativeReviewTargetKind(item.target) === 'baseBranch' ? 1 : 0,
+    additions: 0,
+    deletions: 0,
+    critical: findings.filter((finding) => finding.severity === 'critical').length,
+    major: findings.filter((finding) => finding.severity === 'major').length,
+    minor: findings.filter((finding) => finding.severity === 'minor').length,
+    nitpick: findings.filter((finding) => finding.severity === 'nitpick').length
+  }
+  const correctness = stringValue(output.overallCorrectness)
+  const decision = correctness === 'patch is incorrect'
+    ? 'request_changes'
+    : findings.some((finding) => finding.severity === 'critical' || finding.severity === 'major')
+      ? 'needs_review'
+      : 'pass'
+
+  return {
+    review_id: item.id,
+    project_id: threadId,
+    project_root: thread.workspace ?? '',
+    thread_id: threadId,
+    scope: nativeReviewScope(item.target),
+    decision,
+    summary,
+    findings,
+    source: {
+      kind: 'qiongqi-native-review',
+      target: item.target,
+      title: item.title,
+      status: item.status,
+      overallCorrectness: correctness,
+      overallExplanation: stringValue(output.overallExplanation),
+      overallConfidenceScore: numberValue(output.overallConfidenceScore)
+    },
+    created_at: item.finishedAt ?? item.createdAt ?? latest.turn.finishedAt ?? latest.turn.createdAt ?? new Date().toISOString(),
+    next_plan: findings.length > 0
+      ? ['处理 native QiongQi review findings', '修复后重新运行 Code Review']
+      : []
+  }
+}
+
+function nativeReviewFindingFromOutput(
+  value: unknown,
+  index: number,
+  threadId: string,
+  reviewItemId: string
+): CodingReviewFinding | null {
+  if (!isObject(value)) return null
+  const location = isObject(value.codeLocation) ? value.codeLocation : {}
+  const lineRange = isObject(location.lineRange) ? lineRangeObject(location.lineRange) : {}
+  const priority = numberValue(value.priority) ?? 3
+  const confidence = numberValue(value.confidenceScore)
+  const title = stringValue(value.title) || `Review finding ${index + 1}`
+  const body = stringValue(value.body)
+  const file = stringValue(location.absoluteFilePath) || null
+  const line = numberValue(lineRange.start)
+  return {
+    id: `${reviewItemId}_finding_${index + 1}`,
+    severity: severityFromReviewPriority(priority),
+    category: 'native_review',
+    file,
+    line: line > 0 ? line : null,
+    task_id: threadId,
+    message: title,
+    suggestion: body,
+    evidence: [
+      `priority=${Number.isFinite(priority) ? priority : 'unknown'}`,
+      `confidence=${Number.isFinite(confidence) ? confidence : 'unknown'}`,
+      `review_item=${reviewItemId}`
+    ],
+    fix: {
+      applicable: false,
+      kind: null,
+      description: 'Native QiongQi review findings are read-only in this panel; ask the Coding Agent to implement the fix.',
+      patch: '',
+      applied: false
+    }
+  }
+}
+
+function severityFromReviewPriority(priority: number): CodingReviewFinding['severity'] {
+  if (priority <= 0) return 'critical'
+  if (priority === 1) return 'major'
+  if (priority === 2) return 'minor'
+  return 'nitpick'
+}
+
+function nativeReviewScope(target: unknown): string {
+  const kind = nativeReviewTargetKind(target)
+  if (kind === 'baseBranch') return 'pr'
+  if (kind === 'commit') return 'commit'
+  if (kind === 'custom') return 'custom'
+  return 'project_diff'
+}
+
+function nativeReviewTargetKind(target: unknown): string {
+  return isObject(target) ? stringValue(target.kind) ?? '' : ''
+}
+
+function lineRangeObject(value: unknown): Record<string, unknown> {
+  return isObject(value) ? value : {}
 }
 
 export async function kworksApplyCodingReviewFix(request: Request): Promise<JsonResponse | Response> {
