@@ -168,6 +168,11 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 120_000
 const DEFAULT_MESSAGES_MAX_TOKENS = 4096
 const REDACTED_THINKING_SIGNATURE_PREFIX = 'redacted:'
 const STRICT_PROVIDER_EMPTY_CONTENT_PLACEHOLDER = '\u200b'
+const ACTIVE_TASK_CONTINUATION_MESSAGE = [
+  'Continue the active task from the conversation summary and recent context above.',
+  'Use the latest unresolved next action as your immediate next step.',
+  'Do not ask the user what to do unless the summary explicitly says user input is required or the task is blocked.'
+].join(' ')
 
 /**
  * Provider-agnostic model compatibility client.
@@ -2542,7 +2547,7 @@ function cleanInlineToolCommand(value: string): string {
 function ensureUserMessagePresent(messages: ChatMessage[]): ChatMessage[] {
   const hasNonSystem = messages.some((m) => m.role !== 'system')
   if (hasNonSystem) return messages
-  return [...messages, { role: 'user', content: 'Continue.' } as ChatMessage]
+  return [...messages, { role: 'user', content: ACTIVE_TASK_CONTINUATION_MESSAGE } as ChatMessage]
 }
 
 function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
@@ -2566,7 +2571,7 @@ function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
   if (nonSystemMessages.length === 0) {
     return [
       systemMessage,
-      { role: 'user', content: 'Continue.' }
+      { role: 'user', content: ACTIVE_TASK_CONTINUATION_MESSAGE }
     ]
   }
   // Zhipu GLM rejects (error 1214 "messages 参数非法") when the first
@@ -2574,7 +2579,7 @@ function normalizeGlmMessages(messages: ChatMessage[]): ChatMessage[] {
   // folds history into a system summary whose following tail starts with an
   // assistant turn. Insert a minimal user message to lead the conversation.
   if (nonSystemMessages[0]?.role !== 'user') {
-    return [systemMessage, { role: 'user', content: 'Continue.' }, ...nonSystemMessages]
+    return [systemMessage, { role: 'user', content: ACTIVE_TASK_CONTINUATION_MESSAGE }, ...nonSystemMessages]
   }
   return [systemMessage, ...nonSystemMessages]
 }

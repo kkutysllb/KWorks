@@ -567,7 +567,11 @@ describe('DeepseekCompatModelClient', () => {
     expect(JSON.stringify(messages)).toContain('<qiongqi_internal_tool_context>')
     expect(JSON.stringify(messages)).toContain('assistant_preface:')
     expect(JSON.stringify(messages)).toContain('Checking the final file shape.')
-    expect(messages.at(-1)).toMatchObject({ role: 'user', content: 'Continue.' })
+    expect(messages.at(-1)).toMatchObject({
+      role: 'user',
+      content: expect.stringContaining('Continue the active task')
+    })
+    expect(String(messages.at(-1)?.content)).toContain('Do not ask the user what to do')
   })
 
   it('folds replay-shifted GLM user-input tool history without orphan assistant messages', async () => {
@@ -666,7 +670,11 @@ describe('DeepseekCompatModelClient', () => {
     expect(String(messages[0]?.content)).toContain('<qiongqi_internal_tool_context>')
     expect(String(messages[0]?.content)).toContain('assistant_preface:')
     expect(String(messages[0]?.content)).toContain('I need one decision before continuing.')
-    expect(messages.at(-1)).toMatchObject({ role: 'user', content: 'Continue.' })
+    expect(messages.at(-1)).toMatchObject({
+      role: 'user',
+      content: expect.stringContaining('Continue the active task')
+    })
+    expect(String(messages.at(-1)?.content)).toContain('Do not ask the user what to do')
   })
 
   it('strips persisted legacy folded GLM tool history from assistant text before sending context', async () => {
@@ -3326,9 +3334,11 @@ describe('DeepseekCompatModelClient', () => {
 
     const messages = sentBodies[0]?.messages ?? []
     // MiniMax rejects a request with only system messages ("chat content is
-    // empty"); a user message must be present.
-    const hasUser = messages.some((message) => message.role === 'user')
-    expect(hasUser).toBe(true)
+    // empty"); the synthetic user message must also carry a clear resumption
+    // instruction so post-compaction turns do not ask the user what to do.
+    const user = messages.find((message) => message.role === 'user')
+    expect(user?.content).toContain('Continue the active task')
+    expect(user?.content).toContain('Do not ask the user what to do')
   })
 
   it('GLM injects a leading user message when the first conversational message is assistant (1214)', async () => {
@@ -3382,6 +3392,8 @@ describe('DeepseekCompatModelClient', () => {
     // assistant message so GLM accepts the conversation.
     const firstNonSystem = messages.find((message) => message.role !== 'system')
     expect(firstNonSystem?.role).toBe('user')
+    expect(String(firstNonSystem?.content)).toContain('Continue the active task')
+    expect(String(firstNonSystem?.content)).toContain('Do not ask the user what to do')
     expect(messages.some((message) => message.role === 'assistant')).toBe(true)
   })
 
