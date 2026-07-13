@@ -18,7 +18,6 @@ import { useState } from "react";
 
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { TodoList } from "@/components/workspace/todo-list";
-import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { getFinanceModule, type FinanceModuleIcon } from "@/core/finance/modules";
 import type { Todo } from "@/core/todos";
 import { cn } from "@/lib/utils";
@@ -46,12 +45,8 @@ export function FinanceWorkbench({ moduleId }: FinanceWorkbenchProps) {
   const currentModule = getFinanceModule(moduleId);
   const [agentTodos, setAgentTodos] = useState<Todo[]>([]);
 
-  // In Electron (app:// protocol), router.push triggers will-navigate which
-  // reloads the page. Use history.pushState via navigateWorkspaceInPlace.
   const navigateToPath = (path: string) => {
-    if (!navigateWorkspaceInPlace(path)) {
-      router.push(path);
-    }
+    router.push(path);
   };
 
   if (!currentModule) {

@@ -33,12 +33,6 @@ function workspaceShellKey(pathname: string): string | null {
     return codingMatch?.[1] ? `coding:${decodeSegment(codingMatch[1])}` : "coding";
   }
 
-  // Finance: gallery (/workspace/finance) and module pages share the same shell
-  if (/^\/workspace\/finance(\/[^/]+)?\/?$/.test(pathname)) {
-    const financeMatch = /^\/workspace\/finance\/([^/]+)\/?$/.exec(pathname);
-    return financeMatch?.[1] ? `finance:${decodeSegment(financeMatch[1])}` : "finance";
-  }
-
   return null;
 }
 
@@ -53,12 +47,7 @@ export function canNavigateWorkspaceInPlace(
   const currentShell = workspaceShellKey(current.pathname);
   const targetShell = workspaceShellKey(target.pathname);
   if (currentShell === null || targetShell === null) return false;
-  // Match if both are in the same base workspace section (e.g. "finance",
-  // "finance:market-analysis", "coding", "coding:proj1"). The base prefix
-  // before ":" identifies the section; the suffix identifies the sub-page.
-  const currentBase = currentShell.split(":")[0];
-  const targetBase = targetShell.split(":")[0];
-  return currentBase === targetBase;
+  return currentShell === targetShell;
 }
 
 function currentFullPath(): string {

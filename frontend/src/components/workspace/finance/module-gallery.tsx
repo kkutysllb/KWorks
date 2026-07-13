@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { navigateWorkspaceInPlace } from "@/core/navigation/workspace-route";
 import { useFinanceCredentials } from "@/core/finance/credentials";
 import { FINANCE_MODULES, type FinanceModuleIcon } from "@/core/finance/modules";
 import { cn } from "@/lib/utils";
@@ -38,13 +37,7 @@ export function FinanceModuleGallery() {
   const { data: credStatus } = useFinanceCredentials();
 
   const navigateToModule = (moduleId: string) => {
-    const path = `/workspace/finance/${moduleId}`;
-    // In Electron (app:// protocol), router.push triggers will-navigate which
-    // reloads the page. Use history.pushState via navigateWorkspaceInPlace to
-    // stay in the SPA. Fall back to router.push in web mode.
-    if (!navigateWorkspaceInPlace(path)) {
-      router.push(path);
-    }
+    router.push(`/workspace/finance/${moduleId}`);
   };
 
   return (

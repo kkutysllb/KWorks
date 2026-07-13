@@ -84,6 +84,8 @@ const CHATS_DYNAMIC_RSC =
   "workspace/chats/new/__next.workspace.chats.$d$thread_id.__PAGE__.txt";
 const CODING_DYNAMIC_RSC =
   "workspace/coding/__init__/__next.workspace.coding.$d$projectId.__PAGE__.txt";
+const FINANCE_DYNAMIC_RSC =
+  "workspace/finance/__init__/__next.workspace.finance.$d$moduleId.__PAGE__.txt";
 
 export function resolveFrontendRequestPath(
   input: string,
@@ -157,6 +159,12 @@ export function resolveFrontendRequestPath(
     ) {
       return CODING_DYNAMIC_RSC;
     }
+    if (
+      clean.startsWith("workspace/finance/") &&
+      !clean.startsWith("workspace/finance/__init__")
+    ) {
+      return FINANCE_DYNAMIC_RSC;
+    }
 
     // Static routes → canonical __PAGE__.txt path.
     //   pathname ""               → "__next.__PAGE__.txt"
@@ -209,6 +217,16 @@ export function resolveFrontendRequestPath(
     !clean.startsWith("workspace/coding/new")
   ) {
     return "workspace/coding/__init__.html";
+  }
+
+  // Finance workspace: "workspace/finance/<moduleId>" is a dynamic route.
+  // Mirrors the coding pattern above — the desktop build pre-renders one
+  // placeholder (moduleId: "__init__"), producing
+  // workspace/finance/__init__.html. For any other moduleId, fall back to
+  // that pre-rendered shell — page.tsx is a client component that reads
+  // moduleId from usePathname() at runtime.
+  if (clean.startsWith("workspace/finance/")) {
+    return "workspace/finance/__init__.html";
   }
 
   return `${clean}.html`;
