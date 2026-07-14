@@ -128,7 +128,7 @@ describe('Memory store and recall', () => {
       ownerUserId: 'user_a',
       threadId: 'thread_a',
       limit: 5
-    })).map((item) => item.id)).toEqual([threadMemory.id])
+    })).map((item) => item.id)).toEqual([threadMemory.id, userMemory.id])
 
     expect(await store.retrieve({
       query: 'yarn',
@@ -143,6 +143,39 @@ describe('Memory store and recall', () => {
       ownerUserId: 'user_a',
       limit: 5
     })).toEqual([userMemory])
+  })
+
+  it('retrieves user and workspace memories across threads while keeping project memories thread-scoped', async () => {
+    const store = createStore()
+    const userMemory = await store.create({
+      ownerUserId: 'user_a',
+      content: 'User prefers pnpm for frontend analysis dashboards',
+      scope: 'user',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'old_thread'
+    })
+    const workspaceMemory = await store.create({
+      ownerUserId: 'user_a',
+      content: 'Workspace financial reports should include MD and HTML outputs',
+      scope: 'workspace',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'old_thread'
+    })
+    await store.create({
+      ownerUserId: 'user_a',
+      content: 'Project-specific draft uses yarn',
+      scope: 'project',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'old_thread'
+    })
+
+    expect((await store.retrieve({
+      query: 'frontend financial analysis reports pnpm MD HTML',
+      workspace: '/tmp/ws',
+      ownerUserId: 'user_a',
+      threadId: 'new_thread',
+      limit: 5
+    })).map((item) => item.id)).toEqual([workspaceMemory.id, userMemory.id])
   })
 
   it('exposes memory API routes with diagnostics', async () => {

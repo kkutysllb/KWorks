@@ -295,6 +295,7 @@ function activeObjectiveFromHistory(history: TurnItem[]): string {
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const item = history[index]
     if (item.kind === 'user_message' && item.text.trim()) {
+      if (isContinuationOnlyMessage(item.text)) continue
       return clipText(item.text, 600)
     }
   }
@@ -325,6 +326,7 @@ function nextActionsFromHistory(history: TurnItem[], prefix: ImmutablePrefix): s
     if (!text.trim()) continue
     for (const sentence of splitActionSentences(text)) {
       if (actions.length >= 3) break
+      if (isContinuationOnlyMessage(sentence)) continue
       if (looksLikeNextAction(sentence)) actions.push(clipText(sentence, 500))
     }
   }
@@ -349,6 +351,15 @@ function splitActionSentences(text: string): string[] {
 
 function looksLikeNextAction(text: string): boolean {
   return /(?:下一步|继续|修复|同步|验证|测试|实现|next|continue|fix|sync|verify|test|implement)/i.test(text)
+}
+
+function isContinuationOnlyMessage(text: string): boolean {
+  const compact = text
+    .replace(/[。.!！?？\s]+/g, '')
+    .trim()
+    .toLowerCase()
+  if (!compact) return true
+  return /^(继续|接着|继续推进|继续做|全部做|都做|开始吧|执行|接着来|goon|continue|proceed|doit|doall)$/.test(compact)
 }
 
 function extractSkillPins(history: TurnItem[]): string[] {

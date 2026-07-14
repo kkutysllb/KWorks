@@ -66,13 +66,13 @@ function scoreRecord(record: MemoryRecord, queryTokens: Set<string>): number {
 }
 
 function inActiveScope(record: MemoryRecord, workspace: string | undefined, threadId: string | undefined): boolean {
-  if (threadId && record.sourceThreadId !== threadId) return false
   if (record.scope === 'user') return true
   if (record.scope === 'workspace') return Boolean(workspace && record.workspace === workspace)
   if (record.scope === 'project') {
     return Boolean(
       workspace &&
-      record.workspace === workspace
+      record.workspace === workspace &&
+      (!threadId || record.sourceThreadId === threadId)
     )
   }
   return false
