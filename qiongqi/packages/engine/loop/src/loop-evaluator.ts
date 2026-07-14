@@ -54,15 +54,10 @@ export function defaultLoopEvaluator(input: LoopEvaluationInput): LoopEvaluation
     stepResult.completedToolCalls.length === 0 &&
     !stepResult.text.trim() &&
     !stepResult.reasoning.trim() &&
-    !hasPriorToolResult(input.ctx) &&
     retryCount < DEFAULT_EVALUATOR_MAX_RETRIES
   ) {
     return { verdict: 'retry', reason: 'model returned an empty stop response; retrying once' }
   }
 
   return { verdict: 'pass' }
-}
-
-function hasPriorToolResult(ctx: BuildContext): boolean {
-  return (ctx.healedItems ?? []).some((item) => item.kind === 'tool_result')
 }

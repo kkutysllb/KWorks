@@ -69,6 +69,76 @@ describe('ContinuationPolicy', () => {
     expect(calls).toBe(3)
   })
 
+  it('recovers from an empty terminal response after tool execution', async () => {
+    let calls = 0
+    const h = makeHarness({
+      provider: 'post-tool-empty-runner',
+      model: 'post-tool-empty-runner',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        calls += 1
+        if (calls === 1) {
+          yield {
+            kind: 'tool_call_complete',
+            callId: 'call_pwd',
+            toolName: 'pwd',
+            arguments: {}
+          }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
+        if (calls === 2) {
+          yield { kind: 'completed', stopReason: 'stop' }
+          return
+        }
+        yield { kind: 'assistant_text_delta', text: 'Final answer after tool output.' }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }, { toolStorm: { enabled: false } })
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const texts = (await h.sessionStore.loadItems(h.threadId))
+      .filter((item) => item.kind === 'assistant_text')
+      .map((item) => item.kind === 'assistant_text' ? item.text : '')
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(3)
+    expect(texts).toContain('Final answer after tool output.')
+  })
+
+  it('materializes a fallback final answer when post-tool empty recovery is exhausted', async () => {
+    let calls = 0
+    const h = makeHarness({
+      provider: 'post-tool-empty-exhausted-runner',
+      model: 'post-tool-empty-exhausted-runner',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        calls += 1
+        if (calls === 1) {
+          yield {
+            kind: 'tool_call_complete',
+            callId: 'call_pwd',
+            toolName: 'pwd',
+            arguments: {}
+          }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }, { toolStorm: { enabled: false } })
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+    const fallback = items.find(
+      (item) => item.kind === 'assistant_text' && item.text.includes('工具已经执行完成，但模型没有生成最终答复')
+    )
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(3)
+    expect(fallback).toBeDefined()
+  })
+
   it('fails a classic turn that exceeds its loop step budget', async () => {
     const h = makeHarness({
       provider: 'runaway-runner',
@@ -289,7 +359,7 @@ describe('ContinuationPolicy', () => {
       const status = await h.loop.runTurn(h.threadId, h.turnId)
       expect(status).toBe('completed')
       expect(observedToolLists[0]).toContain(CREATE_PLAN_TOOL_NAME)
-      expect(observedRequiredToolNames).toEqual([CREATE_PLAN_TOOL_NAME, undefined])
+      expect(observedRequiredToolNames.slice(0, 2)).toEqual([CREATE_PLAN_TOOL_NAME, undefined])
       await expect(readFile(join(workspace, '.qiongqisdd/plan/auth.md'), 'utf8')).resolves.toBe('# Generated plan')
       const turn = await h.turns.getTurn(h.threadId, h.turnId)
       expect(turn?.guiPlan?.relativePath).toBe('.qiongqisdd/plan/auth.md')
