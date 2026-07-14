@@ -80,6 +80,9 @@ export type TurnOrchestratorOptions = {
   toolArgumentRepair?: {
     maxStringBytes?: number
   }
+  loopBudget?: {
+    maxSteps?: number
+  }
   /**
    * Optional fallback GUI plan context for embedders that run the loop
    * without persisted turn metadata. Normal serve mode reads GUI plan
@@ -117,6 +120,8 @@ type AwaitUserInputFn = (
   },
   signal: AbortSignal
 ) => Promise<UserInputResolution>
+
+const DEFAULT_CLASSIC_LOOP_MAX_STEPS = 200
 
 /**
  * Turn-scoped state machine. `runTurn(threadId, turnId)` advances a turn
@@ -314,8 +319,13 @@ export class TurnOrchestrator {
     signal: AbortSignal
   ): Promise<'completed' | 'failed' | 'aborted'> {
     const retryCounts = new Map<number, number>()
+    const maxSteps = this.maxLoopSteps()
     for (let step = 0; ;) {
       if (signal.aborted) return 'aborted'
+      if (step >= maxSteps) {
+        await this.recordLoopBudgetExceeded(threadId, turnId, maxSteps)
+        return 'failed'
+      }
       await this.drainSteering(threadId, turnId, signal)
       const retryCount = retryCounts.get(step) ?? 0
       const stepResult = await this.runStep(threadId, turnId, signal, step, retryCount)
@@ -329,6 +339,34 @@ export class TurnOrchestrator {
       retryCounts.delete(step)
       step += 1
     }
+  }
+
+  private maxLoopSteps(): number {
+    const configured = this.opts.loopBudget?.maxSteps
+    if (configured === undefined) return DEFAULT_CLASSIC_LOOP_MAX_STEPS
+    if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_CLASSIC_LOOP_MAX_STEPS
+    return Math.floor(configured)
+  }
+
+  private async recordLoopBudgetExceeded(threadId: string, turnId: string, maxSteps: number): Promise<void> {
+    const message = `Loop exceeded maxSteps budget (${maxSteps})`
+    await this.opts.events.record({
+      kind: 'error',
+      threadId,
+      turnId,
+      message,
+      code: 'loop_budget_exceeded'
+    })
+    await this.opts.turns.applyItem(
+      threadId,
+      makeErrorItem({
+        id: this.opts.ids.next('item_error'),
+        turnId,
+        threadId,
+        message,
+        code: 'loop_budget_exceeded'
+      })
+    )
   }
 
   private async runStep(
