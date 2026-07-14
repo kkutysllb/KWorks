@@ -29,7 +29,7 @@ The default runtime remains `classic` until the rollout task explicitly changes 
 - Test: `qiongqi/tests/scope-key.test.ts`
 - Mirror the same files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add failing contract tests for identity and terminal outcomes.**
+- [x] **Step 1: Add failing contract tests for identity and terminal outcomes.**
 
 Add tests that construct a complete identity and reject missing owner/run fields:
 
@@ -53,7 +53,7 @@ it('keeps terminal outcome reasons structured', () => {
 
 Add scope tests proving purpose and owner are part of the encoded key and that two owners never collide even when thread ids match.
 
-- [ ] **Step 2: Run the focused tests and verify RED.**
+- [x] **Step 2: Run the focused tests and verify RED.**
 
 Run in each repository:
 
@@ -63,7 +63,7 @@ pnpm exec vitest run tests/runtime-kernel-contracts.test.ts tests/scope-key.test
 
 Expected: FAIL because the runtime-kernel contract module and constructors do not exist.
 
-- [ ] **Step 3: Implement serializable contracts.**
+- [x] **Step 3: Implement serializable contracts.**
 
 In `contracts/src/runtime-kernel.ts`, define `RunStatus`, `RunOutcomeReason`, `RunOutcome`, `RunIdentity`, `ScopeKey`, `BudgetState`, `RecoveryState`, `EffectIntent`, `CommittedEffectRef`, `RunStateV3`, `RunEventEnvelope`, and `MiddlewareState`. Keep fields JSON-safe and export constructors that reject empty identity components. Use `ownerUserId` as required; do not create an implicit global owner in the contract layer.
 
@@ -89,7 +89,7 @@ export interface RunLeaseStore {
 
 Add `encodeScopeKey(scope: ScopeKey): string` with stable field ordering and explicit escaping. Export all new types from both package indexes.
 
-- [ ] **Step 4: Run GREEN and typecheck.**
+- [x] **Step 4: Run GREEN and typecheck.**
 
 ```bash
 pnpm exec vitest run tests/runtime-kernel-contracts.test.ts tests/scope-key.test.ts
@@ -99,7 +99,7 @@ pnpm --filter @qiongqi/ports run typecheck
 
 Expected: all focused tests pass and both packages typecheck.
 
-- [ ] **Step 5: Sync and commit both repositories.**
+- [x] **Step 5: Sync and commit both repositories.**
 
 Copy only the listed contracts, ports, indexes, and tests to the upstream repository, rerun the same commands there, then commit:
 
