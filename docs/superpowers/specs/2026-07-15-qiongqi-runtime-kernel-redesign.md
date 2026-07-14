@@ -430,6 +430,7 @@ type RunEventEnvelope = {
   threadId: string
   turnId: string
   runId: string
+  workspaceKey: string
   stepId?: string
   nodeAttemptId?: string
   eventType: string

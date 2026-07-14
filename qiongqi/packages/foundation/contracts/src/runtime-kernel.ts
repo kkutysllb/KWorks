@@ -146,6 +146,7 @@ export const RunEventEnvelopeSchema = z.object({
   threadId: NonEmptyString,
   turnId: NonEmptyString,
   runId: NonEmptyString,
+  workspaceKey: NonEmptyString,
   stepId: NonEmptyString.optional(),
   nodeAttemptId: NonEmptyString.optional(),
   eventType: NonEmptyString,

@@ -122,11 +122,11 @@ Use the same commit subject in both repositories.
 - Test: `qiongqi/tests/run-event-store.test.ts`
 - Mirror the same files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Write crash and ordering tests.**
+- [x] **Step 1: Write crash and ordering tests.**
 
 Cover atomic snapshot replacement, replay after a sequence number, owner/thread/run filtering, monotonic per-thread sequence assignment, stale lease rejection, lease renewal, and lease release. Include a test that writes a V2 state fixture and confirms the adapter returns a V3 migration result only when the owner can be resolved from the supplied identity.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
@@ -134,15 +134,15 @@ pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
 
 Expected: FAIL because the four adapters are absent.
 
-- [ ] **Step 3: Implement in-memory adapters.**
+- [x] **Step 3: Implement in-memory adapters.**
 
 Use `Map<string, RunStateV3>` keyed by `encodeScopeKey` plus run id for snapshots. Use a per-thread sequence counter for events and reject an append whose identity does not match the event envelope. Store leases with holder and expiry; a non-expired lease can only be renewed or released by its holder.
 
-- [ ] **Step 4: Implement file adapters with atomic writes.**
+- [x] **Step 4: Implement file adapters with atomic writes.**
 
 Use the existing `atomicWriteFile` helper. Store snapshots under `<root>/run-state/<ownerHash>/<threadId>/<turnId>/<runId>/snapshot.json`, events as JSONL under the same run directory, and leases as an atomic JSON file. Validate every loaded record before returning it. A malformed snapshot is ignored and replay starts from an empty state; a malformed event line is reported through a structured read error rather than silently merged.
 
-- [ ] **Step 5: Run GREEN and storage package verification.**
+- [x] **Step 5: Run GREEN and storage package verification.**
 
 ```bash
 pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
@@ -151,7 +151,7 @@ pnpm --filter @qiongqi/adapter-storage run typecheck
 
 Expected: all adapter tests pass and the storage package typechecks.
 
-- [ ] **Step 6: Sync and commit both repositories.**
+- [x] **Step 6: Sync and commit both repositories.**
 
 Mirror the adapter files, index exports, and tests, run the same tests in `/Users/libing/kk_Projects/QiongQi`, then commit `feat: add durable runtime state adapters` in both repositories.
 
