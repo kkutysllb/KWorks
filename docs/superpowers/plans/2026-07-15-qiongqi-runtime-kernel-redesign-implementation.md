@@ -171,11 +171,11 @@ Mirror the adapter files, index exports, and tests, run the same tests in `/User
 - Test: `qiongqi/tests/runtime-event-recorder-kernel.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Define the graph and middleware RED tests.**
+- [x] **Step 1: Define the graph and middleware RED tests.**
 
 Test that a graph rejects duplicate node ids, unknown edges, cycles that are not explicitly marked as loop edges, and unregistered predicates. Test middleware ordering with `before`/`after` anchors and reject conflicting anchors. Test a fake graph that executes `prepare -> model -> evaluate -> complete`, persists cursor checkpoints, and returns `completed`.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test.ts tests/runtime-kernel.test.ts
@@ -183,19 +183,19 @@ pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test
 
 Expected: FAIL because the graph, chain, and kernel modules are absent.
 
-- [ ] **Step 3: Implement graph validation and cursor transitions.**
+- [x] **Step 3: Implement graph validation and cursor transitions.**
 
 `execution-graph.ts` must expose `RuntimeNode`, `RuntimeEdge`, `ExecutionGraph`, and `validateExecutionGraph()`. `RuntimeEdge` includes `loop?: boolean`; cycles are accepted only when the edge explicitly opts into loop semantics. The interpreter may only transition through a registered edge or a registered predicate result. Use `stepIndex`, `nodeId`, `attempt`, and `checkpointSeq` from `RunStateV3`; do not infer the next node from model text.
 
-- [ ] **Step 4: Implement middleware context and deterministic ordering.**
+- [x] **Step 4: Implement middleware context and deterministic ordering.**
 
 `runtime-middleware.ts` defines `RuntimeHook`, `MiddlewareContext`, `MiddlewareCommand`, `MiddlewareResult`, and `RuntimeMiddleware`. `middleware-chain.ts` performs a topological sort from `before`/`after` anchors, rejects cycles and duplicate ids, and invokes the same declared order for each hook. The context exposes read-only state plus typed commands; middleware cannot call `TurnService`, `ToolHost`, or `ModelClient` directly.
 
-- [ ] **Step 5: Implement the kernel over injected ports.**
+- [x] **Step 5: Implement the kernel over injected ports.**
 
 Extend `RuntimeEventRecorder` with `recordKernelEvent()` that delegates durable run events to the injected `RunEventStore` while leaving the public `record()` path unchanged. `runtime-kernel.ts` accepts `RunEventStore`, `RunSnapshotStore`, `RunLeaseStore`, a graph, a middleware chain, and node handlers. `run()` acquires a lease, loads or creates state, saves a checkpoint before and after each node, applies commands, appends events through `recordKernelEvent()`, and releases the lease in `finally`. It must return a structured `RunOutcome`; thrown errors become `runtime_error` and never become completed.
 
-- [ ] **Step 6: Run GREEN and package checks.**
+- [x] **Step 6: Run GREEN and package checks.**
 
 ```bash
 pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test.ts tests/runtime-kernel.test.ts
@@ -204,7 +204,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: focused tests pass and the loop package typechecks while classic tests remain unchanged.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the new loop files and tests, run focused tests and typecheck upstream, then commit `feat: add persisted runtime kernel interpreter` in both repositories.
 
