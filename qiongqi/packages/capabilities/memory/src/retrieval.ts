@@ -35,13 +35,20 @@ export function tokenizeMemoryText(text: string): string[] {
 export function rankMemoryRecords(input: RankMemoryRecordsInput): MemoryRecord[] {
   const queryTokens = new Set(tokenizeMemoryText(input.query))
   if (queryTokens.size === 0) return []
+  const allowCurrentTaskCarryover = isContinuationQuery(input.query)
   return input.records
     .filter((record) => !record.deletedAt && !record.disabledAt)
     .filter((record) => inActiveScope(record, input.workspace, input.threadId))
-    .map((record) => ({
-      record,
-      score: scoreRecord(record, queryTokens)
-    }))
+    .map((record) => {
+      const lexicalScore = scoreRecord(record, queryTokens)
+      const currentTaskCarryover =
+        allowCurrentTaskCarryover &&
+        isCurrentThreadProjectMemory(record, input.workspace, input.threadId)
+      return {
+        record,
+        score: lexicalScore > 0 ? lexicalScore : currentTaskCarryover ? 0.1 : 0
+      }
+    })
     .filter((entry) => entry.score > 0)
     .sort((a, b) =>
       b.score - a.score ||
@@ -51,6 +58,28 @@ export function rankMemoryRecords(input: RankMemoryRecordsInput): MemoryRecord[]
     )
     .slice(0, Math.max(0, input.limit))
     .map((entry) => entry.record)
+}
+
+function isContinuationQuery(text: string): boolean {
+  const compact = text
+    .replace(/[。.!！?？\s]+/g, '')
+    .trim()
+    .toLowerCase()
+  return /^(继续|接着|继续推进|继续做|全部做|都做|开始吧|执行|接着来|goon|continue|proceed|doit|doall)$/.test(compact)
+}
+
+function isCurrentThreadProjectMemory(
+  record: MemoryRecord,
+  workspace: string | undefined,
+  threadId: string | undefined
+): boolean {
+  return Boolean(
+    threadId &&
+    record.scope === 'project' &&
+    workspace &&
+    record.workspace === workspace &&
+    record.sourceThreadId === threadId
+  )
 }
 
 function scoreRecord(record: MemoryRecord, queryTokens: Set<string>): number {

@@ -33,7 +33,9 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
               memory: await store.create({
                 ownerUserId: context.ownerUserId,
                 content,
-                scope: args.scope === 'user' || args.scope === 'project' ? args.scope : 'workspace',
+                scope: args.scope === 'user' || args.scope === 'workspace' || args.scope === 'project'
+                  ? args.scope
+                  : 'project',
                 workspace: typeof args.workspace === 'string' ? args.workspace : context.workspace,
                 sourceThreadId: context.threadId,
                 sourceTurnId: context.turnId,

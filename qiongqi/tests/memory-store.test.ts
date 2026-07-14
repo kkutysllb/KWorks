@@ -178,6 +178,32 @@ describe('Memory store and recall', () => {
     })).map((item) => item.id)).toEqual([workspaceMemory.id, userMemory.id])
   })
 
+  it('carries current-thread project memories across continue prompts without leaking other tasks', async () => {
+    const store = createStore()
+    const currentTask = await store.create({
+      ownerUserId: 'user_a',
+      content: '真实任务是宁德时代 300750 全面深度分析，需要输出 MD 报告和 HTML 看板',
+      scope: 'project',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'catl_thread'
+    })
+    await store.create({
+      ownerUserId: 'user_a',
+      content: '旧任务是股指期货联动分析',
+      scope: 'project',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'futures_thread'
+    })
+
+    expect((await store.retrieve({
+      query: '继续',
+      workspace: '/tmp/ws',
+      ownerUserId: 'user_a',
+      threadId: 'catl_thread',
+      limit: 5
+    })).map((item) => item.id)).toEqual([currentTask.id])
+  })
+
   it('exposes memory API routes with diagnostics', async () => {
     const h = buildHarness()
     h.runtime.memoryStore = createStore()
@@ -309,7 +335,12 @@ describe('Memory store and recall', () => {
 
     expect(approvals).toBe(1)
     expect(result.item).toMatchObject({ kind: 'tool_result', isError: false })
-    expect(await store.list({ workspace: '/tmp/ws', ownerUserId: 'user_a' })).toHaveLength(1)
+    const memories = await store.list({ workspace: '/tmp/ws', ownerUserId: 'user_a' })
+    expect(memories).toHaveLength(1)
+    expect(memories[0]).toMatchObject({
+      scope: 'project',
+      sourceThreadId: 'thr_1'
+    })
     expect(await store.list({ workspace: '/tmp/ws', ownerUserId: 'user_b' })).toHaveLength(0)
   })
 
@@ -469,6 +500,49 @@ describe('Memory store and recall', () => {
     const instructions = seenRequests.at(-1)?.contextInstructions?.join('\n') ?? ''
     expect(instructions).toContain(current.id)
     expect(instructions).not.toContain(other.id)
+    expect((await h.turns.getTurn(h.threadId, h.turnId))?.injectedMemoryIds).toEqual([current.id])
+  })
+
+  it('injects current task project memory on continue prompts without pulling another task', async () => {
+    const store = createStore()
+    const current = await store.create({
+      ownerUserId: 'user_a',
+      content: '真实任务是宁德时代 300750 全面深度分析，需要输出 MD 报告和 HTML 看板',
+      scope: 'project',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'catl_thread'
+    })
+    const other = await store.create({
+      ownerUserId: 'user_a',
+      content: '旧任务是股指期货联动分析',
+      scope: 'project',
+      workspace: '/tmp/ws',
+      sourceThreadId: 'futures_thread'
+    })
+    const seenRequests: ModelRequest[] = []
+    const model: ModelClient = {
+      provider: 'fake',
+      model: 'fake',
+      async *stream(request) {
+        seenRequests.push(request)
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const h = makeHarness(model, { memoryStore: store })
+    await bootstrapThread(h, {
+      threadId: 'catl_thread',
+      workspace: '/tmp/ws',
+      thread: { ownerUserId: 'user_a' },
+      request: { prompt: '继续' }
+    })
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    const instructions = seenRequests.at(-1)?.contextInstructions?.join('\n') ?? ''
+    expect(instructions).toContain(current.id)
+    expect(instructions).toContain('宁德时代 300750')
+    expect(instructions).not.toContain(other.id)
+    expect(instructions).not.toContain('股指期货')
     expect((await h.turns.getTurn(h.threadId, h.turnId))?.injectedMemoryIds).toEqual([current.id])
   })
 
