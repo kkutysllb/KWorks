@@ -7,6 +7,7 @@
 import type { LoopDecision } from './loop-policy.js'
 import type { StepResult } from './model-step-runner.js'
 import type { BuildContext } from './prompt-builder.js'
+import { hasRecoverableTaskState, looksLikeContextLossClarification } from './context-recovery-guard.js'
 
 export interface LoopEvaluationInput {
   decision: LoopDecision
@@ -57,6 +58,23 @@ export function defaultLoopEvaluator(input: LoopEvaluationInput): LoopEvaluation
     retryCount < DEFAULT_EVALUATOR_MAX_RETRIES
   ) {
     return { verdict: 'retry', reason: 'model returned an empty stop response; retrying once' }
+  }
+
+  // Context-compaction recovery guard: weaker providers sometimes respond to
+  // a recoverable compaction summary by asking the user to restate the task
+  // ("context was compressed; what should I do next?"). That is not a valid
+  // terminal answer when the engine still has structured task-resumption
+  // state. Retry once so the next request can continue from engine state
+  // instead of offloading recovery to the user.
+  if (
+    decision.action === 'stop' &&
+    stepResult.stopReason === 'stop' &&
+    stepResult.completedToolCalls.length === 0 &&
+    retryCount < DEFAULT_EVALUATOR_MAX_RETRIES &&
+    looksLikeContextLossClarification(stepResult.text) &&
+    hasRecoverableTaskState(input.ctx)
+  ) {
+    return { verdict: 'retry', reason: 'model asked the user to restate a recoverable post-compaction task; retrying once' }
   }
 
   return { verdict: 'pass' }

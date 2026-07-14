@@ -451,7 +451,10 @@ export async function runOrchestratorStep(input: {
     ctx,
     retryCount
   })
-  if (evaluation.verdict === 'retry') return 'retry'
+  if (evaluation.verdict === 'retry') {
+    await markRetriedModelOutputFailed({ turns, threadId, stepResult })
+    return 'retry'
+  }
   if (shouldMaterializeEmptyTerminalFallback({ decision, stepResult, ctx, retryCount })) {
     await turns.applyItem(
       threadId,
@@ -540,6 +543,20 @@ export async function runOrchestratorStep(input: {
       if (dispatched === 'aborted') return 'aborted'
       return 'continue'
     }
+  }
+}
+
+async function markRetriedModelOutputFailed(input: {
+  turns: TurnService
+  threadId: string
+  stepResult: Extract<StepResult, { kind: 'ran' }>
+}): Promise<void> {
+  const patch = { status: 'failed' as const, finishedAt: new Date().toISOString() }
+  if (input.stepResult.textItemId) {
+    await input.turns.updateItem(input.threadId, input.stepResult.textItemId, patch)
+  }
+  if (input.stepResult.reasoningItemId) {
+    await input.turns.updateItem(input.threadId, input.stepResult.reasoningItemId, patch)
   }
 }
 

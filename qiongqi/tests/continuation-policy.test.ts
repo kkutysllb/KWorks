@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { LocalToolHost, buildDefaultLocalTools } from '@qiongqi/adapter-tools'
 import { CREATE_PLAN_TOOL_NAME } from '@qiongqi/adapter-tools'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '@qiongqi/adapter-tools'
+import { makeCompactionItem } from '@qiongqi/domain'
 import type { ModelRequest, ModelStreamChunk } from '@qiongqi/ports'
 import {
   bootstrapThread,
@@ -137,6 +138,65 @@ describe('ContinuationPolicy', () => {
     expect(status).toBe('completed')
     expect(calls).toBe(3)
     expect(fallback).toBeDefined()
+  })
+
+  it('recovers from a post-compaction context-loss clarification without leaving it as completed output', async () => {
+    let calls = 0
+    const h = makeHarness({
+      provider: 'context-loss-runner',
+      model: 'context-loss-runner',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        calls += 1
+        if (calls === 1) {
+          yield {
+            kind: 'assistant_text_delta',
+            text: '对话上下文已被压缩，我无法还原您最后一条请求的原文。请问您接下来想做什么？'
+          }
+          yield { kind: 'completed', stopReason: 'stop' }
+          return
+        }
+        yield { kind: 'assistant_text_delta', text: '修复完成：我已继续处理 QiongQi 的上下文恢复链路。' }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    })
+    await bootstrapThread(h, { request: { prompt: '继续' } })
+    await h.turns.applyItem(
+      h.threadId,
+      makeCompactionItem({
+        id: 'compaction_recoverable',
+        turnId: h.turnId,
+        threadId: h.threadId,
+        replacedTokens: 900,
+        pinnedConstraints: ['所有 qiongqi 核心修复都要同步到 /Users/libing/kk_Projects/QiongQi'],
+        summary: [
+          'Task resumption state:',
+          '- Active objective: 继续修复 QiongQi classic loop 上下文压缩后丢失真实任务的问题',
+          '- Current state: 已经定位到 evaluator 会把上下文丢失式反问当作普通 stop',
+          '- Next actions:',
+          '  - 写 RED 测试并实现恢复保护',
+          '- Do not ask the user what to do unless this summary explicitly says user input is required or the next action is blocked.'
+        ].join('\n')
+      })
+    )
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const texts = (await h.sessionStore.loadItems(h.threadId))
+      .filter((item) => item.kind === 'assistant_text')
+      .map((item) => item.kind === 'assistant_text' ? { id: item.id, text: item.text, status: item.status } : null)
+      .filter(Boolean)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(2)
+    expect(texts).toContainEqual({
+      id: expect.any(String),
+      text: '对话上下文已被压缩，我无法还原您最后一条请求的原文。请问您接下来想做什么？',
+      status: 'failed'
+    })
+    expect(texts).toContainEqual({
+      id: expect.any(String),
+      text: '修复完成：我已继续处理 QiongQi 的上下文恢复链路。',
+      status: 'completed'
+    })
   })
 
   it('fails a classic turn that exceeds its loop step budget', async () => {
