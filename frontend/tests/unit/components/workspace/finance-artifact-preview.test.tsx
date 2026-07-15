@@ -90,7 +90,7 @@ describe("FinanceArtifactPreview", () => {
     expect(preview.parentElement).toBe(document.body);
     expect(preview).toHaveAttribute("aria-label", "金融结果预览");
     expect(preview).toHaveClass("fixed", "inset-0", "z-[100]");
-    expect(screen.getByRole("banner")).toHaveClass("h-11");
+    expect(screen.getByRole("banner")).toHaveClass("h-11", "relative", "z-20");
 
     const iframe = await screen.findByTitle("dashboard.html 金融看板");
     expect(iframe).toHaveAttribute("src", "about:blank#dashboard");

@@ -158,7 +158,7 @@ export function FinanceArtifactPreview({
       ref={dialogRef}
       role="dialog"
     >
-      <header className="flex h-11 shrink-0 items-center bg-neutral-950 px-2 text-neutral-100">
+      <header className="relative z-20 flex h-11 shrink-0 pointer-events-auto items-center bg-neutral-950 px-2 text-neutral-100">
         <div className="min-w-0 flex-1 basis-0" aria-hidden="true" />
         <div className="max-w-[50vw] min-w-0 truncate px-2 text-center text-sm font-medium">
           {filename}
@@ -179,7 +179,7 @@ export function FinanceArtifactPreview({
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 items-center justify-center">
+      <main className="relative z-0 flex min-h-0 flex-1 items-center justify-center">
         {isLoading ? (
           <p className="text-sm text-neutral-600">正在加载金融看板...</p>
         ) : error ? (
