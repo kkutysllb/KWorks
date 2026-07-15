@@ -437,11 +437,11 @@ Mirror capsule, scope, compaction, memory, and tests; run the same suite upstrea
 - Modify: `qiongqi/tests/http-server.test.ts`
 - Mirror generic core changes and tests under `/Users/libing/kk_Projects/QiongQi`; keep KWorks-only desktop changes local.
 
-- [ ] **Step 1: Add RED rollout and projection tests.**
+- [x] **Step 1: Add RED rollout and projection tests.**
 
 Test `orchestrationMode: 'kernel_v3'` selects the kernel, `'classic'` remains the default, legacy `'evented'` maps to `evented_v2`, startup failure before any side effect falls back when configured, and post-effect failure returns a suspended/failure outcome without launching a second orchestrator. Test V3 events project to existing SSE event kinds and add only additive runtime metadata.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projection.test.ts tests/evented-loop.test.ts tests/http-server.test.ts
@@ -449,15 +449,15 @@ pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projectio
 
 Expected: new rollout/projection tests fail because kernel_v3 and its projection are not wired.
 
-- [ ] **Step 3: Add rollout configuration and composition.**
+- [x] **Step 3: Add rollout configuration and composition.**
 
 Extend config types with `kernel_v3` and `KernelRolloutConfig`. In `runtime-factory.ts`, construct the kernel with injected stores, graph, middleware, model proposal runner, and tool runtime. Keep the existing classic/evented branches and guard fallback so it is allowed only before `effect.prepared`.
 
-- [ ] **Step 4: Implement compatible event projection.**
+- [x] **Step 4: Implement compatible event projection.**
 
 `runtime-event-projection.ts` maps `RunEventEnvelope` to current `RuntimeEvent`/SSE payloads, preserves thread sequence and `Last-Event-ID` replay, and adds `{ runtime: { mode, run_id, outcome_reason } }` only when available. It must not emit internal capsule content, raw tool arguments, or provider secrets.
 
-- [ ] **Step 5: Run GREEN and full HTTP/loop checks.**
+- [x] **Step 5: Run GREEN and full HTTP/loop checks.**
 
 ```bash
 pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projection.test.ts tests/evented-loop.test.ts tests/http-server.test.ts
@@ -467,7 +467,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: rollout tests pass, classic HTTP tests remain green, and SSE compatibility is preserved.
 
-- [ ] **Step 6: Sync and commit both repositories.**
+- [x] **Step 6: Sync and commit both repositories.**
 
 Mirror generic composition/config/projection files and tests, run the same commands upstream, and commit `feat: expose kernel v3 behind runtime rollout flag` in both repositories.
 
@@ -484,19 +484,19 @@ Mirror generic composition/config/projection files and tests, run the same comma
 - Modify: `qiongqi/docs/architecture.en.md`
 - Mirror generic tests/script/docs under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Create deterministic golden fixtures.**
+- [x] **Step 1: Create deterministic golden fixtures.**
 
 Record normalized model frames and tool results for normal stop, tool loop, empty terminal, context-loss clarification, safety stop, length stop, and provider protocol failure. The fixture runner must never call a live provider or execute a real workspace mutation.
 
-- [ ] **Step 2: Add classic/kernel parity assertions.**
+- [x] **Step 2: Add classic/kernel parity assertions.**
 
 For each fixture, compare user-visible assistant text, tool names/arguments, item terminal statuses, compatible event order, usage totals, and structured outcome. Permit additive `kernel_v3` audit events; fail on removed or reordered legacy events.
 
-- [ ] **Step 3: Add provider and isolation gates.**
+- [x] **Step 3: Add provider and isolation gates.**
 
 Run the same normalized fixtures through DeepSeek, official MiniMax M3, Kimi, local vLLM profile, and OpenRouter metadata profiles. Add two-owner same-thread, parallel-thread compaction, two-turn, stale warning, fork, and child-run cases. Assert no cross-owner memory, event, budget, loop, or capsule state.
 
-- [ ] **Step 4: Add the core sync verifier.**
+- [x] **Step 4: Add the core sync verifier.**
 
 `qiongqi/scripts/verify-core-sync.mjs` accepts `QIONGQI_UPSTREAM_DIR`, compares an explicit allow-list of shared `packages/*` core files and `tests/runtime-kernel*` files, ignores generated `dist`, and exits non-zero with the first differing path. Run it from KWorks with:
 
@@ -504,7 +504,7 @@ Run the same normalized fixtures through DeepSeek, official MiniMax M3, Kimi, lo
 QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi node qiongqi/scripts/verify-core-sync.mjs
 ```
 
-- [ ] **Step 5: Run the complete verification matrix.**
+- [x] **Step 5: Run the complete verification matrix.**
 
 ```bash
 pnpm exec vitest run tests/runtime-kernel-parity.test.ts tests/runtime-kernel-provider-matrix.test.ts tests/runtime-kernel-isolation.test.ts tests/runtime-kernel-e2e.test.ts
@@ -515,7 +515,7 @@ QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi node qiongqi/scripts/veri
 
 Run the same test/typecheck/build/sync commands in the upstream repository. Live smoke is opt-in through provider-specific environment variables and is never required for offline CI.
 
-- [ ] **Step 6: Commit the gates and documentation.**
+- [x] **Step 6: Commit the gates and documentation.**
 
 Commit `test: add kernel parity and dual-repository release gates` in both repositories after the sync verifier passes.
 
