@@ -529,15 +529,15 @@ Commit `test: add kernel parity and dual-repository release gates` in both repos
 - Test: `qiongqi/tests/runtime-rollout.test.ts`
 - Mirror generic changes and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add rollout metrics tests.**
+- [x] **Step 1: Add rollout metrics tests.**
 
 Assert counters for `run_outcome`, `recovery`, `effect_deduplicated`, `scope_violation`, middleware duration, and classic fallback include mode/provider/reason labels without secrets or raw tool arguments.
 
-- [ ] **Step 2: Implement staged defaults.**
+- [x] **Step 2: Implement staged defaults.**
 
 Keep `classic` as the default while development/test configuration can select `kernel_v3`. Enable thread override only through explicit metadata, keep active runs pinned to their mode, and retain classic for two stable release cycles. Set the documented promotion gate to seven consecutive days without blocking regression and less than 1% pre-effect startup fallback for new kernel runs.
 
-- [ ] **Step 3: Run release verification.**
+- [x] **Step 3: Run release verification.**
 
 ```bash
 pnpm exec vitest run tests/runtime-rollout.test.ts tests/runtime-kernel-parity.test.ts tests/runtime-kernel-isolation.test.ts
@@ -549,7 +549,7 @@ CI=true pnpm --dir /Users/libing/kk_Projects/KWorks/frontend run build:desktop
 
 Expected: all runtime tests and QiongQi build pass, desktop main/preload and static desktop frontend build pass, and no release publication occurs in this task.
 
-- [ ] **Step 4: Sync, verify, and commit the rollout checkpoint.**
+- [x] **Step 4: Sync, verify, and commit the rollout checkpoint.**
 
 Run the same generic checks upstream, run `verify-core-sync.mjs`, and commit `chore: gate kernel v3 rollout` in both repositories. Do not remove classic or evented_v2 in this commit.
 
