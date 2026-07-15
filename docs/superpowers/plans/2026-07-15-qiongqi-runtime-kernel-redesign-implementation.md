@@ -29,7 +29,7 @@ The default runtime remains `classic` until the rollout task explicitly changes 
 - Test: `qiongqi/tests/scope-key.test.ts`
 - Mirror the same files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add failing contract tests for identity and terminal outcomes.**
+- [x] **Step 1: Add failing contract tests for identity and terminal outcomes.**
 
 Add tests that construct a complete identity and reject missing owner/run fields:
 
@@ -53,7 +53,7 @@ it('keeps terminal outcome reasons structured', () => {
 
 Add scope tests proving purpose and owner are part of the encoded key and that two owners never collide even when thread ids match.
 
-- [ ] **Step 2: Run the focused tests and verify RED.**
+- [x] **Step 2: Run the focused tests and verify RED.**
 
 Run in each repository:
 
@@ -63,7 +63,7 @@ pnpm exec vitest run tests/runtime-kernel-contracts.test.ts tests/scope-key.test
 
 Expected: FAIL because the runtime-kernel contract module and constructors do not exist.
 
-- [ ] **Step 3: Implement serializable contracts.**
+- [x] **Step 3: Implement serializable contracts.**
 
 In `contracts/src/runtime-kernel.ts`, define `RunStatus`, `RunOutcomeReason`, `RunOutcome`, `RunIdentity`, `ScopeKey`, `BudgetState`, `RecoveryState`, `EffectIntent`, `CommittedEffectRef`, `RunStateV3`, `RunEventEnvelope`, and `MiddlewareState`. Keep fields JSON-safe and export constructors that reject empty identity components. Use `ownerUserId` as required; do not create an implicit global owner in the contract layer.
 
@@ -89,7 +89,7 @@ export interface RunLeaseStore {
 
 Add `encodeScopeKey(scope: ScopeKey): string` with stable field ordering and explicit escaping. Export all new types from both package indexes.
 
-- [ ] **Step 4: Run GREEN and typecheck.**
+- [x] **Step 4: Run GREEN and typecheck.**
 
 ```bash
 pnpm exec vitest run tests/runtime-kernel-contracts.test.ts tests/scope-key.test.ts
@@ -99,7 +99,7 @@ pnpm --filter @qiongqi/ports run typecheck
 
 Expected: all focused tests pass and both packages typecheck.
 
-- [ ] **Step 5: Sync and commit both repositories.**
+- [x] **Step 5: Sync and commit both repositories.**
 
 Copy only the listed contracts, ports, indexes, and tests to the upstream repository, rerun the same commands there, then commit:
 
@@ -122,11 +122,11 @@ Use the same commit subject in both repositories.
 - Test: `qiongqi/tests/run-event-store.test.ts`
 - Mirror the same files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Write crash and ordering tests.**
+- [x] **Step 1: Write crash and ordering tests.**
 
 Cover atomic snapshot replacement, replay after a sequence number, owner/thread/run filtering, monotonic per-thread sequence assignment, stale lease rejection, lease renewal, and lease release. Include a test that writes a V2 state fixture and confirms the adapter returns a V3 migration result only when the owner can be resolved from the supplied identity.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
@@ -134,15 +134,15 @@ pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
 
 Expected: FAIL because the four adapters are absent.
 
-- [ ] **Step 3: Implement in-memory adapters.**
+- [x] **Step 3: Implement in-memory adapters.**
 
 Use `Map<string, RunStateV3>` keyed by `encodeScopeKey` plus run id for snapshots. Use a per-thread sequence counter for events and reject an append whose identity does not match the event envelope. Store leases with holder and expiry; a non-expired lease can only be renewed or released by its holder.
 
-- [ ] **Step 4: Implement file adapters with atomic writes.**
+- [x] **Step 4: Implement file adapters with atomic writes.**
 
 Use the existing `atomicWriteFile` helper. Store snapshots under `<root>/run-state/<ownerHash>/<threadId>/<turnId>/<runId>/snapshot.json`, events as JSONL under the same run directory, and leases as an atomic JSON file. Validate every loaded record before returning it. A malformed snapshot is ignored and replay starts from an empty state; a malformed event line is reported through a structured read error rather than silently merged.
 
-- [ ] **Step 5: Run GREEN and storage package verification.**
+- [x] **Step 5: Run GREEN and storage package verification.**
 
 ```bash
 pnpm exec vitest run tests/run-state-store.test.ts tests/run-event-store.test.ts
@@ -151,7 +151,7 @@ pnpm --filter @qiongqi/adapter-storage run typecheck
 
 Expected: all adapter tests pass and the storage package typechecks.
 
-- [ ] **Step 6: Sync and commit both repositories.**
+- [x] **Step 6: Sync and commit both repositories.**
 
 Mirror the adapter files, index exports, and tests, run the same tests in `/Users/libing/kk_Projects/QiongQi`, then commit `feat: add durable runtime state adapters` in both repositories.
 
@@ -171,11 +171,11 @@ Mirror the adapter files, index exports, and tests, run the same tests in `/User
 - Test: `qiongqi/tests/runtime-event-recorder-kernel.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Define the graph and middleware RED tests.**
+- [x] **Step 1: Define the graph and middleware RED tests.**
 
 Test that a graph rejects duplicate node ids, unknown edges, cycles that are not explicitly marked as loop edges, and unregistered predicates. Test middleware ordering with `before`/`after` anchors and reject conflicting anchors. Test a fake graph that executes `prepare -> model -> evaluate -> complete`, persists cursor checkpoints, and returns `completed`.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test.ts tests/runtime-kernel.test.ts
@@ -183,19 +183,19 @@ pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test
 
 Expected: FAIL because the graph, chain, and kernel modules are absent.
 
-- [ ] **Step 3: Implement graph validation and cursor transitions.**
+- [x] **Step 3: Implement graph validation and cursor transitions.**
 
 `execution-graph.ts` must expose `RuntimeNode`, `RuntimeEdge`, `ExecutionGraph`, and `validateExecutionGraph()`. `RuntimeEdge` includes `loop?: boolean`; cycles are accepted only when the edge explicitly opts into loop semantics. The interpreter may only transition through a registered edge or a registered predicate result. Use `stepIndex`, `nodeId`, `attempt`, and `checkpointSeq` from `RunStateV3`; do not infer the next node from model text.
 
-- [ ] **Step 4: Implement middleware context and deterministic ordering.**
+- [x] **Step 4: Implement middleware context and deterministic ordering.**
 
 `runtime-middleware.ts` defines `RuntimeHook`, `MiddlewareContext`, `MiddlewareCommand`, `MiddlewareResult`, and `RuntimeMiddleware`. `middleware-chain.ts` performs a topological sort from `before`/`after` anchors, rejects cycles and duplicate ids, and invokes the same declared order for each hook. The context exposes read-only state plus typed commands; middleware cannot call `TurnService`, `ToolHost`, or `ModelClient` directly.
 
-- [ ] **Step 5: Implement the kernel over injected ports.**
+- [x] **Step 5: Implement the kernel over injected ports.**
 
 Extend `RuntimeEventRecorder` with `recordKernelEvent()` that delegates durable run events to the injected `RunEventStore` while leaving the public `record()` path unchanged. `runtime-kernel.ts` accepts `RunEventStore`, `RunSnapshotStore`, `RunLeaseStore`, a graph, a middleware chain, and node handlers. `run()` acquires a lease, loads or creates state, saves a checkpoint before and after each node, applies commands, appends events through `recordKernelEvent()`, and releases the lease in `finally`. It must return a structured `RunOutcome`; thrown errors become `runtime_error` and never become completed.
 
-- [ ] **Step 6: Run GREEN and package checks.**
+- [x] **Step 6: Run GREEN and package checks.**
 
 ```bash
 pnpm exec vitest run tests/execution-graph.test.ts tests/runtime-middleware.test.ts tests/runtime-kernel.test.ts
@@ -204,7 +204,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: focused tests pass and the loop package typechecks while classic tests remain unchanged.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the new loop files and tests, run focused tests and typecheck upstream, then commit `feat: add persisted runtime kernel interpreter` in both repositories.
 
@@ -223,11 +223,11 @@ Mirror the new loop files and tests, run focused tests and typecheck upstream, t
 - Test: `qiongqi/tests/model-protocol-normalizer.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add RED fixtures for all provider stop classes.**
+- [x] **Step 1: Add RED fixtures for all provider stop classes.**
 
 Use fake streams for normal stop, native tool calls, MiniMax reasoning/tool streams, vLLM parser metadata, `content_filter`/safety, refusal, length, malformed tool JSON, and transport error. Assert that raw protocol markers such as `<action>` or `(tool call)` without a structured tool frame set `leakedProtocolText: true` and produce no `ToolIntent`.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalizer.test.ts tests/provider-compatibility.test.ts
@@ -235,19 +235,19 @@ pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalize
 
 Expected: new proposal/normalizer tests fail, while existing compatibility tests continue to show the current baseline.
 
-- [ ] **Step 3: Extend the model port additively.**
+- [x] **Step 3: Extend the model port additively.**
 
 Add optional provider metadata to completed/error chunks without removing `stopReason: 'stop' | 'tool_calls' | 'length' | 'error'`. Define `NormalizedModelCompletion` and `ModelProposal` in `packages/foundation/contracts/src/runtime-kernel.ts`, with `stopClass`, `providerReason`, endpoint format, raw metadata, integrity flags, text, reasoning, and validated tool intents.
 
-- [ ] **Step 4: Normalize in the adapter, not in the loop policy.**
+- [x] **Step 4: Normalize in the adapter, not in the loop policy.**
 
 Update `ModelCompatClient` to map each endpoint/provider response into the normalized completion fields, preserve only redacted metadata, and keep MiniMax M3 official versus vLLM parser behavior distinct. `model-protocol-normalizer.ts` must validate tool argument objects and refuse partial or unpaired calls.
 
-- [ ] **Step 5: Implement proposal runner with provisional projections.**
+- [x] **Step 5: Implement proposal runner with provisional projections.**
 
 `model-proposal-runner.ts` consumes the existing model stream, accumulates a `ModelProposal`, emits provisional delta events for SSE compatibility, and only exposes `toolIntents` after a complete normalized frame. It must not call `TurnService.applyItem()` for completed assistant items; a later commit node owns that mutation.
 
-- [ ] **Step 6: Run GREEN and provider checks.**
+- [x] **Step 6: Run GREEN and provider checks.**
 
 ```bash
 pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalizer.test.ts tests/provider-compatibility.test.ts
@@ -257,7 +257,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: all fixtures pass, including no tool execution for leaked protocol text and distinct provider stop metadata.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the model port, adapter, loop proposal files, and tests; run the same commands upstream; commit `feat: normalize model proposals before loop decisions` in both repositories.
 
@@ -279,11 +279,11 @@ Mirror the model port, adapter, loop proposal files, and tests; run the same com
 - Modify: `qiongqi/tests/continuation-policy.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Convert existing regressions into kernel middleware tests.**
+- [x] **Step 1: Convert existing regressions into kernel middleware tests.**
 
 Cover recoverable context-loss clarification, tool-after-empty terminal retry, fallback after recovery exhaustion, max step/token/cost budgets, safety stop with partial tool calls, strict history pairing, repeated tool-call warn/hard-stop, and old-run warning isolation. Each test asserts a `MiddlewareCommand` or `RunOutcome`, not a regex-cleaned user-visible string.
 
-- [ ] **Step 2: Run RED for the new middleware suite.**
+- [x] **Step 2: Run RED for the new middleware suite.**
 
 ```bash
 pnpm exec vitest run tests/runtime-middleware-governance.test.ts
@@ -291,21 +291,21 @@ pnpm exec vitest run tests/runtime-middleware-governance.test.ts
 
 Expected: FAIL because kernel middleware modules are absent.
 
-- [ ] **Step 3: Implement identity and budget middleware.**
+- [x] **Step 3: Implement identity and budget middleware.**
 
 `identity-scope-middleware.ts` compares every event and context identity against the run identity and returns `fail` on mismatch. `budget-middleware.ts` stores counters in versioned middleware state and returns `terminate` with `step_capped`, `token_capped`, `cost_capped`, or `loop_capped` before another node can run.
 
-- [ ] **Step 4: Implement history, context, safety, and terminal middleware.**
+- [x] **Step 4: Implement history, context, safety, and terminal middleware.**
 
 Reuse `repairModelHistoryItems`, `context-recovery-guard.ts`, and the current compaction metadata. History middleware repairs dangling/orphan pairs before serialization. Context middleware injects only a run-scoped hidden recovery entry. Safety middleware removes partial tool intents when normalized stop class is safety/refusal and records the provider reason. Terminal middleware retries one empty post-tool proposal and then returns `degraded/tool_completed_no_final_text` with a materialized fallback item.
 
-- [ ] **Step 5: Implement loop detection and commit integrity.**
+- [x] **Step 5: Implement loop detection and commit integrity.**
 
 Move the current `ToolStormBreaker` behavior into a run-scoped sliding window keyed by stable `(toolName, salientArgs)` hashes. Warnings are queued for the next model request only after tool results are paired. `commit-integrity-middleware.ts` checks idempotency keys and prevents a terminal run from being overwritten by late events.
 
 `observability-middleware.ts` records hook duration, structured outcome reason, provider class, and redacted identity hash through `RuntimeEventRecorder`; it never records raw tool arguments or safety-filtered provider content.
 
-- [ ] **Step 6: Run GREEN and classic regression tests.**
+- [x] **Step 6: Run GREEN and classic regression tests.**
 
 ```bash
 pnpm exec vitest run tests/runtime-middleware-governance.test.ts tests/loop-evaluator.test.ts tests/continuation-policy.test.ts tests/tool-storm-breaker.test.ts
@@ -314,7 +314,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: all new and existing governance tests pass; classic behavior remains available.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror middleware and tests, run the same focused suite upstream, then commit `feat: move loop governance into kernel middleware` in both repositories.
 
@@ -331,11 +331,11 @@ Mirror middleware and tests, run the same focused suite upstream, then commit `f
 - Test: `qiongqi/tests/runtime-kernel-crash-recovery.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add RED effect tests.**
+- [x] **Step 1: Add RED effect tests.**
 
 Test read tools replay safely, idempotent writes return the committed result for the same key, non-idempotent writes suspend after an injected crash between execution and commit, approvals are never duplicated, and tool results are externalized when the inline budget is exceeded.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts tests/runtime-kernel-crash-recovery.test.ts
@@ -343,19 +343,19 @@ pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts t
 
 Expected: FAIL because effect commit and V3 tool runtime do not exist.
 
-- [ ] **Step 3: Define effect policy and intent records.**
+- [x] **Step 3: Define effect policy and intent records.**
 
 Add `ToolEffectPolicy` to `packages/foundation/contracts/src/runtime-kernel.ts` with `effect`, `replay`, and optional `concurrencyKey`. `effect-commit.ts` creates `EffectIntent`, writes `effect.prepared`, looks up an existing commit by idempotency key, and writes `effect.committed` only once.
 
-- [ ] **Step 4: Implement Tool Runtime facade.**
+- [x] **Step 4: Implement Tool Runtime facade.**
 
 `tool-runtime-v3.ts` validates tool schema, identity/workspace scope, skill allow-list, approval policy, effect policy, and idempotency before delegating to `ToolCallCoordinator`. It returns normalized `ToolResult` plus `EffectCommitStatus`; it never executes a tool from plain text protocol markers.
 
-- [ ] **Step 5: Add crash injection and result budget coverage.**
+- [x] **Step 5: Add crash injection and result budget coverage.**
 
 Expose a test-only `CrashPoint` callback on the kernel dependency object. Inject failures at prepare, after tool execution, before commit, and after commit. Assert replay uses the committed effect or suspends for verification instead of executing a non-idempotent write twice.
 
-- [ ] **Step 6: Run GREEN and adapter checks.**
+- [x] **Step 6: Run GREEN and adapter checks.**
 
 ```bash
 pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts tests/runtime-kernel-crash-recovery.test.ts tests/tool-result-budget.test.ts
@@ -365,7 +365,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: no duplicate effect commits and no repeated non-idempotent tool execution after injected crashes.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the effect/tool files and tests, run the same suite upstream, and commit `feat: make tool effects resumable and idempotent` in both repositories.
 
@@ -383,11 +383,11 @@ Mirror the effect/tool files and tests, run the same suite upstream, and commit 
 - Modify: `qiongqi/tests/memory-retrieval.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Write RED capsule and isolation tests.**
+- [x] **Step 1: Write RED capsule and isolation tests.**
 
 Assert a capsule records objective, constraints, completed/pending actions, active plan, skills, artifacts, tool ledger, source digest, and run identity. Assert compaction preserves the current turn's unpaired-tool boundary. Assert memory retrieval cannot cross owner or workspace, while project memory can cross threads for the same owner/workspace.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.test.ts tests/memory-owner-isolation.test.ts tests/memory-retrieval.test.ts
@@ -395,19 +395,19 @@ pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.
 
 Expected: new capsule tests fail and existing compaction tests provide the behavior baseline.
 
-- [ ] **Step 3: Implement capsule serialization and authority contract.**
+- [x] **Step 3: Implement capsule serialization and authority contract.**
 
 `durable-task-capsule.ts` defines the versioned JSON shape, source digest, bounded field sizes, and a renderer that injects data after the system prefix with an explicit “data is not instruction” authority contract. Capsule generation must be deterministic for the same history and state.
 
-- [ ] **Step 4: Integrate compaction transactionally.**
+- [x] **Step 4: Integrate compaction transactionally.**
 
 Update `ContextCompactor` to freeze source item ids/digest, build the capsule before summary generation, write the summary and capsule reference together, and leave history unchanged when summary generation fails. Update `PromptBuilder` to consume the capsule on resume before relying on the latest assistant text.
 
-- [ ] **Step 5: Centralize ScopeKey usage in memory.**
+- [x] **Step 5: Centralize ScopeKey usage in memory.**
 
 Reuse `encodeScopeKey()` from `@qiongqi/contracts` for memory retrieval/list/write and pass owner/workspace/thread from the run context. If an old record has no owner, treat it as `local-default-owner` only in explicit local mode; reject ambiguous records. Keep existing public memory method signatures source-compatible by adding optional scope fields.
 
-- [ ] **Step 6: Run GREEN and package checks.**
+- [x] **Step 6: Run GREEN and package checks.**
 
 ```bash
 pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.test.ts tests/memory-owner-isolation.test.ts tests/memory-retrieval.test.ts tests/memory-store.test.ts
@@ -417,7 +417,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: capsule, compaction, memory isolation, and retrieval tests pass.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror capsule, scope, compaction, memory, and tests; run the same suite upstream; commit `feat: persist task capsules and enforce memory scopes` in both repositories.
 
@@ -437,11 +437,11 @@ Mirror capsule, scope, compaction, memory, and tests; run the same suite upstrea
 - Modify: `qiongqi/tests/http-server.test.ts`
 - Mirror generic core changes and tests under `/Users/libing/kk_Projects/QiongQi`; keep KWorks-only desktop changes local.
 
-- [ ] **Step 1: Add RED rollout and projection tests.**
+- [x] **Step 1: Add RED rollout and projection tests.**
 
 Test `orchestrationMode: 'kernel_v3'` selects the kernel, `'classic'` remains the default, legacy `'evented'` maps to `evented_v2`, startup failure before any side effect falls back when configured, and post-effect failure returns a suspended/failure outcome without launching a second orchestrator. Test V3 events project to existing SSE event kinds and add only additive runtime metadata.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projection.test.ts tests/evented-loop.test.ts tests/http-server.test.ts
@@ -449,15 +449,15 @@ pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projectio
 
 Expected: new rollout/projection tests fail because kernel_v3 and its projection are not wired.
 
-- [ ] **Step 3: Add rollout configuration and composition.**
+- [x] **Step 3: Add rollout configuration and composition.**
 
 Extend config types with `kernel_v3` and `KernelRolloutConfig`. In `runtime-factory.ts`, construct the kernel with injected stores, graph, middleware, model proposal runner, and tool runtime. Keep the existing classic/evented branches and guard fallback so it is allowed only before `effect.prepared`.
 
-- [ ] **Step 4: Implement compatible event projection.**
+- [x] **Step 4: Implement compatible event projection.**
 
 `runtime-event-projection.ts` maps `RunEventEnvelope` to current `RuntimeEvent`/SSE payloads, preserves thread sequence and `Last-Event-ID` replay, and adds `{ runtime: { mode, run_id, outcome_reason } }` only when available. It must not emit internal capsule content, raw tool arguments, or provider secrets.
 
-- [ ] **Step 5: Run GREEN and full HTTP/loop checks.**
+- [x] **Step 5: Run GREEN and full HTTP/loop checks.**
 
 ```bash
 pnpm exec vitest run tests/runtime-factory.test.ts tests/runtime-event-projection.test.ts tests/evented-loop.test.ts tests/http-server.test.ts
@@ -467,7 +467,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: rollout tests pass, classic HTTP tests remain green, and SSE compatibility is preserved.
 
-- [ ] **Step 6: Sync and commit both repositories.**
+- [x] **Step 6: Sync and commit both repositories.**
 
 Mirror generic composition/config/projection files and tests, run the same commands upstream, and commit `feat: expose kernel v3 behind runtime rollout flag` in both repositories.
 
@@ -484,19 +484,19 @@ Mirror generic composition/config/projection files and tests, run the same comma
 - Modify: `qiongqi/docs/architecture.en.md`
 - Mirror generic tests/script/docs under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Create deterministic golden fixtures.**
+- [x] **Step 1: Create deterministic golden fixtures.**
 
 Record normalized model frames and tool results for normal stop, tool loop, empty terminal, context-loss clarification, safety stop, length stop, and provider protocol failure. The fixture runner must never call a live provider or execute a real workspace mutation.
 
-- [ ] **Step 2: Add classic/kernel parity assertions.**
+- [x] **Step 2: Add classic/kernel parity assertions.**
 
 For each fixture, compare user-visible assistant text, tool names/arguments, item terminal statuses, compatible event order, usage totals, and structured outcome. Permit additive `kernel_v3` audit events; fail on removed or reordered legacy events.
 
-- [ ] **Step 3: Add provider and isolation gates.**
+- [x] **Step 3: Add provider and isolation gates.**
 
 Run the same normalized fixtures through DeepSeek, official MiniMax M3, Kimi, local vLLM profile, and OpenRouter metadata profiles. Add two-owner same-thread, parallel-thread compaction, two-turn, stale warning, fork, and child-run cases. Assert no cross-owner memory, event, budget, loop, or capsule state.
 
-- [ ] **Step 4: Add the core sync verifier.**
+- [x] **Step 4: Add the core sync verifier.**
 
 `qiongqi/scripts/verify-core-sync.mjs` accepts `QIONGQI_UPSTREAM_DIR`, compares an explicit allow-list of shared `packages/*` core files and `tests/runtime-kernel*` files, ignores generated `dist`, and exits non-zero with the first differing path. Run it from KWorks with:
 
@@ -504,7 +504,7 @@ Run the same normalized fixtures through DeepSeek, official MiniMax M3, Kimi, lo
 QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi node qiongqi/scripts/verify-core-sync.mjs
 ```
 
-- [ ] **Step 5: Run the complete verification matrix.**
+- [x] **Step 5: Run the complete verification matrix.**
 
 ```bash
 pnpm exec vitest run tests/runtime-kernel-parity.test.ts tests/runtime-kernel-provider-matrix.test.ts tests/runtime-kernel-isolation.test.ts tests/runtime-kernel-e2e.test.ts
@@ -515,7 +515,7 @@ QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi node qiongqi/scripts/veri
 
 Run the same test/typecheck/build/sync commands in the upstream repository. Live smoke is opt-in through provider-specific environment variables and is never required for offline CI.
 
-- [ ] **Step 6: Commit the gates and documentation.**
+- [x] **Step 6: Commit the gates and documentation.**
 
 Commit `test: add kernel parity and dual-repository release gates` in both repositories after the sync verifier passes.
 
@@ -529,15 +529,15 @@ Commit `test: add kernel parity and dual-repository release gates` in both repos
 - Test: `qiongqi/tests/runtime-rollout.test.ts`
 - Mirror generic changes and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add rollout metrics tests.**
+- [x] **Step 1: Add rollout metrics tests.**
 
 Assert counters for `run_outcome`, `recovery`, `effect_deduplicated`, `scope_violation`, middleware duration, and classic fallback include mode/provider/reason labels without secrets or raw tool arguments.
 
-- [ ] **Step 2: Implement staged defaults.**
+- [x] **Step 2: Implement staged defaults.**
 
 Keep `classic` as the default while development/test configuration can select `kernel_v3`. Enable thread override only through explicit metadata, keep active runs pinned to their mode, and retain classic for two stable release cycles. Set the documented promotion gate to seven consecutive days without blocking regression and less than 1% pre-effect startup fallback for new kernel runs.
 
-- [ ] **Step 3: Run release verification.**
+- [x] **Step 3: Run release verification.**
 
 ```bash
 pnpm exec vitest run tests/runtime-rollout.test.ts tests/runtime-kernel-parity.test.ts tests/runtime-kernel-isolation.test.ts
@@ -549,7 +549,7 @@ CI=true pnpm --dir /Users/libing/kk_Projects/KWorks/frontend run build:desktop
 
 Expected: all runtime tests and QiongQi build pass, desktop main/preload and static desktop frontend build pass, and no release publication occurs in this task.
 
-- [ ] **Step 4: Sync, verify, and commit the rollout checkpoint.**
+- [x] **Step 4: Sync, verify, and commit the rollout checkpoint.**
 
 Run the same generic checks upstream, run `verify-core-sync.mjs`, and commit `chore: gate kernel v3 rollout` in both repositories. Do not remove classic or evented_v2 in this commit.
 

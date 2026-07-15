@@ -36,7 +36,7 @@ import {
   type QiongqiCapabilitiesConfig
 } from '@qiongqi/contracts'
 import type { ApprovalPolicy, SandboxMode } from '@qiongqi/contracts'
-import type { OrchestrationMode } from '@qiongqi/loop'
+import { normalizeOrchestrationMode, type OrchestrationMode } from '@qiongqi/loop'
 import type {
   ToolHost,
   ToolHostContext,
@@ -1134,7 +1134,8 @@ async function assembleRuntime(input: {
     }
   }
   // Stage 3: choose classic or evented orchestrator.
-  const loop = options.orchestrationMode === 'evented'
+  const orchestrationMode = normalizeOrchestrationMode(options.orchestrationMode)
+  const loop = orchestrationMode === 'evented_v2'
     ? new EventedTurnOrchestrator(
         orchOpts,
         new FileTurnStateStore(join(options.dataDir, 'turn-states')),

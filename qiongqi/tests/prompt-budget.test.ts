@@ -51,7 +51,7 @@ describe('prompt budget protections', () => {
       const secondHistory = JSON.stringify(seenRequests[1]?.history ?? [])
 
       expect(status).toBe('completed')
-      expect(seenRequests).toHaveLength(2)
+      expect(seenRequests).toHaveLength(3)
       expect(secondHistory).toContain('tool output omitted')
       expect(secondHistory).toContain('Full output:')
       expect(secondHistory).not.toContain('x'.repeat(10_000))

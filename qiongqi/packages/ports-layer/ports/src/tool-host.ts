@@ -1,4 +1,4 @@
-import type { ApprovalPolicy } from '@qiongqi/contracts'
+import type { ApprovalPolicy, ToolEffectPolicy } from '@qiongqi/contracts'
 import type { ApprovalRequest } from '@qiongqi/domain'
 import type { TurnItem } from '@qiongqi/contracts'
 import type { ModelCapabilityMetadata } from '@qiongqi/contracts'
@@ -104,6 +104,7 @@ export type ToolCallLike = {
   providerId?: string
   toolKind?: 'tool_call' | 'command_execution' | 'file_change'
   arguments: Record<string, unknown>
+  effectPolicy?: ToolEffectPolicy
 }
 
 export type ToolExecutionUpdate = {
@@ -137,6 +138,7 @@ export interface ToolHost {
     toolKind?: 'tool_call' | 'command_execution' | 'file_change'
     providerId?: string
     providerKind?: ToolProviderKind
+    effectPolicy?: ToolEffectPolicy
   }[]>
   execute(
     call: ToolCallLike,
