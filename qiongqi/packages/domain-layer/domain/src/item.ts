@@ -188,6 +188,8 @@ export function makeCompactionItem(input: {
   sourceDigest?: string
   digestMarker?: string
   sourceItemIds?: string[]
+  taskRevision?: number
+  taskSourceDigest?: string
 }): TurnItem {
   return {
     id: input.id,
@@ -203,7 +205,9 @@ export function makeCompactionItem(input: {
     pinnedConstraints: input.pinnedConstraints,
     ...(input.sourceDigest ? { sourceDigest: input.sourceDigest } : {}),
     ...(input.digestMarker ? { digestMarker: input.digestMarker } : {}),
-    ...(input.sourceItemIds ? { sourceItemIds: [...input.sourceItemIds] } : {})
+    ...(input.sourceItemIds ? { sourceItemIds: [...input.sourceItemIds] } : {}),
+    ...(input.taskRevision ? { taskRevision: input.taskRevision } : {}),
+    ...(input.taskSourceDigest ? { taskSourceDigest: input.taskSourceDigest } : {})
   }
 }
 
