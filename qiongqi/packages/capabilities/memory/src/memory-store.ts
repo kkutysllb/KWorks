@@ -97,6 +97,7 @@ export class FileMemoryStore implements MemoryStore {
       records: (await this.readAll()).filter((record) => !input.ownerUserId || record.ownerUserId === input.ownerUserId),
       workspace: input.workspace,
       threadId: input.threadId,
+      ownerUserId: input.ownerUserId,
       limit: input.limit
     })
   }

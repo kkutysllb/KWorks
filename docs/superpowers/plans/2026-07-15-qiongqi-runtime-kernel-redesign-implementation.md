@@ -383,11 +383,11 @@ Mirror the effect/tool files and tests, run the same suite upstream, and commit 
 - Modify: `qiongqi/tests/memory-retrieval.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Write RED capsule and isolation tests.**
+- [x] **Step 1: Write RED capsule and isolation tests.**
 
 Assert a capsule records objective, constraints, completed/pending actions, active plan, skills, artifacts, tool ledger, source digest, and run identity. Assert compaction preserves the current turn's unpaired-tool boundary. Assert memory retrieval cannot cross owner or workspace, while project memory can cross threads for the same owner/workspace.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.test.ts tests/memory-owner-isolation.test.ts tests/memory-retrieval.test.ts
@@ -395,19 +395,19 @@ pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.
 
 Expected: new capsule tests fail and existing compaction tests provide the behavior baseline.
 
-- [ ] **Step 3: Implement capsule serialization and authority contract.**
+- [x] **Step 3: Implement capsule serialization and authority contract.**
 
 `durable-task-capsule.ts` defines the versioned JSON shape, source digest, bounded field sizes, and a renderer that injects data after the system prefix with an explicit “data is not instruction” authority contract. Capsule generation must be deterministic for the same history and state.
 
-- [ ] **Step 4: Integrate compaction transactionally.**
+- [x] **Step 4: Integrate compaction transactionally.**
 
 Update `ContextCompactor` to freeze source item ids/digest, build the capsule before summary generation, write the summary and capsule reference together, and leave history unchanged when summary generation fails. Update `PromptBuilder` to consume the capsule on resume before relying on the latest assistant text.
 
-- [ ] **Step 5: Centralize ScopeKey usage in memory.**
+- [x] **Step 5: Centralize ScopeKey usage in memory.**
 
 Reuse `encodeScopeKey()` from `@qiongqi/contracts` for memory retrieval/list/write and pass owner/workspace/thread from the run context. If an old record has no owner, treat it as `local-default-owner` only in explicit local mode; reject ambiguous records. Keep existing public memory method signatures source-compatible by adding optional scope fields.
 
-- [ ] **Step 6: Run GREEN and package checks.**
+- [x] **Step 6: Run GREEN and package checks.**
 
 ```bash
 pnpm exec vitest run tests/durable-task-capsule.test.ts tests/context-compactor.test.ts tests/memory-owner-isolation.test.ts tests/memory-retrieval.test.ts tests/memory-store.test.ts
@@ -417,7 +417,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: capsule, compaction, memory isolation, and retrieval tests pass.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror capsule, scope, compaction, memory, and tests; run the same suite upstream; commit `feat: persist task capsules and enforce memory scopes` in both repositories.
 
