@@ -59,6 +59,7 @@ describe("qiongqi client adapters", () => {
       workspace: "/tmp/project",
       model: "gpt-5",
       workModeId: "coding",
+      workModeModuleId: "stock-analysis",
       status: "idle",
       createdAt: "2026-06-28T00:00:00.000Z",
       updatedAt: "2026-06-28T00:00:00.000Z",
@@ -70,6 +71,9 @@ describe("qiongqi client adapters", () => {
     expect(threadSummaryToAgentThread(summary).context?.workspaceRoot).toBe(
       "/tmp/project",
     );
+    expect(
+      threadSummaryToAgentThread(summary).context?.workModeModuleId,
+    ).toBe("stock-analysis");
   });
 
   test("preserves work mode id when adapting thread records", () => {
@@ -79,6 +83,7 @@ describe("qiongqi client adapters", () => {
       workspace: "/tmp/project",
       model: "gpt-5",
       workModeId: "coding",
+      workModeModuleId: "stock-analysis",
       status: "idle",
       turns: [],
       createdAt: "2026-06-28T00:00:00.000Z",
@@ -90,6 +95,9 @@ describe("qiongqi client adapters", () => {
     );
     expect(threadRecordToAgentThread(record).context?.workspaceRoot).toBe(
       "/tmp/project",
+    );
+    expect(threadRecordToAgentThread(record).context?.workModeModuleId).toBe(
+      "stock-analysis",
     );
   });
 

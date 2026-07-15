@@ -40,11 +40,13 @@ const ICON_MAP: Record<FinanceModuleIcon, LucideIcon> = {
 interface FinanceWorkbenchProps {
   moduleId: string;
   startNewTask?: boolean;
+  threadId?: string;
 }
 
 export function FinanceWorkbench({
   moduleId,
   startNewTask = false,
+  threadId,
 }: FinanceWorkbenchProps) {
   const router = useRouter();
   const currentModule = getFinanceModule(moduleId);
@@ -124,6 +126,7 @@ export function FinanceWorkbench({
           <FinanceAgentPanel
             module={currentModule}
             startNewTask={startNewTask}
+            initialThreadId={threadId}
             onTodosChange={setAgentTodos}
             avoidRightFloatingPanels={showFloatingTodos}
           />

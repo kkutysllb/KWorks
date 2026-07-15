@@ -17,8 +17,8 @@ import {
 import { useRouter } from "next/navigation";
 
 import { useFinanceCredentials } from "@/core/finance/credentials";
-import { financeModulePath } from "@/core/finance/navigation";
 import { FINANCE_MODULES, type FinanceModuleIcon } from "@/core/finance/modules";
+import { financeModulePath } from "@/core/finance/navigation";
 import { cn } from "@/lib/utils";
 
 const ICON_MAP: Record<FinanceModuleIcon, LucideIcon> = {

@@ -42,6 +42,18 @@ test("uses coding workbench route when thread belongs to coding mode", () => {
   ).toBe("/workspace/coding/proj_123");
 });
 
+test("uses the originating finance module route for finance history tasks", () => {
+  expect(
+    pathOfThread({
+      thread_id: "thread-finance",
+      context: {
+        workModeId: "finance",
+        workModeModuleId: "stock-analysis",
+      },
+    }),
+  ).toBe("/workspace/finance/stock-analysis?thread=thread-finance");
+});
+
 test("ignores provided stale agent context when pathOfThread is called with a thread id", () => {
   expect(pathOfThread({
     thread_id: "thread-123",

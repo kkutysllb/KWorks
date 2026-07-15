@@ -21,6 +21,7 @@ export interface AgentThreadContext extends Record<string, unknown> {
   executionProfile?: "fast" | "balanced" | "deep";
   collaborationPolicy?: "single" | "auto";
   workModeId?: string;
+  workModeModuleId?: string;
   workspaceRoot?: string;
   projectId?: string;
   activeSkillId?: string;

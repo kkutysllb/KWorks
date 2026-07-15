@@ -1,3 +1,4 @@
+import { persistedFinanceModuleId } from "@/core/finance/navigation";
 import type { WorkMode } from "@/core/skills/type";
 import { workModeDisplayNameById } from "@/core/skills/work-modes";
 
@@ -13,7 +14,7 @@ type ThreadRouteTarget =
   | string
   | {
       thread_id: string;
-      context?: Pick<AgentThreadContext, "workModeId" | "projectId"> | null;
+      context?: Pick<AgentThreadContext, "workModeId" | "projectId" | "workModeModuleId"> | null;
       metadata?: Record<string, unknown> | null;
     };
 
@@ -24,6 +25,14 @@ export function pathOfThread(thread: ThreadRouteTarget) {
       return thread.context.projectId
         ? `/workspace/coding/${encodeURIComponent(thread.context.projectId)}`
         : "/workspace/coding";
+    }
+    if (thread.context?.workModeId === "finance") {
+      const moduleId =
+        thread.context.workModeModuleId?.trim() ??
+        persistedFinanceModuleId(thread.thread_id);
+      if (moduleId) {
+        return `/workspace/finance/${encodeURIComponent(moduleId)}?thread=${encodeURIComponent(thread.thread_id)}`;
+      }
     }
   }
 

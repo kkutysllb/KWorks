@@ -34,6 +34,7 @@ export default function FinanceModulePage() {
     <FinanceWorkbench
       moduleId={moduleId}
       startNewTask={isFinanceNewTaskRequest(searchParams)}
+      threadId={searchParams.get("thread") ?? undefined}
     />
   );
 }

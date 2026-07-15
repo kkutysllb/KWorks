@@ -50,6 +50,7 @@ export interface QiongqiThreadRecord {
   model: string;
   mode?: string;
   workModeId?: string;
+  workModeModuleId?: string;
   status?: string;
   turns: QiongqiTurn[];
   goal?: Record<string, unknown> | null;
@@ -67,6 +68,7 @@ export interface QiongqiThreadSummary {
   model: string;
   mode?: string;
   workModeId?: string;
+  workModeModuleId?: string;
   status?: string;
   createdAt: string;
   updatedAt: string;
@@ -207,6 +209,7 @@ export const qiongqiClient = {
     model?: string;
     mode?: string;
     workModeId?: string;
+    workModeModuleId?: string;
   }): Promise<QiongqiThreadRecord> {
     return request<QiongqiThreadRecord>("/v1/threads", {
       method: "POST",
@@ -221,6 +224,7 @@ export const qiongqiClient = {
       model?: string;
       mode?: string;
       workModeId?: string;
+      workModeModuleId?: string;
       [key: string]: unknown;
     },
   ): Promise<QiongqiThreadRecord> {
@@ -479,7 +483,11 @@ export interface AgentThreadLike {
   updated_at: string;
   status: ThreadStatus;
   metadata: Record<string, unknown> | null;
-  context?: { workModeId?: string; workspaceRoot?: string };
+  context?: {
+    workModeId?: string;
+    workModeModuleId?: string;
+    workspaceRoot?: string;
+  };
   values: {
     title: string;
     messages: Message[];
@@ -550,11 +558,17 @@ export function threadSummaryToAgentThread(
 }
 
 function qiongqiThreadContext(
-  thread: Pick<QiongqiThreadRecord, "workspace" | "workModeId">,
+  thread: Pick<
+    QiongqiThreadRecord,
+    "workspace" | "workModeId" | "workModeModuleId"
+  >,
 ): AgentThreadLike["context"] {
   const context: NonNullable<AgentThreadLike["context"]> = {};
   if (thread.workModeId?.trim()) {
     context.workModeId = thread.workModeId.trim();
+  }
+  if (thread.workModeModuleId?.trim()) {
+    context.workModeModuleId = thread.workModeModuleId.trim();
   }
   if (thread.workspace?.trim()) {
     context.workspaceRoot = thread.workspace.trim();

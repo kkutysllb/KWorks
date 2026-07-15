@@ -37,6 +37,7 @@ const FINANCE_AGENT_FLOATING_PANEL_GUTTER_CLASS = "xl:pr-[336px]";
 interface FinanceAgentPanelProps {
   module: FinanceModule;
   startNewTask?: boolean;
+  initialThreadId?: string;
   onTodosChange?: (todos: Todo[]) => void;
   /** When true, chat content gets right-padding so the floating TodoList
    *  panel doesn't overlap messages and the input box. */
@@ -57,6 +58,7 @@ interface FinanceAgentPanelProps {
 export function FinanceAgentPanel({
   module,
   startNewTask = false,
+  initialThreadId,
   onTodosChange,
   avoidRightFloatingPanels = false,
 }: FinanceAgentPanelProps) {
@@ -66,6 +68,7 @@ export function FinanceAgentPanel({
         <FinanceAgentPanelInner
           module={module}
           startNewTask={startNewTask}
+          initialThreadId={initialThreadId}
           onTodosChange={onTodosChange}
           avoidRightFloatingPanels={avoidRightFloatingPanels}
         />
@@ -77,6 +80,7 @@ export function FinanceAgentPanel({
 function FinanceAgentPanelInner({
   module,
   startNewTask = false,
+  initialThreadId,
   onTodosChange,
   avoidRightFloatingPanels = false,
 }: FinanceAgentPanelProps) {
@@ -84,6 +88,7 @@ function FinanceAgentPanelInner({
   const [threadId, setThreadId] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
     if (startNewTask) return undefined;
+    if (initialThreadId?.trim()) return initialThreadId.trim();
     return window.localStorage.getItem(threadIdStorageKey) ?? undefined;
   });
   useEffect(() => {
@@ -110,9 +115,16 @@ function FinanceAgentPanelInner({
   // reset and silently kill the outgoing stream.
   const initialThreadIdRef = useRef<string | undefined>(
     typeof window !== "undefined" && !startNewTask
-      ? (window.localStorage.getItem(threadIdStorageKey) ?? undefined)
+      ? (initialThreadId?.trim() ?? window.localStorage.getItem(threadIdStorageKey) ?? undefined)
       : undefined,
   );
+  useEffect(() => {
+    if (startNewTask) return;
+    const nextThreadId = initialThreadId?.trim();
+    if (!nextThreadId || nextThreadId === threadId) return;
+    initialThreadIdRef.current = nextThreadId;
+    setThreadId(nextThreadId);
+  }, [initialThreadId, startNewTask, threadId]);
   const { data: threads } = useThreads();
   useEffect(() => {
     const initialId = initialThreadIdRef.current;
@@ -135,15 +147,17 @@ function FinanceAgentPanelInner({
   useEffect(() => {
     if (
       settings.context.workModeId !== "finance" ||
+      settings.context.workModeModuleId !== module.id ||
       settings.context.taskMode === "plan"
     ) {
       setSettings("context", {
         ...settings.context,
         workModeId: "finance",
+        workModeModuleId: module.id,
         taskMode: "agent",
       });
     }
-  }, [settings.context, setSettings]);
+  }, [module.id, settings.context, setSettings]);
 
   const {
     thread,
@@ -193,6 +207,7 @@ function FinanceAgentPanelInner({
         context: {
           ...submitContext,
           workModeId: "finance",
+          workModeModuleId: module.id,
           taskMode: "agent",
           mode: "agent",
         },

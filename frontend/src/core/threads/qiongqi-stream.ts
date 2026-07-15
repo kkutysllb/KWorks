@@ -546,6 +546,13 @@ function workModeIdFromContext(
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function workModeModuleIdFromContext(
+  context: Record<string, unknown>,
+): string | undefined {
+  const value = context.workModeModuleId;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // useQiongqiStream hook
 // ---------------------------------------------------------------------------
@@ -586,6 +593,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
   const isSubscribedRef = useRef(false);
   const mountedRef = useRef(true);
   const workModeIdRef = useRef<string | undefined>(undefined);
+  const workModeModuleIdRef = useRef<string | undefined>(undefined);
   const scheduledSyncRef = useRef<ScheduledSync | null>(null);
 
   // Callback refs
@@ -861,6 +869,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       cancelScheduledSync();
       mirrorRef.current.reset();
       workModeIdRef.current = undefined;
+      workModeModuleIdRef.current = undefined;
       // Clear the stale thread id so ensureThread() doesn't reuse the previous
       // thread when creating/sending on a new-thread page. Without this, a
       // "new task" send silently routes to the old thread.
@@ -878,6 +887,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     cancelScheduledSync();
     mirrorRef.current.reset();
     workModeIdRef.current = undefined;
+    workModeModuleIdRef.current = undefined;
     setMessages([]);
     setValues({} as StateType);
     setIsLoading(false);
@@ -894,6 +904,10 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         workModeIdRef.current =
           typeof thread.workModeId === "string" && thread.workModeId.trim()
             ? thread.workModeId.trim()
+            : undefined;
+        workModeModuleIdRef.current =
+          typeof thread.workModeModuleId === "string" && thread.workModeModuleId.trim()
+            ? thread.workModeModuleId.trim()
             : undefined;
 
         // Build initial state from thread items
@@ -988,6 +1002,7 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       let activeThreadId = threadIdRef.current;
       const workspaceRoot = workspaceRootFromContext(context);
       const requestedWorkModeId = workModeIdFromContext(context);
+      const requestedWorkModeModuleId = workModeModuleIdFromContext(context);
       // TEMP DEBUG: trace work-mode pollution. Enable with DEBUG_THREAD_MODE=1
       if (typeof window !== "undefined" && (window as { __DEBUG_THREAD_MODE?: boolean }).__DEBUG_THREAD_MODE) {
          
@@ -1008,11 +1023,17 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
           ...(modelName ? { model: modelName } : {}),
           mode: qiongqiModeFromContext(context),
           workModeId: requestedWorkModeId,
+          workModeModuleId: requestedWorkModeModuleId,
         });
         workModeIdRef.current =
           typeof newThread.workModeId === "string" && newThread.workModeId.trim()
             ? newThread.workModeId.trim()
             : requestedWorkModeId;
+        workModeModuleIdRef.current =
+          typeof newThread.workModeModuleId === "string" &&
+          newThread.workModeModuleId.trim()
+            ? newThread.workModeModuleId.trim()
+            : requestedWorkModeModuleId;
         activeThreadId = newThread.id;
         threadIdRef.current = activeThreadId;
         onThreadIdRef.current?.(activeThreadId);
@@ -1021,12 +1042,16 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
       }
 
       const currentWorkModeId = workModeIdRef.current;
+      const currentWorkModeModuleId = workModeModuleIdRef.current;
       const shouldUpdateWorkspace = workspaceRoot !== undefined;
       const shouldUpdateWorkMode =
         requestedWorkModeId !== undefined &&
         requestedWorkModeId !== currentWorkModeId;
+      const shouldUpdateWorkModeModule =
+        requestedWorkModeModuleId !== undefined &&
+        requestedWorkModeModuleId !== currentWorkModeModuleId;
 
-      if (shouldUpdateWorkspace || shouldUpdateWorkMode) {
+      if (shouldUpdateWorkspace || shouldUpdateWorkMode || shouldUpdateWorkModeModule) {
         const previousWorkModeId = workModeIdRef.current;
         if (typeof window !== "undefined" && (window as { __DEBUG_THREAD_MODE?: boolean }).__DEBUG_THREAD_MODE) {
            
@@ -1040,12 +1065,20 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
         const updatedThread = await qiongqiClient.updateThread(activeThreadId, {
           ...(shouldUpdateWorkspace ? { workspace: workspaceRoot } : {}),
           ...(shouldUpdateWorkMode ? { workModeId: requestedWorkModeId } : {}),
+          ...(shouldUpdateWorkModeModule
+            ? { workModeModuleId: requestedWorkModeModuleId }
+            : {}),
         });
         workModeIdRef.current =
           typeof updatedThread.workModeId === "string" &&
           updatedThread.workModeId.trim()
             ? updatedThread.workModeId.trim()
             : (requestedWorkModeId ?? previousWorkModeId);
+        workModeModuleIdRef.current =
+          typeof updatedThread.workModeModuleId === "string" &&
+          updatedThread.workModeModuleId.trim()
+            ? updatedThread.workModeModuleId.trim()
+            : (requestedWorkModeModuleId ?? currentWorkModeModuleId);
         syncState();
       }
 

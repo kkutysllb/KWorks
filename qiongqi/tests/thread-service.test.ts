@@ -45,16 +45,18 @@ function withId(item: TurnItem, id: string): TurnItem {
 }
 
 describe('ThreadService work modes', () => {
-  it('persists the requested workModeId when creating a thread', async () => {
+  it('persists the requested work mode and module when creating a thread', async () => {
     const { service, threadStore } = buildService()
 
     const thread = await service.create(
-      { workspace: '/tmp/code', model: 'deepseek-chat', mode: 'agent', workModeId: 'coding' },
+      { workspace: '/tmp/code', model: 'deepseek-chat', mode: 'agent', workModeId: 'coding', workModeModuleId: 'stock-analysis' },
       { id: 'thr_coding', title: 'Coding thread' }
     )
 
     expect(thread.workModeId).toBe('coding')
+    expect(thread.workModeModuleId).toBe('stock-analysis')
     expect((await threadStore.get('thr_coding'))?.workModeId).toBe('coding')
+    expect((await threadStore.get('thr_coding'))?.workModeModuleId).toBe('stock-analysis')
   })
 })
 
