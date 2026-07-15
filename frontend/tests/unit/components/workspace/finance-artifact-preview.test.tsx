@@ -105,7 +105,7 @@ describe("FinanceArtifactPreview", () => {
     });
   });
 
-  test("renders live HTML with a normalized filename and paired Markdown report", async () => {
+  test("renders live HTML with a normalized filename and no Markdown toolbar action", async () => {
     const liveContent = "<html><body>live dashboard</body></html>";
     vi.mocked(useArtifactContent).mockReturnValue({
       ...hookResult,
@@ -127,14 +127,9 @@ describe("FinanceArtifactPreview", () => {
     const htmlBlob = vi.mocked(createObjectURL).mock.calls[0]?.[0] as Blob;
     expect(await htmlBlob.text()).toBe(liveContent);
 
-    fireEvent.click(screen.getByRole("button", { name: "下载 MD 报告" }));
-    await waitFor(() => {
-      expect(urlOfArtifact).toHaveBeenCalledWith({
-        filepath: "reports/2026-07-10/daily_report.md",
-        threadId: "thread-1",
-        download: true,
-      });
-    });
+    expect(
+      screen.queryByRole("button", { name: "下载 MD 报告" }),
+    ).not.toBeInTheDocument();
   });
 
   test.each([
@@ -235,37 +230,12 @@ describe("FinanceArtifactPreview", () => {
     expect(onBack).toHaveBeenCalledTimes(2);
   });
 
-  test("downloads the preferred daily Markdown report", async () => {
+  test("does not render a Markdown download action in the toolbar", () => {
     render(<FinanceArtifactPreview {...baseProps} />);
-
-    const button = screen.getByRole("button", { name: "下载 MD 报告" });
-    expect(button).toHaveAttribute("title", "下载 daily_report.md");
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(urlOfArtifact).toHaveBeenCalledWith({
-        filepath: "reports/2026-07-10/daily_report.md",
-        threadId: "thread-1",
-        download: true,
-      });
-      expect(downloadArtifactUrl).toHaveBeenCalledWith(
-        "/artifact/thread-1/reports/2026-07-10/daily_report.md?download=true",
-        "daily_report.md",
-      );
-    });
-  });
-
-  test("disables Markdown download when no report exists", () => {
-    render(
-      <FinanceArtifactPreview
-        {...baseProps}
-        artifacts={[baseProps.filepath]}
-      />,
-    );
-
-    const button = screen.getByRole("button", { name: "下载 MD 报告" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", "未找到 Markdown 报告");
+    expect(
+      screen.queryByRole("button", { name: "下载 MD 报告" }),
+    ).not.toBeInTheDocument();
+    expect(downloadArtifactUrl).not.toHaveBeenCalled();
   });
 
   test("renders the loading state", () => {
@@ -319,29 +289,6 @@ describe("FinanceArtifactPreview", () => {
     fireEvent.click(screen.getByRole("button", { name: "下载 HTML" }));
     await waitFor(() => {
       expect(downloadError).toHaveBeenCalledWith("HTML 看板下载失败");
-    });
-    expect(screen.getByTestId("finance-artifact-preview")).toBeInTheDocument();
-  });
-
-  test("prevents duplicate Markdown downloads while pending and reports failure", async () => {
-    let rejectDownload: (reason: Error) => void = () => undefined;
-    const pending = new Promise<void>((_resolve, reject) => {
-      rejectDownload = reject;
-    });
-    const downloadError = vi.spyOn(toast, "error");
-    vi.mocked(downloadArtifactUrl).mockReturnValueOnce(pending);
-
-    render(<FinanceArtifactPreview {...baseProps} />);
-
-    const button = screen.getByRole("button", { name: "下载 MD 报告" });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(downloadArtifactUrl).toHaveBeenCalledTimes(1);
-    expect(button).toBeDisabled();
-
-    rejectDownload(new Error("denied"));
-    await waitFor(() => {
-      expect(downloadError).toHaveBeenCalledWith("Markdown 报告下载失败");
     });
     expect(screen.getByTestId("finance-artifact-preview")).toBeInTheDocument();
   });
