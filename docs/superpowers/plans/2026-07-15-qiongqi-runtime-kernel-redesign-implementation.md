@@ -279,11 +279,11 @@ Mirror the model port, adapter, loop proposal files, and tests; run the same com
 - Modify: `qiongqi/tests/continuation-policy.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Convert existing regressions into kernel middleware tests.**
+- [x] **Step 1: Convert existing regressions into kernel middleware tests.**
 
 Cover recoverable context-loss clarification, tool-after-empty terminal retry, fallback after recovery exhaustion, max step/token/cost budgets, safety stop with partial tool calls, strict history pairing, repeated tool-call warn/hard-stop, and old-run warning isolation. Each test asserts a `MiddlewareCommand` or `RunOutcome`, not a regex-cleaned user-visible string.
 
-- [ ] **Step 2: Run RED for the new middleware suite.**
+- [x] **Step 2: Run RED for the new middleware suite.**
 
 ```bash
 pnpm exec vitest run tests/runtime-middleware-governance.test.ts
@@ -291,21 +291,21 @@ pnpm exec vitest run tests/runtime-middleware-governance.test.ts
 
 Expected: FAIL because kernel middleware modules are absent.
 
-- [ ] **Step 3: Implement identity and budget middleware.**
+- [x] **Step 3: Implement identity and budget middleware.**
 
 `identity-scope-middleware.ts` compares every event and context identity against the run identity and returns `fail` on mismatch. `budget-middleware.ts` stores counters in versioned middleware state and returns `terminate` with `step_capped`, `token_capped`, `cost_capped`, or `loop_capped` before another node can run.
 
-- [ ] **Step 4: Implement history, context, safety, and terminal middleware.**
+- [x] **Step 4: Implement history, context, safety, and terminal middleware.**
 
 Reuse `repairModelHistoryItems`, `context-recovery-guard.ts`, and the current compaction metadata. History middleware repairs dangling/orphan pairs before serialization. Context middleware injects only a run-scoped hidden recovery entry. Safety middleware removes partial tool intents when normalized stop class is safety/refusal and records the provider reason. Terminal middleware retries one empty post-tool proposal and then returns `degraded/tool_completed_no_final_text` with a materialized fallback item.
 
-- [ ] **Step 5: Implement loop detection and commit integrity.**
+- [x] **Step 5: Implement loop detection and commit integrity.**
 
 Move the current `ToolStormBreaker` behavior into a run-scoped sliding window keyed by stable `(toolName, salientArgs)` hashes. Warnings are queued for the next model request only after tool results are paired. `commit-integrity-middleware.ts` checks idempotency keys and prevents a terminal run from being overwritten by late events.
 
 `observability-middleware.ts` records hook duration, structured outcome reason, provider class, and redacted identity hash through `RuntimeEventRecorder`; it never records raw tool arguments or safety-filtered provider content.
 
-- [ ] **Step 6: Run GREEN and classic regression tests.**
+- [x] **Step 6: Run GREEN and classic regression tests.**
 
 ```bash
 pnpm exec vitest run tests/runtime-middleware-governance.test.ts tests/loop-evaluator.test.ts tests/continuation-policy.test.ts tests/tool-storm-breaker.test.ts
@@ -314,7 +314,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: all new and existing governance tests pass; classic behavior remains available.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror middleware and tests, run the same focused suite upstream, then commit `feat: move loop governance into kernel middleware` in both repositories.
 
