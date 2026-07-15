@@ -29,5 +29,11 @@ describe("desktop titlebar drag region", () => {
     expect(read("src/components/workspace/workspace-header.tsx")).toContain(
       "desktop-titlebar-drag",
     );
+    const financePreview = read(
+      "src/components/workspace/finance/finance-artifact-preview.tsx",
+    );
+    expect(financePreview).toContain("desktop-titlebar-drag");
+    expect(financePreview).toContain("desktop-no-drag");
+    expect(financePreview).toContain('data-desktop-no-drag="true"');
   });
 });

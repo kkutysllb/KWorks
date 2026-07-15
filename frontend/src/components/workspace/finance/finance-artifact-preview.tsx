@@ -152,21 +152,25 @@ export function FinanceArtifactPreview({
     <section
       aria-label="金融结果预览"
       aria-modal="true"
-      className="fixed inset-0 z-[100] flex min-h-0 flex-col bg-white"
+      className="desktop-no-drag fixed inset-0 z-[100] flex min-h-0 flex-col bg-white"
       data-testid="finance-artifact-preview"
       onKeyDown={handleDialogKeyDown}
       ref={dialogRef}
       role="dialog"
     >
-      <header className="relative z-20 flex h-11 shrink-0 pointer-events-auto items-center bg-neutral-950 px-2 text-neutral-100">
+      <header className="desktop-titlebar-drag pointer-events-auto relative z-20 flex h-11 shrink-0 items-center bg-neutral-950 px-2 text-neutral-100">
         <div className="min-w-0 flex-1 basis-0" aria-hidden="true" />
         <div className="max-w-[50vw] min-w-0 truncate px-2 text-center text-sm font-medium">
           {filename}
         </div>
-        <div className="flex min-w-0 flex-1 basis-0 justify-end">
+        <div
+          className="desktop-no-drag flex min-w-0 flex-1 basis-0 justify-end"
+          data-desktop-no-drag="true"
+        >
           <Button
             aria-label="返回任务"
-            className="text-neutral-100 hover:bg-neutral-800 hover:text-white"
+            className="desktop-no-drag text-neutral-100 hover:bg-neutral-800 hover:text-white"
+            data-desktop-no-drag="true"
             onClick={onBack}
             ref={backButtonRef}
             size="sm"

@@ -230,6 +230,16 @@ describe("FinanceArtifactPreview", () => {
     expect(onBack).toHaveBeenCalledTimes(2);
   });
 
+  test("keeps the macOS titlebar draggable while excluding the back control from native drag hit-testing", () => {
+    render(<FinanceArtifactPreview {...baseProps} />);
+
+    expect(screen.getByRole("banner")).toHaveClass("desktop-titlebar-drag");
+    const backButton = screen.getByRole("button", { name: "返回任务" });
+    expect(backButton).toHaveClass("desktop-no-drag");
+    expect(backButton).toHaveAttribute("data-desktop-no-drag", "true");
+    expect(backButton.parentElement).toHaveClass("desktop-no-drag");
+  });
+
   test("does not render a Markdown download action in the toolbar", () => {
     render(<FinanceArtifactPreview {...baseProps} />);
     expect(
