@@ -223,11 +223,11 @@ Mirror the new loop files and tests, run focused tests and typecheck upstream, t
 - Test: `qiongqi/tests/model-protocol-normalizer.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add RED fixtures for all provider stop classes.**
+- [x] **Step 1: Add RED fixtures for all provider stop classes.**
 
 Use fake streams for normal stop, native tool calls, MiniMax reasoning/tool streams, vLLM parser metadata, `content_filter`/safety, refusal, length, malformed tool JSON, and transport error. Assert that raw protocol markers such as `<action>` or `(tool call)` without a structured tool frame set `leakedProtocolText: true` and produce no `ToolIntent`.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalizer.test.ts tests/provider-compatibility.test.ts
@@ -235,19 +235,19 @@ pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalize
 
 Expected: new proposal/normalizer tests fail, while existing compatibility tests continue to show the current baseline.
 
-- [ ] **Step 3: Extend the model port additively.**
+- [x] **Step 3: Extend the model port additively.**
 
 Add optional provider metadata to completed/error chunks without removing `stopReason: 'stop' | 'tool_calls' | 'length' | 'error'`. Define `NormalizedModelCompletion` and `ModelProposal` in `packages/foundation/contracts/src/runtime-kernel.ts`, with `stopClass`, `providerReason`, endpoint format, raw metadata, integrity flags, text, reasoning, and validated tool intents.
 
-- [ ] **Step 4: Normalize in the adapter, not in the loop policy.**
+- [x] **Step 4: Normalize in the adapter, not in the loop policy.**
 
 Update `ModelCompatClient` to map each endpoint/provider response into the normalized completion fields, preserve only redacted metadata, and keep MiniMax M3 official versus vLLM parser behavior distinct. `model-protocol-normalizer.ts` must validate tool argument objects and refuse partial or unpaired calls.
 
-- [ ] **Step 5: Implement proposal runner with provisional projections.**
+- [x] **Step 5: Implement proposal runner with provisional projections.**
 
 `model-proposal-runner.ts` consumes the existing model stream, accumulates a `ModelProposal`, emits provisional delta events for SSE compatibility, and only exposes `toolIntents` after a complete normalized frame. It must not call `TurnService.applyItem()` for completed assistant items; a later commit node owns that mutation.
 
-- [ ] **Step 6: Run GREEN and provider checks.**
+- [x] **Step 6: Run GREEN and provider checks.**
 
 ```bash
 pnpm exec vitest run tests/model-proposal.test.ts tests/model-protocol-normalizer.test.ts tests/provider-compatibility.test.ts
@@ -257,7 +257,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: all fixtures pass, including no tool execution for leaked protocol text and distinct provider stop metadata.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the model port, adapter, loop proposal files, and tests; run the same commands upstream; commit `feat: normalize model proposals before loop decisions` in both repositories.
 
