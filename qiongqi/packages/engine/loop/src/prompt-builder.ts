@@ -26,6 +26,7 @@ import type {
 } from '@qiongqi/ports'
 import type { ThreadStore } from '@qiongqi/ports'
 import type { SessionStore } from '@qiongqi/ports'
+import type { TaskStateStore } from '@qiongqi/ports'
 import type { UsageService } from '@qiongqi/services'
 import type { TurnService } from '@qiongqi/services'
 import type { RuntimeEventRecorder } from '@qiongqi/services'
@@ -41,7 +42,6 @@ import type { ContextCompactionConfig } from './model-context-profile.js'
 import { modelCapabilitiesForModel } from './model-context-profile.js'
 import type { SkillRuntime } from '@qiongqi/skills'
 import type { SkillPluginHost, WorkModeInfo } from '@qiongqi/skills'
-import { isImageMimeType } from '@qiongqi/attachments'
 import type { AttachmentStore, AttachmentContent } from '@qiongqi/attachments'
 import type { MemoryStore } from '@qiongqi/memory'
 import type { UserInputResolution } from '@qiongqi/ports'
@@ -99,9 +99,14 @@ import {
   recordTokenEconomySavings,
   recordToolCatalogDrift
 } from './loop-events.js'
+import { CompactionTransaction } from './compaction-transaction.js'
 
 type ThreadRecord = Awaited<ReturnType<ThreadStore['get']>>
 type TurnRecord = Awaited<ReturnType<TurnService['getTurn']>>
+
+function isImageMimeType(mimeType: string | undefined): boolean {
+  return Boolean(mimeType && mimeType.toLowerCase().startsWith('image/'))
+}
 
 const TOOL_OUTPUT_MAX_INLINE_BYTES = 64 * 1024
 const TOOL_OUTPUT_PREVIEW_HEAD_BYTES = 4 * 1024
@@ -138,6 +143,7 @@ export type BuildResult =
 export type PromptBuilderDeps = {
   threadStore: ThreadStore
   sessionStore: SessionStore
+  taskStates?: TaskStateStore
   events: RuntimeEventRecorder
   turns: TurnService
   usage: UsageService
@@ -761,6 +767,54 @@ export class PromptBuilder {
     if (!plan) return items
     const threadId = context.threadId
     const turnId = context.turnId
+    if (this.deps.taskStates) {
+      const thread = await this.deps.threadStore.get(threadId)
+      const identity = thread ? {
+        ownerUserId: thread.ownerUserId ?? 'local-default-owner',
+        workspaceKey: thread.workspace,
+        threadId,
+        turnId,
+        runId: `run_${threadId}_${turnId}`
+      } : undefined
+      const taskState = identity
+        ? await this.deps.taskStates.load(identity)
+        : undefined
+      if (identity && taskState) {
+        const transaction = new CompactionTransaction({
+          taskStates: this.deps.taskStates,
+          sessionStore: this.deps.sessionStore,
+          compactor: this.deps.compactor,
+          nowIso: this.deps.nowIso
+        })
+        const result = await transaction.compact({
+          identity,
+          taskState,
+          history: items,
+          prefix: this.deps.prefix,
+          reason: plan.reason,
+          mode: plan.mode,
+          keepRecent: plan.keepRecent,
+          ...(this.deps.contextCompaction?.summaryMode === 'model'
+            ? {
+                summarize: (heuristicSummary: string) => this.summarizeCompactionWithModel({
+                  threadId,
+                  turnId,
+                  model,
+                  items,
+                  heuristicSummary,
+                  signal
+                })
+              }
+            : {})
+        })
+        if (signal.aborted) return items
+        if (result.replacedTokens > 0) {
+          this.deps.toolHost.clearReadTracker?.(threadId)
+          await this.recordCompactionCompleted(threadId, turnId, result)
+        }
+        return result.next
+      }
+    }
     let result = this.deps.compactor.compact({
       threadId,
       turnId,
@@ -796,26 +850,37 @@ export class PromptBuilder {
     if (result.replacedTokens > 0) {
       this.deps.toolHost.clearReadTracker?.(threadId)
       await this.deps.sessionStore.appendItem(threadId, result.summaryItem)
-      await this.deps.events.record({
-        kind: 'compaction_completed',
-        threadId,
-        turnId,
-        itemId: result.summaryItem.id,
-        summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
-        replacedTokens: result.replacedTokens,
-        pinnedConstraints: this.deps.prefix.pinnedConstraints,
-        ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceDigest
-          ? { sourceDigest: result.summaryItem.sourceDigest }
-          : {}),
-        ...(result.summaryItem.kind === 'compaction' && result.summaryItem.digestMarker
-          ? { digestMarker: result.summaryItem.digestMarker }
-          : {}),
-        ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceItemIds
-          ? { sourceItemIds: result.summaryItem.sourceItemIds }
-          : {})
-      })
+      await this.recordCompactionCompleted(threadId, turnId, result)
     }
     return result.next
+  }
+
+  private async recordCompactionCompleted(
+    threadId: string,
+    turnId: string,
+    result: {
+      summaryItem: TurnItem
+      replacedTokens: number
+    }
+  ): Promise<void> {
+    await this.deps.events.record({
+      kind: 'compaction_completed',
+      threadId,
+      turnId,
+      itemId: result.summaryItem.id,
+      summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
+      replacedTokens: result.replacedTokens,
+      pinnedConstraints: this.deps.prefix.pinnedConstraints,
+      ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceDigest
+        ? { sourceDigest: result.summaryItem.sourceDigest }
+        : {}),
+      ...(result.summaryItem.kind === 'compaction' && result.summaryItem.digestMarker
+        ? { digestMarker: result.summaryItem.digestMarker }
+        : {}),
+      ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceItemIds
+        ? { sourceItemIds: result.summaryItem.sourceItemIds }
+        : {})
+    })
   }
 
   private async summarizeCompactionWithModel(input: {
