@@ -206,7 +206,7 @@ describe("workspace workbench layout", () => {
     expect(en).toContain("QiongQi");
   });
 
-  test("qiongqi input controls keep work mode, task mode, execution profile, and collaboration policy separate", () => {
+  test("qiongqi input controls keep work mode, unified execution, and collaboration policy available", () => {
     const inputBox = readFileSync(
       resolve(repoRoot, "src/components/workspace/input-box.tsx"),
       "utf8",
@@ -230,7 +230,8 @@ describe("workspace workbench layout", () => {
       'type ExecutionProfile = "fast" | "balanced" | "deep"',
     );
     expect(inputBox).toContain('type CollaborationPolicy = "single" | "auto"');
-    expect(inputBox).toContain("QiongQiTaskModeMenu");
+    expect(inputBox).toContain("QiongQiUnifiedModeMenu");
+    expect(inputBox).not.toContain("QiongQiTaskModeMenu");
     expect(inputBox).toContain("QiongQiCollaborationMenu");
     expect(inputBox).toContain("WorkModeTabs");
     expect(inputBox).toContain('router.push("/workspace/coding")');

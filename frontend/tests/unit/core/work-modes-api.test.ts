@@ -54,6 +54,7 @@ describe("work modes API", () => {
     expect(result.workModes.map((mode) => [mode.id, mode.name])).toEqual([
       ["office", "日常办公"],
       ["coding", "Coding 模式"],
+      ["finance", "金融量化"],
     ]);
   });
 
@@ -79,6 +80,7 @@ describe("work modes API", () => {
     expect(result.workModes.map((mode) => [mode.id, mode.name])).toEqual([
       ["office", "日常办公"],
       ["coding", "Coding 模式"],
+      ["finance", "金融量化"],
     ]);
   });
 

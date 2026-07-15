@@ -19,7 +19,7 @@ describe("QiongQi input controls", () => {
       "utf8",
     );
 
-    expect(source).toContain("QiongQiExecutionModeMenu");
+    expect(source).toContain("QiongQiUnifiedModeMenu");
     expect(source).toContain("WorkspaceRootMenu");
     expect(source).toContain("QiongQiRoiStrip");
     expect(source).toContain("workspaceRoot");
