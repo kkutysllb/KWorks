@@ -161,7 +161,7 @@ print(main_capital["score"], main_capital["signals"])
 
 | 数据源 | 时效 | 用途 |
 |--------|------|------|
-| **Tushare Pro API** | T+1 | 结构化历史数据（主要数据源） |
+| **Tushare Pro API** | 每日 18:00 后更新 | 结构化历史数据（主要数据源，具体以接口返回为准） |
 | **同花顺问财 OpenAPI** | 实时/盘中 | 实时数据补充（可选，`--iwencai` 启用） |
 
 ## 环境变量

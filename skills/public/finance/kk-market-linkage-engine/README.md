@@ -106,7 +106,7 @@ src/market_linkage_engine/
 
 ## 数据时效
 
-- **Tushare Pro**：T+1 结构化历史数据（主要数据源）
+- **Tushare Pro**：日频数据通常在每日 18:00 后更新的结构化数据（主要数据源，具体以接口返回为准）
 - **同花顺问财**：实时/盘中数据补充（可选，需启用 `--iwencai`）
 
 ## License
