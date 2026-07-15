@@ -49,6 +49,7 @@ import { ModelStepRunner, type StepResult } from './model-step-runner.js'
 import { PromptBuilder, type BuildContext } from './prompt-builder.js'
 import { decideContinuation } from './continuation-policy.js'
 import { DEFAULT_EVALUATOR_MAX_RETRIES, defaultLoopEvaluator } from './loop-evaluator.js'
+import type { ToolRuntimeV3 } from './tool-runtime-v3.js'
 
 export type TurnOrchestratorOptions = {
   threadStore: ThreadStore
@@ -101,6 +102,7 @@ export type TurnOrchestratorOptions = {
     relativePath: string
     markdown: string
   }) => Promise<void>
+  toolRuntime?: ToolRuntimeV3
 }
 
 type AwaitUserInputFn = (
@@ -151,7 +153,8 @@ export class TurnOrchestrator {
       memoryStoreEnabled: Boolean(opts.memoryStore),
       ...(opts.runtimeDataDir ? { runtimeDataDir: opts.runtimeDataDir } : {}),
       ...(opts.toolStorm ? { toolStorm: opts.toolStorm } : {}),
-      ...(opts.onPlanWritten ? { onPlanWritten: opts.onPlanWritten } : {})
+      ...(opts.onPlanWritten ? { onPlanWritten: opts.onPlanWritten } : {}),
+      ...(opts.toolRuntime ? { toolRuntime: opts.toolRuntime } : {})
     })
     this.modelStepRunner = new ModelStepRunner({
       model: opts.model,
