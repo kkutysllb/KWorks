@@ -101,7 +101,12 @@ export class LoopRunner {
         toolProviderMetadata: ctx.toolProviderMetadata,
         toolKinds: ctx.toolKinds,
         recordPromptPressure: (tid, model, promptTokens) =>
-          promptBuilder.recordPromptPressure(tid, model, promptTokens)
+          promptBuilder.recordPromptPressure({
+            ownerUserId: ctx.thread?.ownerUserId ?? 'local-default-owner',
+            workspaceKey: ctx.thread?.workspace ?? 'local-default-workspace',
+            threadId: tid,
+            turnId: run.turnId
+          }, model, promptTokens)
       })
       if (stepResult.kind === 'aborted') {
         await append(run, bus, { kind: 'step:end', status: 'aborted' })

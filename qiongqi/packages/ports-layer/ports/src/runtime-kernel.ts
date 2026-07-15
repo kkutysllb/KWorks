@@ -15,10 +15,10 @@ export interface RunSnapshotStore {
 }
 
 export interface RunLeaseStore {
-  acquire(runId: string, holderId: string, ttlMs: number): Promise<{
+  acquire(identity: RunIdentity, holderId: string, ttlMs: number): Promise<{
     acquired: boolean
     expiresAt?: string
   }>
-  renew(runId: string, holderId: string, ttlMs: number): Promise<boolean>
-  release(runId: string, holderId: string): Promise<void>
+  renew(identity: RunIdentity, holderId: string, ttlMs: number): Promise<boolean>
+  release(identity: RunIdentity, holderId: string): Promise<void>
 }

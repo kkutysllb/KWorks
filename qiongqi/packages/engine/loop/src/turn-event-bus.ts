@@ -119,7 +119,12 @@ export async function runStepViaEventBus(ctx: StepContext, stepIndex: number): P
     toolProviderMetadata: promptCtx.toolProviderMetadata,
     toolKinds: promptCtx.toolKinds,
     recordPromptPressure: (tid, model, promptTokens) =>
-      deps.promptBuilder.recordPromptPressure(tid, model, promptTokens)
+      deps.promptBuilder.recordPromptPressure({
+        ownerUserId: promptCtx.thread?.ownerUserId ?? 'local-default-owner',
+        workspaceKey: promptCtx.thread?.workspace ?? 'local-default-workspace',
+        threadId: tid,
+        turnId
+      }, model, promptTokens)
   })
   if (stepResult.kind === 'aborted') return finish('aborted')
 
