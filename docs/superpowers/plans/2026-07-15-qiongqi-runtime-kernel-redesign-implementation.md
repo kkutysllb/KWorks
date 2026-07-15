@@ -331,11 +331,11 @@ Mirror middleware and tests, run the same focused suite upstream, then commit `f
 - Test: `qiongqi/tests/runtime-kernel-crash-recovery.test.ts`
 - Mirror core files and tests under `/Users/libing/kk_Projects/QiongQi`.
 
-- [ ] **Step 1: Add RED effect tests.**
+- [x] **Step 1: Add RED effect tests.**
 
 Test read tools replay safely, idempotent writes return the committed result for the same key, non-idempotent writes suspend after an injected crash between execution and commit, approvals are never duplicated, and tool results are externalized when the inline budget is exceeded.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts tests/runtime-kernel-crash-recovery.test.ts
@@ -343,19 +343,19 @@ pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts t
 
 Expected: FAIL because effect commit and V3 tool runtime do not exist.
 
-- [ ] **Step 3: Define effect policy and intent records.**
+- [x] **Step 3: Define effect policy and intent records.**
 
 Add `ToolEffectPolicy` to `packages/foundation/contracts/src/runtime-kernel.ts` with `effect`, `replay`, and optional `concurrencyKey`. `effect-commit.ts` creates `EffectIntent`, writes `effect.prepared`, looks up an existing commit by idempotency key, and writes `effect.committed` only once.
 
-- [ ] **Step 4: Implement Tool Runtime facade.**
+- [x] **Step 4: Implement Tool Runtime facade.**
 
 `tool-runtime-v3.ts` validates tool schema, identity/workspace scope, skill allow-list, approval policy, effect policy, and idempotency before delegating to `ToolCallCoordinator`. It returns normalized `ToolResult` plus `EffectCommitStatus`; it never executes a tool from plain text protocol markers.
 
-- [ ] **Step 5: Add crash injection and result budget coverage.**
+- [x] **Step 5: Add crash injection and result budget coverage.**
 
 Expose a test-only `CrashPoint` callback on the kernel dependency object. Inject failures at prepare, after tool execution, before commit, and after commit. Assert replay uses the committed effect or suspends for verification instead of executing a non-idempotent write twice.
 
-- [ ] **Step 6: Run GREEN and adapter checks.**
+- [x] **Step 6: Run GREEN and adapter checks.**
 
 ```bash
 pnpm exec vitest run tests/effect-commit.test.ts tests/tool-runtime-v3.test.ts tests/runtime-kernel-crash-recovery.test.ts tests/tool-result-budget.test.ts
@@ -365,7 +365,7 @@ pnpm --filter @qiongqi/loop run typecheck
 
 Expected: no duplicate effect commits and no repeated non-idempotent tool execution after injected crashes.
 
-- [ ] **Step 7: Sync and commit both repositories.**
+- [x] **Step 7: Sync and commit both repositories.**
 
 Mirror the effect/tool files and tests, run the same suite upstream, and commit `feat: make tool effects resumable and idempotent` in both repositories.
 
