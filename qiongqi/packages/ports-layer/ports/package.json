@@ -16,7 +16,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm run typecheck:type-tests",
+    "typecheck:type-tests": "tsc --noEmit -p tsconfig.type-tests.json"
   },
   "dependencies": {
     "@qiongqi/contracts": "workspace:*",
