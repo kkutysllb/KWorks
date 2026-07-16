@@ -22,6 +22,7 @@ import type { PromptBuilder } from './prompt-builder.js'
 import type { RuntimeNodeHandler } from './runtime-kernel-context.js'
 import type { ToolRuntimeV3 } from './tool-runtime-v3.js'
 import { classifyProposal, type ProposalClass } from './proposal-classifier.js'
+import { materializableProposalContent } from './proposal-materializer.js'
 import { renderRecoveryContinuationEntry, transitionContextRecovery } from './context-recovery.js'
 import { migrateLegacyTaskState } from './legacy-task-state-migrator.js'
 import { digestValue } from './effect-commit.js'
@@ -47,6 +48,31 @@ type StoredRequest = Omit<Parameters<ModelProposalRunner['run']>[0], 'abortSigna
 export function createKernelV3NodeHandlers(
   deps: KernelV3NodeDependencies
 ): Record<string, RuntimeNodeHandler> {
+  const materializeProposal = async (
+    identity: Parameters<RuntimeNodeHandler>[0]['identity'],
+    proposal: ModelProposal
+  ): Promise<void> => {
+    const content = materializableProposalContent(proposal)
+    if (content.reasoning) {
+      await deps.turns.applyItem(identity.threadId, makeAssistantReasoningItem({
+        id: `item_kernel_reasoning_${proposal.proposalId}`,
+        threadId: identity.threadId,
+        turnId: identity.turnId,
+        text: content.reasoning,
+        status: 'completed'
+      }))
+    }
+    if (content.text) {
+      await deps.turns.applyItem(identity.threadId, makeAssistantTextItem({
+        id: `item_kernel_text_${proposal.proposalId}`,
+        threadId: identity.threadId,
+        turnId: identity.turnId,
+        text: content.text,
+        status: 'completed'
+      }))
+    }
+  }
+
   return {
     'prepare-turn': async ({ identity }) => {
       const [thread, turn] = await Promise.all([
@@ -214,28 +240,17 @@ export function createKernelV3NodeHandlers(
 
     'commit-assistant': async ({ identity, state }) => {
       const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
-      if (proposal.reasoning.trim()) {
-        await deps.turns.applyItem(identity.threadId, makeAssistantReasoningItem({
-          id: `item_kernel_reasoning_${proposal.proposalId}`,
-          threadId: identity.threadId,
-          turnId: identity.turnId,
-          text: proposal.reasoning,
-          status: 'completed'
-        }))
-      }
-      if (proposal.text.trim()) {
-        await deps.turns.applyItem(identity.threadId, makeAssistantTextItem({
-          id: `item_kernel_text_${proposal.proposalId}`,
-          threadId: identity.threadId,
-          turnId: identity.turnId,
-          text: proposal.text,
-          status: 'completed'
-        }))
-      }
+      await materializeProposal(identity, proposal)
       return {
         value: { proposalId: proposal.proposalId },
         outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
       }
+    },
+
+    'materialize-proposal': async ({ identity, state }) => {
+      const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
+      await materializeProposal(identity, proposal)
+      return { condition: 'next', value: { proposalId: proposal.proposalId } }
     },
 
     'prepare-tools': async ({ identity, state }) => {

@@ -42,7 +42,11 @@ describe('Kernel v3 production node handlers', () => {
 
   it('recovers from task discontinuity without committing the model question', async () => {
     const harness = await createHarness([
-      proposal({ text: 'What should I continue with?' }),
+      proposal({
+        proposalId: 'proposal-recovery',
+        reasoning: 'I no longer have the previous context.',
+        text: 'What should I continue with?'
+      }),
       proposal({ text: '已继续生成报告。' })
     ])
     await expect(harness.kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
@@ -50,6 +54,10 @@ describe('Kernel v3 production node handlers', () => {
     expect(harness.applied).not.toContainEqual(expect.objectContaining({
       kind: 'assistant_text',
       text: 'What should I continue with?'
+    }))
+    expect(harness.applied).not.toContainEqual(expect.objectContaining({
+      kind: 'assistant_reasoning',
+      text: 'I no longer have the previous context.'
     }))
     expect(harness.requests[1]?.contextInstructions).toContainEqual(
       expect.stringContaining('Authoritative task recovery entry')
@@ -78,9 +86,67 @@ describe('Kernel v3 production node handlers', () => {
     })
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'evaluate', 'prepare-tools', 'commit-tools',
+      'normalize-proposal', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
       'build-context', 'invoke-model', 'normalize-proposal', 'evaluate',
       'commit-assistant'
+    ])
+  })
+
+  it('materializes tool proposal reasoning and text before the tool call', async () => {
+    const harness = await createHarness([
+      proposal({
+        proposalId: 'proposal-tool',
+        stopClass: 'tool_calls',
+        toolIntents: [{ callId: 'call-1', toolName: 'read_data', arguments: { path: 'data.json' } }],
+        reasoning: '  I should inspect the data first.  ',
+        text: '  I will read the data before answering.  '
+      }),
+      proposal({ proposalId: 'proposal-final', text: '数据读取完成。' })
+    ])
+    await expect(harness.kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+
+    expect(harness.applied.map((item) => item.kind)).toEqual([
+      'assistant_reasoning',
+      'assistant_text',
+      'tool_call',
+      'tool_result',
+      'assistant_text'
+    ])
+    expect(harness.applied.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        id: 'item_kernel_reasoning_proposal-tool',
+        text: 'I should inspect the data first.'
+      }),
+      expect.objectContaining({
+        id: 'item_kernel_text_proposal-tool',
+        text: 'I will read the data before answering.'
+      })
+    ])
+    expect(await nodeSequence(harness.events)).toEqual([
+      'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
+      'normalize-proposal', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
+      'build-context', 'invoke-model', 'normalize-proposal', 'evaluate',
+      'commit-assistant'
+    ])
+  })
+
+  it('re-entering materialization persists one item per stable proposal item id', async () => {
+    const harness = await createHarness([])
+    const repeated = proposal({
+      proposalId: 'proposal-replayed',
+      reasoning: 'reason once',
+      text: 'text once'
+    })
+    const state = {
+      nodeData: { 'normalize-proposal': repeated }
+    }
+
+    await harness.handlers['materialize-proposal']?.({ identity, state } as never)
+    await harness.handlers['materialize-proposal']?.({ identity, state } as never)
+
+    expect([...harness.persistedItems.values()]).toEqual([
+      expect.objectContaining({ id: 'item_kernel_reasoning_proposal-replayed' }),
+      expect.objectContaining({ id: 'item_kernel_text_proposal-replayed' })
     ])
   })
 })
@@ -92,6 +158,7 @@ async function createHarness(proposals: ModelProposal[]) {
   const prepared = await taskStates.prepare(task(), 0)
   await taskStates.commit(prepared)
   const applied: Array<Record<string, unknown>> = []
+  const persistedItems = new Map<string, Record<string, unknown>>()
   const requests: Array<Record<string, unknown>> = []
   const queue = [...proposals]
   const signal = new AbortController().signal
@@ -132,6 +199,7 @@ async function createHarness(proposals: ModelProposal[]) {
       getAbortController: () => signal,
       applyItem: async (_threadId: string, item: Record<string, unknown>) => {
         applied.push(item)
+        persistedItems.set(String(item.id), item)
       },
       updateItem: async () => null
     } as never,
@@ -203,8 +271,10 @@ async function createHarness(proposals: ModelProposal[]) {
       nodes: handlers
     }),
     events,
+    handlers,
     taskStates,
     applied,
+    persistedItems,
     requests
   }
 }
