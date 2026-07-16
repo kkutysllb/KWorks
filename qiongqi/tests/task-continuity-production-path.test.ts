@@ -32,6 +32,7 @@ describe('kernel v3 production topology', () => {
       'normalize-proposal',
       'evaluate',
       'commit-assistant',
+      'materialize-proposal',
       'prepare-tools',
       'commit-tools',
       'recover-context',
