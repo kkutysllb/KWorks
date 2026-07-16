@@ -26,6 +26,16 @@ const incompleteSemantic: ToolHostResult = {
   }
 }
 
+const incompleteCapabilityClass: ToolHostResult = {
+  item,
+  approved: true,
+  // @ts-expect-error semantic metadata must include a capability class when present.
+  semantic: {
+    resourceKeys: ['workspace:/repo/src/index.ts']
+  }
+}
+
 void withoutSemantic
 void withSemantic
 void incompleteSemantic
+void incompleteCapabilityClass

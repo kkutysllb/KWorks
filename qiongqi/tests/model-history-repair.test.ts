@@ -3,6 +3,7 @@ import { repairModelHistoryItems } from '@qiongqi/domain'
 import { healLoadedHistoryItems } from '@qiongqi/loop'
 import {
   makeAssistantTextItem,
+  makeRuntimeProgressItem,
   makeToolCallItem,
   makeToolResultItem,
   makeUserItem
@@ -171,5 +172,52 @@ describe('model history repair', () => {
       kind: 'assistant_text',
       id: 'item_healed_0_assistant_text'
     })
+  })
+
+  it('retains runtime progress while healing surrounding tool history', () => {
+    const orphanResult = makeToolResultItem({
+      id: 'orphan_result',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      callId: 'call_orphan',
+      toolName: 'echo',
+      output: 'orphan'
+    })
+    const progress = makeRuntimeProgressItem({
+      id: 'progress_1',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      phase: 'executing',
+      summary: 'Checking the workspace',
+      modelSteps: 2,
+      toolCalls: 1,
+      evidenceCount: 1
+    })
+    const call = makeToolCallItem({
+      id: 'call_valid',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      callId: 'call_valid',
+      toolName: 'echo',
+      arguments: { text: 'valid' }
+    })
+    const result = makeToolResultItem({
+      id: 'result_valid',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      callId: 'call_valid',
+      toolName: 'echo',
+      output: 'valid'
+    })
+
+    const healed = healLoadedHistoryItems([orphanResult, progress, call, result])
+
+    expect(healed.changed).toBe(true)
+    expect(healed.items.map((item) => item.id)).toEqual([
+      'progress_1',
+      'call_valid',
+      'result_valid'
+    ])
+    expect(healed.items[0]).toEqual(progress)
   })
 })
