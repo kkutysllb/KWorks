@@ -1,4 +1,10 @@
-import type { ApprovalPolicy, RunIdentity, RunStateV3, ToolEffectPolicy } from '@qiongqi/contracts'
+import type {
+  ApprovalPolicy,
+  RunIdentity,
+  RunStateV3,
+  TaskArtifactRef,
+  ToolEffectPolicy
+} from '@qiongqi/contracts'
 import type { ApprovalRequest } from '@qiongqi/domain'
 import type { TurnItem } from '@qiongqi/contracts'
 import type { ModelCapabilityMetadata } from '@qiongqi/contracts'
@@ -119,6 +125,9 @@ export type ToolHostResult = {
   item: TurnItem
   /** True if the call was decided by an approval. */
   approved: boolean
+  capabilityClass?: string
+  resourceKeys?: string[]
+  artifactRefs?: TaskArtifactRef[]
 }
 
 /**

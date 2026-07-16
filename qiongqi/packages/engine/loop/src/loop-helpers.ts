@@ -373,6 +373,8 @@ function compactionPromptLine(item: TurnItem): string {
       return item.replacedTokens > 0 ? `[compaction] ${clipForPrompt(item.summary, 2_000)}` : ''
     case 'review':
       return `[review:${item.title}] ${clipForPrompt(item.reviewText || stringifyForPrompt(item.output), 2_000)}`
+    case 'runtime_progress':
+      return ''
     case 'error':
       return `[error${item.code ? `:${item.code}` : ''}] ${clipForPrompt(item.message, 1_200)}`
   }

@@ -18,6 +18,21 @@ export const TaskArtifactRefSchema = z.object({
 }).strict()
 export type TaskArtifactRef = z.infer<typeof TaskArtifactRefSchema>
 
+export const ToolObservationSchema = z.object({
+  callId: NonEmptyString,
+  toolName: NonEmptyString,
+  effect: z.enum(['read', 'idempotent-write', 'non-idempotent-write']),
+  capabilityClass: NonEmptyString,
+  resourceKeys: z.array(NonEmptyString),
+  canonicalArgumentsDigest: NonEmptyString,
+  resultDigest: NonEmptyString,
+  resultItemId: NonEmptyString,
+  artifactRefs: z.array(TaskArtifactRefSchema),
+  failed: z.boolean(),
+  replayed: z.boolean()
+}).strict()
+export type ToolObservation = z.infer<typeof ToolObservationSchema>
+
 export const TaskToolLedgerEntrySchema = z.object({
   callId: NonEmptyString,
   toolName: NonEmptyString,
