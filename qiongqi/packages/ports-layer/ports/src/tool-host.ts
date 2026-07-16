@@ -125,9 +125,11 @@ export type ToolHostResult = {
   item: TurnItem
   /** True if the call was decided by an approval. */
   approved: boolean
-  capabilityClass?: string
-  resourceKeys?: string[]
-  artifactRefs?: TaskArtifactRef[]
+  semantic?: {
+    capabilityClass: string
+    resourceKeys: string[]
+    artifactRefs?: TaskArtifactRef[]
+  }
 }
 
 /**

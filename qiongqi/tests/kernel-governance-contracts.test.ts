@@ -7,6 +7,7 @@ import {
   TurnItem
 } from '@qiongqi/contracts'
 import { makeRuntimeProgressItem } from '@qiongqi/domain'
+import type { ToolHostResult } from '@qiongqi/ports'
 
 describe('kernel governance contracts', () => {
   it('parses runtime progress and defaults evidence and artifact counts', () => {
@@ -122,5 +123,39 @@ describe('kernel governance contracts', () => {
     })
 
     expect(outcome.reason).toBe('context_capacity_exceeded')
+  })
+
+  it('groups optional tool semantic metadata as one complete block', () => {
+    const item = makeRuntimeProgressItem({
+      id: 'progress_tool_result',
+      turnId: 'turn_1',
+      threadId: 'thread_1',
+      phase: 'executing',
+      summary: 'Tool completed',
+      modelSteps: 1,
+      toolCalls: 1
+    })
+    const withoutSemantic: ToolHostResult = { item, approved: true }
+    const withSemantic: ToolHostResult = {
+      item,
+      approved: true,
+      semantic: {
+        capabilityClass: 'workspace.files',
+        resourceKeys: ['workspace:/repo/src/index.ts'],
+        artifactRefs: [{ path: 'src/index.ts', kind: 'file' }]
+      }
+    }
+    const incompleteSemantic = {
+      item,
+      approved: true,
+      semantic: { capabilityClass: 'workspace.files' }
+    }
+    // @ts-expect-error semantic metadata must include resource keys when present.
+    const invalidResult: ToolHostResult = incompleteSemantic
+
+    expect(withoutSemantic.semantic).toBeUndefined()
+    expect(withSemantic.semantic?.capabilityClass).toBe('workspace.files')
+    expect(withSemantic.semantic?.resourceKeys).toEqual(['workspace:/repo/src/index.ts'])
+    expect(invalidResult.semantic?.resourceKeys).toBeUndefined()
   })
 })
