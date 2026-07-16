@@ -220,4 +220,39 @@ describe('model history repair', () => {
     ])
     expect(healed.items[0]).toEqual(progress)
   })
+
+  it('treats runtime progress as a neutral bridge between a tool call and result', () => {
+    const call = makeToolCallItem({
+      id: 'call_bridged',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      callId: 'call_bridged',
+      toolName: 'echo',
+      arguments: { text: 'bridged' }
+    })
+    const progress = makeRuntimeProgressItem({
+      id: 'progress_bridge',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      phase: 'executing',
+      summary: 'Waiting for tool completion',
+      modelSteps: 1,
+      toolCalls: 1
+    })
+    const result = makeToolResultItem({
+      id: 'result_bridged',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      callId: 'call_bridged',
+      toolName: 'echo',
+      output: 'bridged'
+    })
+    const loaded = [call, progress, result]
+
+    const healed = healLoadedHistoryItems(loaded)
+
+    expect(healed.changed).toBe(false)
+    expect(healed.items).toHaveLength(3)
+    expect(healed.items).toEqual(loaded)
+  })
 })
