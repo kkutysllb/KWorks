@@ -12,10 +12,8 @@ export function materializableProposalContent(
     return {}
   }
 
-  const reasoning = proposal.reasoning.trim()
-  const text = proposal.text.trim()
   return {
-    ...(reasoning ? { reasoning } : {}),
-    ...(text ? { text } : {})
+    ...(proposal.reasoning.trim() ? { reasoning: proposal.reasoning } : {}),
+    ...(proposal.text.trim() ? { text: proposal.text } : {})
   }
 }

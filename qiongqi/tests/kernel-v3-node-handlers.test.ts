@@ -69,6 +69,29 @@ describe('Kernel v3 production node handlers', () => {
     ])
   })
 
+  it('recovers before executing valid tool intents paired with context-loss text', async () => {
+    const harness = await createHarness([
+      proposal({
+        proposalId: 'proposal-tool-context-loss',
+        stopClass: 'tool_calls',
+        text: 'What should I continue with?',
+        toolIntents: [{ callId: 'call-lost', toolName: 'read_data', arguments: { path: 'lost.json' } }]
+      }),
+      proposal({ proposalId: 'proposal-after-recovery', text: '已从恢复入口继续。' })
+    ])
+
+    await expect(harness.kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+
+    expect(harness.applied).not.toContainEqual(expect.objectContaining({
+      id: 'item_kernel_text_proposal-tool-context-loss'
+    }))
+    expect(harness.applied).not.toContainEqual(expect.objectContaining({ callId: 'call-lost' }))
+    expect(harness.toolExecutions).toBe(0)
+    expect(harness.requests[1]?.contextInstructions).toContainEqual(
+      expect.stringContaining('Authoritative task recovery entry')
+    )
+  })
+
   it('commits tools, advances TaskState, and loops back through build-context', async () => {
     const harness = await createHarness([
       proposal({
@@ -115,11 +138,11 @@ describe('Kernel v3 production node handlers', () => {
     expect(harness.applied.slice(0, 2)).toEqual([
       expect.objectContaining({
         id: 'item_kernel_reasoning_proposal-tool',
-        text: 'I should inspect the data first.'
+        text: '  I should inspect the data first.  '
       }),
       expect.objectContaining({
         id: 'item_kernel_text_proposal-tool',
-        text: 'I will read the data before answering.'
+        text: '  I will read the data before answering.  '
       })
     ])
     expect(await nodeSequence(harness.events)).toEqual([
@@ -160,6 +183,7 @@ async function createHarness(proposals: ModelProposal[]) {
   const applied: Array<Record<string, unknown>> = []
   const persistedItems = new Map<string, Record<string, unknown>>()
   const requests: Array<Record<string, unknown>> = []
+  let toolExecutions = 0
   const queue = [...proposals]
   const signal = new AbortController().signal
   const thread = {
@@ -201,6 +225,12 @@ async function createHarness(proposals: ModelProposal[]) {
         applied.push(item)
         persistedItems.set(String(item.id), item)
       },
+      applyItemOnce: async (_threadId: string, item: Record<string, unknown>) => {
+        if (persistedItems.has(String(item.id))) return false
+        applied.push(item)
+        persistedItems.set(String(item.id), item)
+        return true
+      },
       updateItem: async () => null
     } as never,
     promptBuilder: {
@@ -233,21 +263,24 @@ async function createHarness(proposals: ModelProposal[]) {
       }
     } as never,
     toolRuntime: {
-      execute: async (input: { state: unknown; call: { callId: string; toolName: string } }) => ({
-        state: input.state,
-        replayed: false,
-        result: {
-          approved: true,
-          item: makeToolResultItem({
-            id: `result-${input.call.callId}`,
-            threadId: identity.threadId,
-            turnId: identity.turnId,
-            callId: input.call.callId,
-            toolName: input.call.toolName,
-            output: { ok: true }
-          })
+      execute: async (input: { state: unknown; call: { callId: string; toolName: string } }) => {
+        toolExecutions += 1
+        return {
+          state: input.state,
+          replayed: false,
+          result: {
+            approved: true,
+            item: makeToolResultItem({
+              id: `result-${input.call.callId}`,
+              threadId: identity.threadId,
+              turnId: identity.turnId,
+              callId: input.call.callId,
+              toolName: input.call.toolName,
+              output: { ok: true }
+            })
+          }
         }
-      })
+      }
     } as never,
     createToolContext: async () => ({
       threadId: identity.threadId,
@@ -275,7 +308,8 @@ async function createHarness(proposals: ModelProposal[]) {
     taskStates,
     applied,
     persistedItems,
-    requests
+    requests,
+    get toolExecutions() { return toolExecutions }
   }
 }
 

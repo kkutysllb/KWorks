@@ -3,13 +3,13 @@ import type { ModelProposal } from '@qiongqi/contracts'
 import { materializableProposalContent } from '@qiongqi/loop'
 
 describe('proposal materializer', () => {
-  it('trims visible reasoning and text and omits empty content', () => {
+  it('uses trimming only as a presence check and preserves visible content exactly', () => {
     expect(materializableProposalContent(proposal({
-      reasoning: '  inspect the source  ',
-      text: '  I will read the file.  '
+      reasoning: '  inspect the source\n',
+      text: '  ```ts\nconst value = 1\n```\n'
     }))).toEqual({
-      reasoning: 'inspect the source',
-      text: 'I will read the file.'
+      reasoning: '  inspect the source\n',
+      text: '  ```ts\nconst value = 1\n```\n'
     })
 
     expect(materializableProposalContent(proposal({

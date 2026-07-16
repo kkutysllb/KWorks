@@ -34,6 +34,7 @@ export class TurnService {
   private readonly deps: TurnServiceDeps
   private readonly inflightTurns = new Map<string, AbortController>()
   private readonly threadMutationQueues = new Map<string, Promise<void>>()
+  private readonly itemCreationQueues = new Map<string, Promise<void>>()
 
   constructor(deps: TurnServiceDeps) {
     this.deps = deps
@@ -302,6 +303,35 @@ export class TurnService {
       itemId: item.id,
       item
     })
+  }
+
+  /** Persist and announce a creation only when the stable item id is absent. */
+  async applyItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
+    let created = false
+    const previous = this.itemCreationQueues.get(threadId) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(async () => {
+      const items = await this.deps.sessionStore.loadItems(threadId)
+      if (items.some((existing) => existing.id === item.id)) return
+      await this.appendItem(threadId, item)
+      await this.deps.events.record({
+        kind: 'item_created',
+        threadId,
+        turnId: item.turnId,
+        itemId: item.id,
+        item
+      })
+      created = true
+    })
+    const guard = run.then(() => undefined, () => undefined)
+    this.itemCreationQueues.set(threadId, guard)
+    try {
+      await run
+      return created
+    } finally {
+      if (this.itemCreationQueues.get(threadId) === guard) {
+        this.itemCreationQueues.delete(threadId)
+      }
+    }
   }
 
   async updateItem(

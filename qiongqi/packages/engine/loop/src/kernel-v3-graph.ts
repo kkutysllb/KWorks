@@ -2,7 +2,7 @@ import type { ExecutionGraph } from './execution-graph.js'
 
 export function productionKernelV3Graph(): ExecutionGraph {
   return {
-    version: 'kernel-v3-production-v1',
+    version: 'kernel-v3-production-v2',
     startNodeId: 'prepare-turn',
     predicates: [
       'next',

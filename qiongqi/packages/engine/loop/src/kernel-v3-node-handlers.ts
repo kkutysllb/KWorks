@@ -31,7 +31,10 @@ export type KernelV3NodeDependencies = {
   threadStore: ThreadStore
   sessionStore: SessionStore
   taskStates: TaskStateStore
-  turns: Pick<TurnService, 'getTurn' | 'getAbortController' | 'applyItem' | 'updateItem'>
+  turns: Pick<
+    TurnService,
+    'getTurn' | 'getAbortController' | 'applyItem' | 'applyItemOnce' | 'updateItem'
+  >
   promptBuilder: Pick<PromptBuilder, 'build'>
   proposalRunner: Pick<ModelProposalRunner, 'run'>
   toolRuntime: Pick<ToolRuntimeV3, 'execute'>
@@ -54,7 +57,7 @@ export function createKernelV3NodeHandlers(
   ): Promise<void> => {
     const content = materializableProposalContent(proposal)
     if (content.reasoning) {
-      await deps.turns.applyItem(identity.threadId, makeAssistantReasoningItem({
+      await deps.turns.applyItemOnce(identity.threadId, makeAssistantReasoningItem({
         id: `item_kernel_reasoning_${proposal.proposalId}`,
         threadId: identity.threadId,
         turnId: identity.turnId,
@@ -63,7 +66,7 @@ export function createKernelV3NodeHandlers(
       }))
     }
     if (content.text) {
-      await deps.turns.applyItem(identity.threadId, makeAssistantTextItem({
+      await deps.turns.applyItemOnce(identity.threadId, makeAssistantTextItem({
         id: `item_kernel_text_${proposal.proposalId}`,
         threadId: identity.threadId,
         turnId: identity.turnId,
@@ -261,7 +264,7 @@ export function createKernelV3NodeHandlers(
         arguments: intent.arguments
       }))
       for (const call of calls) {
-        await deps.turns.applyItem(identity.threadId, makeToolCallItem({
+        await deps.turns.applyItemOnce(identity.threadId, makeToolCallItem({
           id: `item_tool_${identity.turnId}_${call.callId}`,
           threadId: identity.threadId,
           turnId: identity.turnId,

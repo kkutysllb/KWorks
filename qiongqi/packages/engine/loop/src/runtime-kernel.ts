@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { RunEventEnvelope, RunIdentity, RunOutcome, RunStateV3 } from '@qiongqi/contracts'
+import {
+  ModelProposalSchema,
+  type RunEventEnvelope,
+  type RunIdentity,
+  type RunOutcome,
+  type RunStateV3
+} from '@qiongqi/contracts'
 import type { RunEventStore, RunLeaseStore, RunSnapshotStore } from '@qiongqi/ports'
 import { MiddlewareChain } from './middleware-chain.js'
 import {
@@ -62,13 +68,23 @@ export class RuntimeKernel {
       let state = await snapshots.load(identity)
       if (!state) state = this.initialState(identity)
       this.assertStateIdentity(identity, state)
-      if (isTerminal(state)) return outcomeFromTerminalState(state)
-
-      state = await this.replayAfterCheckpoint(identity, state)
+      const graphCompatibility = this.graphCompatibility(state)
+      if (graphCompatibility) return graphCompatibility
       if (isTerminal(state)) {
+        state = this.migrateGraphState(state)
         await snapshots.save(state)
         return outcomeFromTerminalState(state)
       }
+
+      state = await this.replayAfterCheckpoint(identity, state)
+      if (isTerminal(state)) {
+        state = this.migrateGraphState(state)
+        await snapshots.save(state)
+        return outcomeFromTerminalState(state)
+      }
+
+      state = this.migrateGraphState(state)
+      await snapshots.save(state)
 
       state = { ...state, status: 'running', updatedAt: this.options.nowIso() }
       await snapshots.save(state)
@@ -205,6 +221,49 @@ export class RuntimeKernel {
       committedEffects: [],
       createdAt: now,
       updatedAt: now
+    }
+  }
+
+  private graphCompatibility(state: RunStateV3): RunOutcome | undefined {
+    const targetVersion = this.options.graph.version
+    if (state.graphVersion === targetVersion) return undefined
+    if (
+      state.graphVersion === 'kernel-v3-production-v1'
+      && targetVersion === 'kernel-v3-production-v2'
+    ) {
+      return undefined
+    }
+    return {
+      status: 'failed',
+      reason: 'runtime_error',
+      retryable: false,
+      details: {
+        code: 'unsupported_graph_version',
+        storedGraphVersion: state.graphVersion,
+        runtimeGraphVersion: targetVersion
+      }
+    }
+  }
+
+  private migrateGraphState(state: RunStateV3): RunStateV3 {
+    if (state.graphVersion === this.options.graph.version) return state
+    if (
+      state.graphVersion !== 'kernel-v3-production-v1'
+      || this.options.graph.version !== 'kernel-v3-production-v2'
+    ) {
+      return state
+    }
+    if (state.cursor.nodeId !== 'prepare-tools' && state.cursor.nodeId !== 'commit-tools') {
+      return { ...state, graphVersion: this.options.graph.version }
+    }
+    const proposal = ModelProposalSchema.safeParse(state.nodeData['normalize-proposal'])
+    if (!proposal.success || proposal.data.toolIntents.length === 0) {
+      throw new Error('production graph v1 tool snapshot is missing a normalized tool proposal')
+    }
+    return {
+      ...state,
+      graphVersion: this.options.graph.version,
+      cursor: { ...state.cursor, nodeId: 'materialize-proposal' }
     }
   }
 
