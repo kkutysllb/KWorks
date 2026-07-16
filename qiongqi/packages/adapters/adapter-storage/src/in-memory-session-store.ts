@@ -50,6 +50,13 @@ export class InMemorySessionStore implements SessionStore {
     }
   }
 
+  async appendItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
+    const list = this.items.get(threadId) ?? []
+    if (list.some((existing) => existing.id === item.id)) return false
+    await this.appendItem(threadId, item)
+    return true
+  }
+
   async rewriteItems(threadId: string, items: TurnItem[]): Promise<void> {
     const nextItems = [...items]
     this.items.set(threadId, nextItems)

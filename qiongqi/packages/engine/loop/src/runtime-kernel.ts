@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   ModelProposalSchema,
+  TaskStateV1Schema,
   type RunEventEnvelope,
   type RunIdentity,
   type RunOutcome,
@@ -68,17 +69,18 @@ export class RuntimeKernel {
       let state = await snapshots.load(identity)
       if (!state) state = this.initialState(identity)
       this.assertStateIdentity(identity, state)
+      if (isTerminal(state)) {
+        const outcome = outcomeFromTerminalState(state)
+        const migrated = this.migrateTerminalGraphMetadata(state)
+        if (migrated !== state) await snapshots.save(migrated)
+        return outcome
+      }
       const graphCompatibility = this.graphCompatibility(state)
       if (graphCompatibility) return graphCompatibility
-      if (isTerminal(state)) {
-        state = this.migrateGraphState(state)
-        await snapshots.save(state)
-        return outcomeFromTerminalState(state)
-      }
 
       state = await this.replayAfterCheckpoint(identity, state)
       if (isTerminal(state)) {
-        state = this.migrateGraphState(state)
+        state = this.migrateTerminalGraphMetadata(state)
         await snapshots.save(state)
         return outcomeFromTerminalState(state)
       }
@@ -257,14 +259,27 @@ export class RuntimeKernel {
       return { ...state, graphVersion: this.options.graph.version }
     }
     const proposal = ModelProposalSchema.safeParse(state.nodeData['normalize-proposal'])
-    if (!proposal.success || proposal.data.toolIntents.length === 0) {
-      throw new Error('production graph v1 tool snapshot is missing a normalized tool proposal')
+    const task = TaskStateV1Schema.safeParse(state.nodeData['restore-task'])
+    if (!proposal.success || proposal.data.toolIntents.length === 0 || !task.success) {
+      throw new Error(
+        'production graph v1 tool snapshot is missing a normalized tool proposal or task state'
+      )
     }
     return {
       ...state,
       graphVersion: this.options.graph.version,
-      cursor: { ...state.cursor, nodeId: 'materialize-proposal' }
+      cursor: { ...state.cursor, nodeId: 'evaluate' }
     }
+  }
+
+  private migrateTerminalGraphMetadata(state: RunStateV3): RunStateV3 {
+    if (
+      state.graphVersion === 'kernel-v3-production-v1'
+      && this.options.graph.version === 'kernel-v3-production-v2'
+    ) {
+      return { ...state, graphVersion: this.options.graph.version }
+    }
+    return state
   }
 
   private async replayAfterCheckpoint(

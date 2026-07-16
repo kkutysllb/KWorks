@@ -307,26 +307,24 @@ export class TurnService {
 
   /** Persist and announce a creation only when the stable item id is absent. */
   async applyItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
-    let created = false
+    let createdInSession = false
     const previous = this.itemCreationQueues.get(threadId) ?? Promise.resolve()
     const run = previous.catch(() => undefined).then(async () => {
-      const items = await this.deps.sessionStore.loadItems(threadId)
-      if (items.some((existing) => existing.id === item.id)) return
-      await this.appendItem(threadId, item)
-      await this.deps.events.record({
+      createdInSession = await this.deps.sessionStore.appendItemOnce(threadId, item)
+      await this.projectItem(threadId, item)
+      await this.deps.events.recordOnce({
         kind: 'item_created',
         threadId,
         turnId: item.turnId,
         itemId: item.id,
         item
-      })
-      created = true
+      }, (event) => event.kind === 'item_created' && event.itemId === item.id)
     })
     const guard = run.then(() => undefined, () => undefined)
     this.itemCreationQueues.set(threadId, guard)
     try {
       await run
-      return created
+      return createdInSession
     } finally {
       if (this.itemCreationQueues.get(threadId) === guard) {
         this.itemCreationQueues.delete(threadId)
@@ -364,6 +362,10 @@ export class TurnService {
 
   private async appendItem(threadId: string, item: TurnItem): Promise<void> {
     await this.deps.sessionStore.appendItem(threadId, item)
+    await this.projectItem(threadId, item)
+  }
+
+  private async projectItem(threadId: string, item: TurnItem): Promise<void> {
     await this.upsertThread(threadId, (current) => {
       const turn = current.turns.find((t) => t.id === item.turnId)
       if (!turn) return current

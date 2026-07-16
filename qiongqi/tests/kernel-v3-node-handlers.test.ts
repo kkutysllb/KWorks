@@ -92,6 +92,32 @@ describe('Kernel v3 production node handlers', () => {
     )
   })
 
+  it('recovers before executing valid tool intents paired with reasoning-only context loss', async () => {
+    const harness = await createHarness([
+      proposal({
+        proposalId: 'proposal-tool-reasoning-context-loss',
+        stopClass: 'tool_calls',
+        reasoning: 'What should I continue with?',
+        text: '',
+        toolIntents: [{ callId: 'call-reasoning-lost', toolName: 'read_data', arguments: {} }]
+      }),
+      proposal({ proposalId: 'proposal-after-reasoning-recovery', text: '已恢复。' })
+    ])
+
+    await expect(harness.kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+
+    expect(harness.applied).not.toContainEqual(expect.objectContaining({
+      id: 'item_kernel_reasoning_proposal-tool-reasoning-context-loss'
+    }))
+    expect(harness.applied).not.toContainEqual(expect.objectContaining({
+      callId: 'call-reasoning-lost'
+    }))
+    expect(harness.toolExecutions).toBe(0)
+    expect(harness.requests[1]?.contextInstructions).toContainEqual(
+      expect.stringContaining('Authoritative task recovery entry')
+    )
+  })
+
   it('commits tools, advances TaskState, and loops back through build-context', async () => {
     const harness = await createHarness([
       proposal({

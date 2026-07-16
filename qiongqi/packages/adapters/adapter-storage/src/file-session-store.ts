@@ -18,6 +18,7 @@ const MS_PER_DAY = 86_400_000
  */
 export class FileSessionStore implements SessionStore {
   private readonly dataDir: string
+  private readonly itemAppendQueues = new Map<string, Promise<void>>()
   private readonly usageEventCompaction: {
     maxBytes: number
     retentionDays: number
@@ -61,6 +62,27 @@ export class FileSessionStore implements SessionStore {
     await this.ensureDir(this.threadDir(threadId))
     const path = this.messagesPath(threadId)
     await appendFile(path, `${JSON.stringify(item)}\n`, 'utf-8')
+  }
+
+  async appendItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
+    let appended = false
+    const previous = this.itemAppendQueues.get(threadId) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(async () => {
+      const raw = await readJsonl<TurnItem>(this.messagesPath(threadId))
+      if (raw.some((existing) => existing.id === item.id)) return
+      await this.appendItem(threadId, item)
+      appended = true
+    })
+    const guard = run.then(() => undefined, () => undefined)
+    this.itemAppendQueues.set(threadId, guard)
+    try {
+      await run
+      return appended
+    } finally {
+      if (this.itemAppendQueues.get(threadId) === guard) {
+        this.itemAppendQueues.delete(threadId)
+      }
+    }
   }
 
   async rewriteItems(threadId: string, items: TurnItem[]): Promise<void> {

@@ -28,7 +28,7 @@ export function classifyProposal(input: {
   if (proposal.stopClass === 'safety' || proposal.stopClass === 'refusal') {
     return 'safety_or_refusal'
   }
-  const signals = [proposal.text, ...(input.providerSignals ?? [])]
+  const signals = [proposal.text, proposal.reasoning, ...(input.providerSignals ?? [])]
   if (signals.some(isContextDiscontinuityText)) return 'context_discontinuity'
   if (proposal.toolIntents.length > 0) return 'tool_intents'
   if (proposal.stopClass === 'length') return 'length_limited'
