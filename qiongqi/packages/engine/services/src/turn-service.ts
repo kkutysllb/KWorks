@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { ThreadRecord } from '@qiongqi/contracts'
 import type { CompactRequest, CompactResponse, StartTurnRequest, StartTurnResponse, Turn, TurnStatus } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
@@ -35,6 +36,7 @@ export class TurnService {
   private readonly inflightTurns = new Map<string, AbortController>()
   private readonly threadMutationQueues = new Map<string, Promise<void>>()
   private readonly itemCreationQueues = new Map<string, Promise<void>>()
+  private readonly itemUpdateQueues = new Map<string, Promise<void>>()
 
   constructor(deps: TurnServiceDeps) {
     this.deps = deps
@@ -361,6 +363,45 @@ export class TurnService {
     return updated
   }
 
+  async updateItemOnce(
+    threadId: string,
+    itemId: string,
+    patch: Partial<TurnItem>
+  ): Promise<{ item: TurnItem; updated: boolean } | null> {
+    let outcome: { item: TurnItem; updated: boolean } | null | undefined
+    const previous = this.itemUpdateQueues.get(threadId) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(async () => {
+      const persisted = await this.deps.sessionStore.updateItemOnce(threadId, itemId, patch)
+      if (!persisted) {
+        outcome = null
+        return
+      }
+      await this.projectItem(threadId, persisted.item)
+      const digest = canonicalItemDigest(persisted.item)
+      await this.deps.events.recordOnce({
+        kind: 'item_updated',
+        threadId,
+        turnId: persisted.item.turnId,
+        itemId: persisted.item.id,
+        item: persisted.item
+      }, (event) => event.kind === 'item_updated'
+        && event.itemId === persisted.item.id
+        && canonicalItemDigest(event.item) === digest)
+      outcome = persisted
+    })
+    const guard = run.then(() => undefined, () => undefined)
+    this.itemUpdateQueues.set(threadId, guard)
+    try {
+      await run
+      if (outcome === undefined) throw new Error('updateItemOnce completed without an outcome')
+      return outcome
+    } finally {
+      if (this.itemUpdateQueues.get(threadId) === guard) {
+        this.itemUpdateQueues.delete(threadId)
+      }
+    }
+  }
+
   private async appendItem(threadId: string, item: TurnItem): Promise<void> {
     await this.deps.sessionStore.appendItem(threadId, item)
     await this.projectItem(threadId, item)
@@ -443,6 +484,20 @@ export class TurnService {
   private isSystemOnly(item: TurnItem): boolean {
     return item.kind === 'compaction' || item.kind === 'error'
   }
+}
+
+function canonicalItemDigest(item: TurnItem): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(item))).digest('hex')
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])])
+  )
 }
 
 function deriveFirstTurnTitlePatch(thread: ThreadRecord, prompt: string): { title?: string } {

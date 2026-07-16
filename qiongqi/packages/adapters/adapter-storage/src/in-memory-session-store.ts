@@ -95,6 +95,21 @@ export class InMemorySessionStore implements SessionStore {
     return updated
   }
 
+  async updateItemOnce(
+    threadId: string,
+    itemId: string,
+    patch: Partial<TurnItem>
+  ): Promise<{ item: TurnItem; updated: boolean } | null> {
+    const current = (this.items.get(threadId) ?? []).find((item) => item.id === itemId)
+    if (!current) return null
+    const desired = { ...current, ...patch } as TurnItem
+    if (JSON.stringify(current) === JSON.stringify(desired)) {
+      return { item: current, updated: false }
+    }
+    const updated = await this.updateItem(threadId, itemId, patch)
+    return updated ? { item: updated, updated: true } : null
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
     const list = this.events.get(threadId) ?? []
     return list

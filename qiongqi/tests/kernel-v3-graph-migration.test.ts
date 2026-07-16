@@ -271,6 +271,7 @@ describe('production kernel graph migration', () => {
       events: runEvents,
       leases: snapshots,
       holderId: 'migration-test',
+      nowIso: () => '2026-07-16T00:00:00.000Z',
       nodes: {
         ...handlers,
         'build-context': () => ({ condition: 'next', value: {} }),

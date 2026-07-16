@@ -18,7 +18,7 @@ const MS_PER_DAY = 86_400_000
  */
 export class FileSessionStore implements SessionStore {
   private readonly dataDir: string
-  private readonly itemAppendQueues = new Map<string, Promise<void>>()
+  private readonly itemMutationQueues = new Map<string, Promise<void>>()
   private readonly usageEventCompaction: {
     maxBytes: number
     retentionDays: number
@@ -70,7 +70,7 @@ export class FileSessionStore implements SessionStore {
   ): Promise<{ item: TurnItem; created: boolean }> {
     let canonical: TurnItem | undefined
     let created = false
-    const previous = this.itemAppendQueues.get(threadId) ?? Promise.resolve()
+    const previous = this.itemMutationQueues.get(threadId) ?? Promise.resolve()
     const run = previous.catch(() => undefined).then(async () => {
       const raw = await readJsonl<TurnItem>(this.messagesPath(threadId))
       canonical = [...raw].reverse().find((existing) => existing.id === item.id)
@@ -80,14 +80,14 @@ export class FileSessionStore implements SessionStore {
       created = true
     })
     const guard = run.then(() => undefined, () => undefined)
-    this.itemAppendQueues.set(threadId, guard)
+    this.itemMutationQueues.set(threadId, guard)
     try {
       await run
       if (!canonical) throw new Error('appendItemOnce completed without a canonical item')
       return { item: canonical, created }
     } finally {
-      if (this.itemAppendQueues.get(threadId) === guard) {
-        this.itemAppendQueues.delete(threadId)
+      if (this.itemMutationQueues.get(threadId) === guard) {
+        this.itemMutationQueues.delete(threadId)
       }
     }
   }
@@ -106,6 +106,42 @@ export class FileSessionStore implements SessionStore {
     await this.ensureDir(this.threadDir(threadId))
     await appendFile(this.messagesPath(threadId), `${JSON.stringify(updated)}\n`, 'utf-8')
     return updated
+  }
+
+  async updateItemOnce(
+    threadId: string,
+    itemId: string,
+    patch: Partial<TurnItem>
+  ): Promise<{ item: TurnItem; updated: boolean } | null> {
+    let outcome: { item: TurnItem; updated: boolean } | null | undefined
+    const previous = this.itemMutationQueues.get(threadId) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(async () => {
+      const raw = await readJsonl<TurnItem>(this.messagesPath(threadId))
+      const current = [...raw].reverse().find((item) => item.id === itemId)
+      if (!current) {
+        outcome = null
+        return
+      }
+      const desired = { ...current, ...patch } as TurnItem
+      if (sameItem(current, desired)) {
+        outcome = { item: current, updated: false }
+        return
+      }
+      await this.ensureDir(this.threadDir(threadId))
+      await appendFile(this.messagesPath(threadId), `${JSON.stringify(desired)}\n`, 'utf-8')
+      outcome = { item: desired, updated: true }
+    })
+    const guard = run.then(() => undefined, () => undefined)
+    this.itemMutationQueues.set(threadId, guard)
+    try {
+      await run
+      if (outcome === undefined) throw new Error('updateItemOnce completed without an outcome')
+      return outcome
+    } finally {
+      if (this.itemMutationQueues.get(threadId) === guard) {
+        this.itemMutationQueues.delete(threadId)
+      }
+    }
   }
 
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
@@ -198,6 +234,10 @@ export class FileSessionStore implements SessionStore {
       return false
     }
   }
+}
+
+function sameItem(left: TurnItem, right: TurnItem): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function compactUsageEvents(

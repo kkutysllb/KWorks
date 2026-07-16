@@ -80,6 +80,14 @@ async function expectConcurrentAppend(store: SessionStore): Promise<void> {
   expect(created).toHaveLength(1)
   for (const result of results) expect(result.item).toEqual(results[0]?.item)
   await expect(store.loadItems(threadId)).resolves.toEqual([created[0]?.item])
+
+  const updates = await Promise.all(Array.from({ length: 8 }, () => store.updateItemOnce(
+    threadId,
+    'item_kernel_reasoning_proposal-concurrent',
+    { status: 'aborted', finishedAt: '2026-07-16T00:01:00.000Z' }
+  )))
+  expect(updates.filter((result) => result?.updated)).toHaveLength(1)
+  for (const result of updates) expect(result?.item).toEqual(updates[0]?.item)
 }
 
 function candidateItem(index: number): TurnItem {

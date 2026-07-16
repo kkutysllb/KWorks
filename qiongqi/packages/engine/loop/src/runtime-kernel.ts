@@ -289,7 +289,8 @@ export class RuntimeKernel {
             'v1-proposal-migration': {
               sourceNodeId: state.cursor.nodeId,
               preparedCallIds: prepared,
-              reconciled: false
+              reconciled: false,
+              abortFinishedAt: this.options.nowIso()
             }
           }
         : state.nodeData

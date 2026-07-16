@@ -33,7 +33,12 @@ export type KernelV3NodeDependencies = {
   taskStates: TaskStateStore
   turns: Pick<
     TurnService,
-    'getTurn' | 'getAbortController' | 'applyItem' | 'applyItemOnce' | 'updateItem'
+    | 'getTurn'
+    | 'getAbortController'
+    | 'applyItem'
+    | 'applyItemOnce'
+    | 'updateItem'
+    | 'updateItemOnce'
   >
   promptBuilder: Pick<PromptBuilder, 'build'>
   proposalRunner: Pick<ModelProposalRunner, 'run'>
@@ -213,6 +218,7 @@ export function createKernelV3NodeHandlers(
         sourceNodeId: string
         preparedCallIds: string[]
         reconciled: boolean
+        abortFinishedAt: string
       }>(state, 'v1-proposal-migration')
       const migrationCommands = migration && !migration.reconciled
         ? [{
@@ -223,10 +229,10 @@ export function createKernelV3NodeHandlers(
         : []
       if (migration && !migration.reconciled && proposalClass !== 'tool_intents') {
         for (const callId of migration.preparedCallIds) {
-          await deps.turns.updateItem(
+          await deps.turns.updateItemOnce(
             identity.threadId,
             `item_tool_${identity.turnId}_${callId}`,
-            { status: 'aborted', finishedAt: deps.nowIso() }
+            { status: 'aborted', finishedAt: migration.abortFinishedAt }
           )
         }
       }

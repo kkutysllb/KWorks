@@ -50,6 +50,14 @@ export class HybridSessionStore implements SessionStore {
     return this.delegate.updateItem(threadId, itemId, patch)
   }
 
+  async updateItemOnce(
+    threadId: string,
+    itemId: string,
+    patch: Partial<TurnItem>
+  ): Promise<{ item: TurnItem; updated: boolean } | null> {
+    return this.delegate.updateItemOnce(threadId, itemId, patch)
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
     return this.delegate.loadEventsSince(threadId, sinceSeq)
   }
