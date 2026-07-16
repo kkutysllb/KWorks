@@ -205,12 +205,37 @@ export function createKernelV3NodeHandlers(
       value: ModelProposalSchema.parse(requireNodeValue(state, 'invoke-model'))
     }),
 
-    evaluate: ({ state }) => {
+    evaluate: async ({ identity, state }) => {
       const task = requireNodeValue<TaskStateV1>(state, 'restore-task')
       const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
       const proposalClass = classifyProposal({ proposal, task })
+      const migration = nodeValue<{
+        sourceNodeId: string
+        preparedCallIds: string[]
+        reconciled: boolean
+      }>(state, 'v1-proposal-migration')
+      const migrationCommands = migration && !migration.reconciled
+        ? [{
+            type: 'set-node-data' as const,
+            nodeId: 'v1-proposal-migration',
+            value: { ...migration, reconciled: true }
+          }]
+        : []
+      if (migration && !migration.reconciled && proposalClass !== 'tool_intents') {
+        for (const callId of migration.preparedCallIds) {
+          await deps.turns.updateItem(
+            identity.threadId,
+            `item_tool_${identity.turnId}_${callId}`,
+            { status: 'aborted', finishedAt: deps.nowIso() }
+          )
+        }
+      }
       if (proposalClass === 'tool_intents') {
-        return { condition: 'tools', value: { proposalClass, action: 'tools' } }
+        return {
+          condition: 'tools',
+          value: { proposalClass, action: 'tools' },
+          commands: migrationCommands
+        }
       }
       if (
         proposalClass === 'context_discontinuity'
@@ -226,19 +251,33 @@ export function createKernelV3NodeHandlers(
           return {
             value: { proposalClass, action: 'degrade' },
             outcome: transition.outcome,
-            commands: [{ type: 'set-recovery', recovery: transition.recovery }]
+            commands: [
+              ...migrationCommands,
+              { type: 'set-recovery', recovery: transition.recovery } as const
+            ]
           }
         }
         return {
           condition: 'recover',
           value: { proposalClass, action: 'recover' },
-          commands: [{ type: 'set-recovery', recovery: transition.recovery }]
+          commands: [
+            ...migrationCommands,
+            { type: 'set-recovery', recovery: transition.recovery } as const
+          ]
         }
       }
       if (proposalClass === 'safety_or_refusal' || proposalClass === 'protocol_error') {
-        return { condition: 'fatal', value: { proposalClass, action: 'fatal' } }
+        return {
+          condition: 'fatal',
+          value: { proposalClass, action: 'fatal' },
+          commands: migrationCommands
+        }
       }
-      return { condition: 'final', value: { proposalClass, action: 'final' } }
+      return {
+        condition: 'final',
+        value: { proposalClass, action: 'final' },
+        commands: migrationCommands
+      }
     },
 
     'commit-assistant': async ({ identity, state }) => {

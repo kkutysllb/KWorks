@@ -255,20 +255,44 @@ export class RuntimeKernel {
     ) {
       return state
     }
-    if (state.cursor.nodeId !== 'prepare-tools' && state.cursor.nodeId !== 'commit-tools') {
+    const revalidatesProposal = state.cursor.nodeId === 'prepare-tools'
+      || state.cursor.nodeId === 'commit-tools'
+      || state.cursor.nodeId === 'commit-assistant'
+    if (!revalidatesProposal) {
       return { ...state, graphVersion: this.options.graph.version }
     }
     const proposal = ModelProposalSchema.safeParse(state.nodeData['normalize-proposal'])
     const task = TaskStateV1Schema.safeParse(state.nodeData['restore-task'])
-    if (!proposal.success || proposal.data.toolIntents.length === 0 || !task.success) {
+    const requiresToolProposal = state.cursor.nodeId !== 'commit-assistant'
+    if (
+      !proposal.success
+      || !task.success
+      || (requiresToolProposal && proposal.data.toolIntents.length === 0)
+    ) {
       throw new Error(
         'production graph v1 tool snapshot is missing a normalized tool proposal or task state'
       )
     }
+    const prepared = state.cursor.nodeId === 'commit-tools'
+      ? preparedCallIds(state.nodeData['prepare-tools'])
+      : []
+    if (state.cursor.nodeId === 'commit-tools' && prepared.length === 0) {
+      throw new Error('production graph v1 commit-tools snapshot is missing prepared calls')
+    }
     return {
       ...state,
       graphVersion: this.options.graph.version,
-      cursor: { ...state.cursor, nodeId: 'evaluate' }
+      cursor: { ...state.cursor, nodeId: 'evaluate' },
+      nodeData: prepared.length > 0
+        ? {
+            ...state.nodeData,
+            'v1-proposal-migration': {
+              sourceNodeId: state.cursor.nodeId,
+              preparedCallIds: prepared,
+              reconciled: false
+            }
+          }
+        : state.nodeData
     }
   }
 
@@ -492,6 +516,17 @@ function outcomeFromTerminalState(state: RunStateV3): RunOutcome {
     reason: 'runtime_error',
     retryable: false
   }
+}
+
+function preparedCallIds(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return []
+  const calls = (value as { calls?: unknown }).calls
+  if (!Array.isArray(calls)) return []
+  return calls.flatMap((call) => {
+    if (!call || typeof call !== 'object') return []
+    const callId = (call as { callId?: unknown }).callId
+    return typeof callId === 'string' && callId ? [callId] : []
+  })
 }
 
 function parseCompletedNodePayload(value: unknown): CompletedNodePayload {

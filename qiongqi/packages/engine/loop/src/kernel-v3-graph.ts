@@ -20,7 +20,7 @@ export function productionKernelV3Graph(): ExecutionGraph {
       { id: 'build-context', kind: 'build_context', effect: 'pure', checkpoint: 'after' },
       { id: 'invoke-model', kind: 'invoke_model', effect: 'model', checkpoint: 'both' },
       { id: 'normalize-proposal', kind: 'normalize_proposal', effect: 'pure', checkpoint: 'after' },
-      { id: 'evaluate', kind: 'evaluate', effect: 'pure', checkpoint: 'after' },
+      { id: 'evaluate', kind: 'evaluate', effect: 'state', checkpoint: 'after' },
       { id: 'commit-assistant', kind: 'commit_assistant', effect: 'state', terminal: true, checkpoint: 'both' },
       { id: 'materialize-proposal', kind: 'materialize_proposal', effect: 'state', checkpoint: 'both' },
       { id: 'prepare-tools', kind: 'prepare_tools', effect: 'state', checkpoint: 'both' },
