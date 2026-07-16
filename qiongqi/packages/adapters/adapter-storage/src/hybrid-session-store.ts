@@ -35,7 +35,10 @@ export class HybridSessionStore implements SessionStore {
     await this.delegate.appendItem(threadId, item)
   }
 
-  async appendItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
+  async appendItemOnce(
+    threadId: string,
+    item: TurnItem
+  ): Promise<{ item: TurnItem; created: boolean }> {
     return this.delegate.appendItemOnce(threadId, item)
   }
 

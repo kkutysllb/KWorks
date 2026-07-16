@@ -80,28 +80,38 @@ describe('proposal materialization persistence', () => {
 
   it('repairs thread projection and creation event after only the session append committed', async () => {
     const harness = await createHarness(dataDir)
-    const item = reasoningItem()
-    await harness.sessionStore.appendItem(threadId, item)
+    const canonical = reasoningItem('2026-07-16T00:00:01.000Z')
+    const reconstructed = {
+      ...canonical,
+      createdAt: '2026-07-16T00:00:02.000Z',
+      finishedAt: '2026-07-16T00:00:03.000Z'
+    }
+    await harness.sessionStore.appendItem(threadId, canonical)
 
-    await harness.turns.applyItemOnce(threadId, item)
+    await harness.turns.applyItemOnce(threadId, reconstructed)
 
-    await expectRepairedCreation(harness, item)
+    await expectRepairedCreation(harness, canonical)
   })
 
   it('repairs the creation event after session and thread projection committed', async () => {
     const harness = await createHarness(dataDir)
-    const item = reasoningItem()
-    await harness.sessionStore.appendItem(threadId, item)
+    const canonical = reasoningItem('2026-07-16T00:00:01.000Z')
+    const reconstructed = {
+      ...canonical,
+      createdAt: '2026-07-16T00:00:02.000Z',
+      finishedAt: '2026-07-16T00:00:03.000Z'
+    }
+    await harness.sessionStore.appendItem(threadId, canonical)
     const thread = await harness.threadStore.get(threadId)
     if (!thread?.turns[0]) throw new Error('seeded turn missing')
     await harness.threadStore.upsert({
       ...thread,
-      turns: [appendTurnItem(thread.turns[0], item)]
+      turns: [appendTurnItem(thread.turns[0], canonical)]
     })
 
-    await harness.turns.applyItemOnce(threadId, item)
+    await harness.turns.applyItemOnce(threadId, reconstructed)
 
-    await expectRepairedCreation(harness, item)
+    await expectRepairedCreation(harness, canonical)
   })
 })
 
@@ -167,12 +177,15 @@ async function expectRepairedCreation(
   item: TurnItem
 ): Promise<void> {
   expect((await rawItems(harness.dataDir)).filter((stored) => stored.id === item.id))
-    .toHaveLength(1)
-  expect((await harness.threadStore.get(threadId))?.turns[0]?.items)
-    .toContainEqual(expect.objectContaining({ id: item.id }))
-  expect((await harness.sessionStore.loadEventsSince(threadId, 0)).filter(
+    .toEqual([item])
+  expect((await harness.threadStore.get(threadId))?.turns[0]?.items.find(
+    (projected) => projected.id === item.id
+  )).toEqual(item)
+  const events = (await harness.sessionStore.loadEventsSince(threadId, 0)).filter(
     (event) => event.kind === 'item_created' && event.itemId === item.id
-  )).toHaveLength(1)
+  )
+  expect(events).toHaveLength(1)
+  expect(events[0]).toMatchObject({ item })
 }
 
 async function rawItems(dataDir: string): Promise<TurnItem[]> {
@@ -196,12 +209,16 @@ function modelProposal(): ModelProposal {
   }
 }
 
-function reasoningItem(): TurnItem {
-  return makeAssistantReasoningItem({
-    id: 'item_kernel_reasoning_proposal-persistence',
-    threadId,
-    turnId,
-    text: 'reasoning',
-    status: 'completed'
-  })
+function reasoningItem(createdAt: string = '2026-07-16T00:00:01.000Z'): TurnItem {
+  return {
+    ...makeAssistantReasoningItem({
+      id: 'item_kernel_reasoning_proposal-persistence',
+      threadId,
+      turnId,
+      text: 'reasoning',
+      status: 'completed'
+    }),
+    createdAt,
+    finishedAt: '2026-07-16T00:00:01.500Z'
+  }
 }

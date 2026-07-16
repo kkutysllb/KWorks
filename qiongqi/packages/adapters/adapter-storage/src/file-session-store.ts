@@ -64,20 +64,27 @@ export class FileSessionStore implements SessionStore {
     await appendFile(path, `${JSON.stringify(item)}\n`, 'utf-8')
   }
 
-  async appendItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
-    let appended = false
+  async appendItemOnce(
+    threadId: string,
+    item: TurnItem
+  ): Promise<{ item: TurnItem; created: boolean }> {
+    let canonical: TurnItem | undefined
+    let created = false
     const previous = this.itemAppendQueues.get(threadId) ?? Promise.resolve()
     const run = previous.catch(() => undefined).then(async () => {
       const raw = await readJsonl<TurnItem>(this.messagesPath(threadId))
-      if (raw.some((existing) => existing.id === item.id)) return
+      canonical = [...raw].reverse().find((existing) => existing.id === item.id)
+      if (canonical) return
       await this.appendItem(threadId, item)
-      appended = true
+      canonical = item
+      created = true
     })
     const guard = run.then(() => undefined, () => undefined)
     this.itemAppendQueues.set(threadId, guard)
     try {
       await run
-      return appended
+      if (!canonical) throw new Error('appendItemOnce completed without a canonical item')
+      return { item: canonical, created }
     } finally {
       if (this.itemAppendQueues.get(threadId) === guard) {
         this.itemAppendQueues.delete(threadId)

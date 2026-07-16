@@ -13,8 +13,11 @@ import type { TurnItem } from '@qiongqi/contracts'
 export interface SessionStore {
   appendEvent(threadId: string, event: RuntimeEvent): Promise<void>
   appendItem(threadId: string, item: TurnItem): Promise<void>
-  /** Append a creation only when the stable item id is absent from durable storage. */
-  appendItemOnce(threadId: string, item: TurnItem): Promise<boolean>
+  /** Return the canonical durable item, appending it only when the stable id is absent. */
+  appendItemOnce(
+    threadId: string,
+    item: TurnItem
+  ): Promise<{ item: TurnItem; created: boolean }>
   /**
    * Replace the canonical item stream for a thread. File-backed stores
    * should write atomically because this is used by load-time healing

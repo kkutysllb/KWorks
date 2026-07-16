@@ -310,15 +310,16 @@ export class TurnService {
     let createdInSession = false
     const previous = this.itemCreationQueues.get(threadId) ?? Promise.resolve()
     const run = previous.catch(() => undefined).then(async () => {
-      createdInSession = await this.deps.sessionStore.appendItemOnce(threadId, item)
-      await this.projectItem(threadId, item)
+      const persisted = await this.deps.sessionStore.appendItemOnce(threadId, item)
+      createdInSession = persisted.created
+      await this.projectItem(threadId, persisted.item)
       await this.deps.events.recordOnce({
         kind: 'item_created',
         threadId,
-        turnId: item.turnId,
-        itemId: item.id,
-        item
-      }, (event) => event.kind === 'item_created' && event.itemId === item.id)
+        turnId: persisted.item.turnId,
+        itemId: persisted.item.id,
+        item: persisted.item
+      }, (event) => event.kind === 'item_created' && event.itemId === persisted.item.id)
     })
     const guard = run.then(() => undefined, () => undefined)
     this.itemCreationQueues.set(threadId, guard)

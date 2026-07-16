@@ -50,11 +50,15 @@ export class InMemorySessionStore implements SessionStore {
     }
   }
 
-  async appendItemOnce(threadId: string, item: TurnItem): Promise<boolean> {
+  async appendItemOnce(
+    threadId: string,
+    item: TurnItem
+  ): Promise<{ item: TurnItem; created: boolean }> {
     const list = this.items.get(threadId) ?? []
-    if (list.some((existing) => existing.id === item.id)) return false
+    const existing = list.find((candidate) => candidate.id === item.id)
+    if (existing) return { item: existing, created: false }
     await this.appendItem(threadId, item)
-    return true
+    return { item, created: true }
   }
 
   async rewriteItems(threadId: string, items: TurnItem[]): Promise<void> {
