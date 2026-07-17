@@ -369,6 +369,134 @@ describe('Qiongqi built-in tools', () => {
     expect((lsOutput.names as Array<string>)[0]).toBe('demo.txt')
   })
 
+  it('returns structured file semantics without deriving bash resources from command text', async () => {
+    await writeFile(join(workspace, 'semantic.txt'), 'hello\n', 'utf8')
+    const readResult = await host.execute(
+      { callId: 'call_read_semantic', toolName: 'read', arguments: { path: './semantic.txt' } },
+      buildContext(workspace)
+    )
+    expect(readResult.semantic).toEqual({
+      capabilityClass: 'file.read',
+      resourceKeys: [join(workspace, 'semantic.txt')]
+    })
+
+    const writeResult = await host.execute(
+      { callId: 'call_write_semantic', toolName: 'write', arguments: { path: 'generated/report.txt', content: 'done\n' } },
+      buildContext(workspace)
+    )
+    expect(writeResult.semantic).toEqual({
+      capabilityClass: 'file.write',
+      resourceKeys: [join(workspace, 'generated/report.txt')],
+      artifactRefs: [{
+        path: 'generated/report.txt',
+        kind: 'file',
+        producedByCallId: 'call_write_semantic'
+      }]
+    })
+
+    const editResult = await host.execute(
+      {
+        callId: 'call_edit_semantic',
+        toolName: 'edit',
+        arguments: { path: 'generated/report.txt', oldText: 'done', newText: 'complete' }
+      },
+      buildContext(workspace)
+    )
+    expect(editResult.semantic).toEqual({
+      capabilityClass: 'file.write',
+      resourceKeys: [join(workspace, 'generated/report.txt')],
+      artifactRefs: [{
+        path: 'generated/report.txt',
+        kind: 'file',
+        producedByCallId: 'call_edit_semantic'
+      }]
+    })
+
+    for (const [toolName, capabilityClass] of [
+      ['ls', 'file.list'],
+      ['find', 'file.search'],
+      ['grep', 'file.search']
+    ] as const) {
+      const argumentsByTool = toolName === 'ls'
+        ? { path: 'generated' }
+        : toolName === 'find'
+          ? { path: 'generated', pattern: '*.txt' }
+          : { path: 'generated', pattern: 'complete' }
+      const searchResult = await host.execute(
+        { callId: `call_${toolName}_semantic`, toolName, arguments: argumentsByTool },
+        buildContext(workspace)
+      )
+      expect(searchResult.semantic).toEqual({
+        capabilityClass,
+        resourceKeys: [join(workspace, 'generated')]
+      })
+    }
+
+    const bashResult = await host.execute(
+      { callId: 'call_bash_semantic', toolName: 'bash', arguments: { command: 'cat semantic.txt' } },
+      buildContext(workspace)
+    )
+    expect(bashResult.semantic).toEqual({
+      capabilityClass: 'command_execution',
+      resourceKeys: []
+    })
+  })
+
+  it('preserves semantic metadata supplied by a local tool executor', async () => {
+    const semanticHost = new LocalToolHost({
+      tools: [LocalToolHost.defineTool({
+        name: 'semantic_tool',
+        description: 'Returns its own structured semantic metadata.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        execute: async () => ({
+          output: { ok: true },
+          semantic: { capabilityClass: 'custom.lookup', resourceKeys: ['custom:record-1'] }
+        })
+      })]
+    })
+    const result = await semanticHost.execute(
+      { callId: 'call_semantic_tool', toolName: 'semantic_tool', arguments: {} },
+      buildContext(workspace)
+    )
+    expect(result.semantic).toEqual({
+      capabilityClass: 'custom.lookup',
+      resourceKeys: ['custom:record-1']
+    })
+  })
+
+  it('does not claim an artifact for a failed file write', async () => {
+    const result = await host.execute(
+      { callId: 'call_failed_write', toolName: 'write', arguments: { path: 'not-created.txt' } },
+      buildContext(workspace)
+    )
+    expect(result.item).toMatchObject({ kind: 'tool_result', isError: true })
+    expect(result.semantic).toEqual({
+      capabilityClass: 'file.write',
+      resourceKeys: [join(workspace, 'not-created.txt')]
+    })
+  })
+
+  it('uses the registered tool name as the generic semantic fallback', async () => {
+    const fallbackHost = new LocalToolHost({
+      tools: [LocalToolHost.defineTool({
+        name: 'lookup_record',
+        description: 'Looks up a record.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        execute: async () => ({ output: { found: true } })
+      })]
+    })
+    const result = await fallbackHost.execute(
+      { callId: 'call_lookup_record', toolName: 'lookup_record', arguments: {} },
+      buildContext(workspace)
+    )
+    expect(result.semantic).toEqual({
+      capabilityClass: 'lookup_record',
+      resourceKeys: []
+    })
+  })
+
   it('executes bash commands in the workspace', async () => {
     await writeFile(join(workspace, 'cmd.txt'), 'from bash\n', 'utf8')
     const output = await executeTool(host, workspace, 'bash', {

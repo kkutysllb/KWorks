@@ -49,11 +49,19 @@ export type LocalTool = {
    * `create_plan`.
    */
   shouldAdvertise?: (context: ToolHostContext) => boolean
+  /** Provider-neutral capability used when the executor does not supply richer semantics. */
+  capabilityClass?: string
+  semantic?: (
+    args: Record<string, unknown>,
+    context: ToolHostContext,
+    result: { output: unknown; isError?: boolean },
+    call: ToolCallLike
+  ) => ToolHostResult['semantic'] | undefined
   execute: (
     args: Record<string, unknown>,
     context: ToolHostContext,
     onUpdate?: (update: ToolExecutionUpdate) => Promise<void> | void
-  ) => Promise<{ output: unknown; isError?: boolean }>
+  ) => Promise<{ output: unknown; isError?: boolean; semantic?: ToolHostResult['semantic'] }>
 }
 
 export type LocalToolHostOptions = {
@@ -237,7 +245,10 @@ export class LocalToolHost implements ToolHost {
       output,
       isError
     })
-    return { item, approved: !needsApproval }
+    const semantic = result.semantic
+      ?? tool.semantic?.(activeCall.arguments, context, { output, isError }, activeCall)
+      ?? { capabilityClass: tool.capabilityClass ?? tool.name, resourceKeys: [] }
+    return { item, approved: !needsApproval, semantic }
   }
 
   clearReadTracker(threadId?: string): void {
@@ -340,6 +351,8 @@ export class LocalToolHost implements ToolHost {
       inputSchema: tool.inputSchema,
       toolKind: tool.toolKind ?? 'tool_call',
       execute: tool.execute,
+      ...(tool.capabilityClass ? { capabilityClass: tool.capabilityClass } : {}),
+      ...(tool.semantic ? { semantic: tool.semantic } : {}),
       ...(tool.shouldAdvertise ? { shouldAdvertise: tool.shouldAdvertise } : {})
     }
   }

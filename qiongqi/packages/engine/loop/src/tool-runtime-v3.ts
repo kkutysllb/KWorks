@@ -1,11 +1,18 @@
-import type { RunIdentity, RunOutcome, RunStateV3, ToolEffectPolicy } from '@qiongqi/contracts'
+import type { RunIdentity, RunOutcome, RunStateV3, ToolEffectPolicy, ToolObservation } from '@qiongqi/contracts'
 import type { ToolCallLike, ToolHost, ToolHostContext, ToolHostResult } from '@qiongqi/ports'
 import { EffectCommitCoordinator } from './effect-commit.js'
+import { observeTool } from './tool-observation.js'
 
 export type CrashPoint = 'prepare' | 'after_tool_execute' | 'before_commit' | 'after_commit'
 export type ToolRuntimeV3Options = { toolHost: ToolHost; effects: EffectCommitCoordinator; crashPoint?: (point: CrashPoint) => void }
 export type ToolRuntimeV3Input = { identity: RunIdentity; state: RunStateV3; call: ToolCallLike; context: ToolHostContext; policy: ToolEffectPolicy; crashAfterExecute?: boolean }
-export type ToolRuntimeV3Result = { state: RunStateV3; result?: ToolHostResult; replayed: boolean; outcome?: RunOutcome }
+export type ToolRuntimeV3Result = { state: RunStateV3; result?: ToolHostResult; observation?: ToolObservation; replayed: boolean; outcome?: RunOutcome }
+
+type StoredToolRuntimeV3Result = {
+  kind: 'tool_runtime_v3_result'
+  result: ToolHostResult
+  observation?: ToolObservation
+}
 
 export class ToolRuntimeV3 {
   constructor(private readonly options: ToolRuntimeV3Options) {}
@@ -14,8 +21,22 @@ export class ToolRuntimeV3 {
     const key = this.options.effects.idempotencyKey(input.identity, input.call.callId)
     const committed = input.state.committedEffects.find((effect) => effect.idempotencyKey === key)
     if (committed) {
-      const stored = await this.options.effects.storedResult(input.identity, key) as ToolHostResult | undefined
-      if (stored) return { state: input.state, result: stored, replayed: true }
+      const stored = await this.options.effects.storedResult(input.identity, key)
+      if (stored) {
+        const persisted = isStoredToolRuntimeV3Result(stored)
+          ? stored
+          : { kind: 'tool_runtime_v3_result' as const, result: stored as ToolHostResult }
+        return {
+          state: input.state,
+          result: persisted.result,
+          observation: persisted.observation
+            ? { ...persisted.observation, replayed: true }
+            : persisted.result.item.kind === 'tool_result'
+              ? observeTool({ ...input, result: persisted.result, replayed: true })
+              : undefined,
+          replayed: true
+        }
+      }
       if (input.policy.replay !== 'safe') {
         return { state: input.state, replayed: true, outcome: { status: 'suspended', reason: 'required_action_missing', retryable: true, details: { code: 'effect_requires_verification', idempotencyKey: key } } }
       }
@@ -31,8 +52,30 @@ export class ToolRuntimeV3 {
     this.options.crashPoint?.('after_tool_execute')
     if (input.crashAfterExecute) return { state: prepared.state, replayed: false, outcome: { status: 'suspended', reason: 'runtime_error', retryable: true, details: { code: 'crash_between_execute_and_commit', idempotencyKey: key } } }
     this.options.crashPoint?.('before_commit')
-    const committedResult = await this.options.effects.commit(input.identity, prepared.state, prepared.intent, result)
+    const observation = result.item.kind === 'tool_result'
+      ? observeTool({ ...input, result, replayed: false })
+      : undefined
+    const stored: StoredToolRuntimeV3Result = {
+      kind: 'tool_runtime_v3_result',
+      result,
+      ...(observation ? { observation } : {})
+    }
+    const committedResult = await this.options.effects.commit(input.identity, prepared.state, prepared.intent, stored)
     this.options.crashPoint?.('after_commit')
-    return { state: committedResult.state, result, replayed: false }
+    return {
+      state: committedResult.state,
+      result,
+      observation,
+      replayed: false
+    }
   }
+}
+
+function isStoredToolRuntimeV3Result(value: unknown): value is StoredToolRuntimeV3Result {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return record.kind === 'tool_runtime_v3_result'
+    && !!record.result
+    && typeof record.result === 'object'
+    && 'item' in record.result
 }
