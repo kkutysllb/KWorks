@@ -65,6 +65,84 @@ class RuntimeKernelCrash extends Error {
   }
 }
 
+class RuntimeLeaseLost extends Error {
+  constructor(readonly terminalOutcome?: RunOutcome) {
+    super('runtime lease unavailable')
+  }
+}
+
+class RuntimeLeaseGuard {
+  private readonly renewIntervalMs: number
+  private timer: ReturnType<typeof setTimeout> | undefined
+  private renewInFlight: Promise<boolean> | undefined
+  private stopped = false
+  private lost = false
+
+  constructor(
+    private readonly leases: RunLeaseStore,
+    private readonly identity: RunIdentity,
+    private readonly holderId: string,
+    private readonly ttlMs: number
+  ) {
+    this.renewIntervalMs = Math.max(1, Math.floor(ttlMs / 3))
+  }
+
+  start(): void {
+    this.schedule()
+  }
+
+  async assertHealthy(): Promise<void> {
+    if (this.lost || this.stopped || !(await this.renew())) throw new RuntimeLeaseLost()
+  }
+
+  isLost(): boolean {
+    return this.lost
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = undefined
+    if (this.renewInFlight) await this.renewInFlight
+  }
+
+  private schedule(): void {
+    if (this.stopped || this.lost) return
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      void this.tick()
+    }, this.renewIntervalMs)
+    const ownedTimer = this.timer as ReturnType<typeof setTimeout> & { unref?: () => void }
+    ownedTimer.unref?.()
+  }
+
+  private async tick(): Promise<void> {
+    const renewed = await this.renew()
+    if (renewed) this.schedule()
+  }
+
+  private async renew(): Promise<boolean> {
+    if (this.stopped || this.lost) return false
+    if (this.renewInFlight) return this.renewInFlight
+    const operation = Promise.resolve()
+      .then(() => this.leases.renew(this.identity, this.holderId, this.ttlMs))
+      .then((renewed) => {
+        if (!renewed) this.lost = true
+        return renewed
+      })
+      .catch(() => {
+        this.lost = true
+        return false
+      })
+    this.renewInFlight = operation
+    try {
+      return await operation
+    } finally {
+      if (this.renewInFlight === operation) this.renewInFlight = undefined
+    }
+  }
+}
+
 export class RuntimeKernel {
   private readonly options: Omit<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware' | 'crashPoint'> &
     Required<Pick<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware'>> &
@@ -91,14 +169,22 @@ export class RuntimeKernel {
         details: { code: 'lease_unavailable' }
       }
     }
+    const leaseGuard = new RuntimeLeaseGuard(
+      leases,
+      identity,
+      holderId,
+      this.options.leaseTtlMs
+    )
+    leaseGuard.start()
 
     try {
       let state = await snapshots.load(identity)
       if (!state) state = this.initialState(identity)
       this.assertStateIdentity(identity, state)
+      await this.assertLeaseHealthy(leaseGuard, state)
       if (isTerminal(state)) {
         const checkpointSeq = state.cursor.checkpointSeq
-        state = await this.replayAfterCheckpoint(identity, state)
+        state = await this.replayAfterCheckpoint(identity, state, leaseGuard)
         if (state.cursor.checkpointSeq > checkpointSeq) {
           // afterRun is best-effort observability/cleanup only.
           // Production correctness must not depend on it.
@@ -118,7 +204,7 @@ export class RuntimeKernel {
       if (graphCompatibility) return graphCompatibility
 
       const replayCheckpointSeq = state.cursor.checkpointSeq
-      state = await this.replayAfterCheckpoint(identity, state)
+      state = await this.replayAfterCheckpoint(identity, state, leaseGuard)
       if (isTerminal(state)) {
         if (state.cursor.checkpointSeq > replayCheckpointSeq) {
           await this.options.middleware.run(
@@ -141,6 +227,7 @@ export class RuntimeKernel {
         'beforeRun',
         this.middlewareContext(identity, state, 'beforeRun')
       )
+      await this.assertLeaseHealthy(leaseGuard, state)
       const beforeRunCommands = canonicalizeMiddlewareCommands(beforeRun?.commands ?? [])
       const beforeRunOutcome = this.commandOutcome(beforeRunCommands)
       if (beforeRunOutcome) {
@@ -151,6 +238,7 @@ export class RuntimeKernel {
 
       while (true) {
         const node = this.nodeFor(state.cursor.nodeId)
+        await this.assertLeaseHealthy(leaseGuard, state)
         if (checkpointsBefore(node)) await snapshots.save(state)
 
         const started = await this.recordEvent(identity, state, node.id, 'node.started', {
@@ -167,6 +255,7 @@ export class RuntimeKernel {
           'beforeNode',
           this.middlewareContext(identity, state, 'beforeNode', node)
         )
+        await this.assertLeaseHealthy(leaseGuard, state)
         const beforeCommands = canonicalizeMiddlewareCommands(before?.commands ?? [])
         const beforeOutcome = this.commandOutcome(beforeCommands)
         if (beforeOutcome) {
@@ -178,6 +267,7 @@ export class RuntimeKernel {
         const handler = this.options.nodes[node.id]
         if (!handler) throw new Error(`missing runtime node handler: ${node.id}`)
         const result = await handler({ identity, state, node, hook: 'beforeNode' })
+        await this.assertLeaseHealthy(leaseGuard, state)
         const commands = canonicalizeMiddlewareCommands([
           ...beforeCommands,
           ...(result?.commands ?? [])
@@ -214,7 +304,7 @@ export class RuntimeKernel {
         state = await this.commitAfterMiddleware(identity, state, {
           node,
           completed: committedPayload
-        })
+        }, leaseGuard)
         if (checkpointsAfter(node) || isTerminal(state)) await snapshots.save(state)
         if (isTerminal(state)) {
           // Terminal outcomes are monotonic. Middleware may record diagnostics,
@@ -229,6 +319,14 @@ export class RuntimeKernel {
       }
     } catch (error) {
       if (error instanceof RuntimeKernelCrash) throw error.original
+      if (error instanceof RuntimeLeaseLost || leaseGuard.isLost()) {
+        if (error instanceof RuntimeLeaseLost && error.terminalOutcome) {
+          return error.terminalOutcome
+        }
+        const persisted = await snapshots.load(identity)
+        if (persisted && isTerminal(persisted)) return outcomeFromTerminalState(persisted)
+        return leaseUnavailableOutcome()
+      }
       const outcome: RunOutcome = {
         status: 'failed',
         reason: 'runtime_error',
@@ -247,6 +345,7 @@ export class RuntimeKernel {
       }
       return state && isTerminal(state) ? outcomeFromTerminalState(state) : outcome
     } finally {
+      await leaseGuard.stop()
       await leases.release(identity, holderId)
     }
   }
@@ -431,7 +530,8 @@ export class RuntimeKernel {
 
   private async replayAfterCheckpoint(
     identity: RunIdentity,
-    initial: RunStateV3
+    initial: RunStateV3,
+    leaseGuard: RuntimeLeaseGuard
   ): Promise<RunStateV3> {
     let state = initial
     const initialCheckpointSeq = state.cursor.checkpointSeq
@@ -454,7 +554,7 @@ export class RuntimeKernel {
         continue
       }
       if (pending && event.eventType !== 'node.after_middleware') {
-        state = await this.commitAfterMiddleware(identity, state, pending)
+        state = await this.commitAfterMiddleware(identity, state, pending, leaseGuard)
         pending = undefined
       }
       if (event.eventType === 'node.started') {
@@ -489,15 +589,17 @@ export class RuntimeKernel {
         pending = undefined
       }
     }
-    if (pending) state = await this.commitAfterMiddleware(identity, state, pending)
+    if (pending) state = await this.commitAfterMiddleware(identity, state, pending, leaseGuard)
     return state
   }
 
   private async commitAfterMiddleware(
     identity: RunIdentity,
     state: RunStateV3,
-    pending: PendingAfterMiddleware
+    pending: PendingAfterMiddleware,
+    leaseGuard: RuntimeLeaseGuard
   ): Promise<RunStateV3> {
+    await this.assertLeaseHealthy(leaseGuard, state)
     const result = await this.options.middleware.run(
       'afterNode',
       this.middlewareContext(
@@ -508,6 +610,7 @@ export class RuntimeKernel {
         pending.completed.facts
       )
     )
+    await this.assertLeaseHealthy(leaseGuard, state)
     const commands = canonicalizeMiddlewareCommands(result?.commands ?? [])
     this.applyCommands(state, commands)
     await this.reachCrashPoint('after_node_middleware')
@@ -529,6 +632,20 @@ export class RuntimeKernel {
     const next = this.reduceAfterMiddleware(state, committed, recorded.seq)
     await this.reachCrashPoint('after_node_after_middleware_event')
     return next
+  }
+
+  private async assertLeaseHealthy(
+    leaseGuard: RuntimeLeaseGuard,
+    state: RunStateV3
+  ): Promise<void> {
+    try {
+      await leaseGuard.assertHealthy()
+    } catch (error) {
+      if (error instanceof RuntimeLeaseLost && isTerminal(state)) {
+        throw new RuntimeLeaseLost(outcomeFromTerminalState(state))
+      }
+      throw error
+    }
   }
 
   private reduceAfterMiddleware(
@@ -753,6 +870,15 @@ function outcomeFromTerminalState(state: RunStateV3): RunOutcome {
     status: state.status as RunOutcome['status'],
     reason: 'runtime_error',
     retryable: false
+  }
+}
+
+function leaseUnavailableOutcome(): RunOutcome {
+  return {
+    status: 'failed',
+    reason: 'runtime_error',
+    retryable: true,
+    details: { code: 'lease_unavailable' }
   }
 }
 
