@@ -30,6 +30,7 @@ describe('kernel v3 production topology', () => {
       'build-context',
       'invoke-model',
       'normalize-proposal',
+      'account-model',
       'evaluate',
       'commit-assistant',
       'materialize-proposal',

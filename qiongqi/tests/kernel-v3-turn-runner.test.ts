@@ -27,4 +27,11 @@ it('runs the production graph without accepting a classic delegate', async () =>
 
   await expect(runner.runTurn('thread-1', 'turn-1')).resolves.toBe('completed')
   expect(finished).toEqual(['completed'])
+  await expect(store.load({
+    ownerUserId: 'owner-1',
+    workspaceKey: '/workspace-1',
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    runId: 'run-turn-1'
+  })).resolves.toMatchObject({ graphVersion: 'kernel-v3-production-v3' })
 })

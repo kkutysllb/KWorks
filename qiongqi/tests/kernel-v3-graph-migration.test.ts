@@ -40,8 +40,8 @@ const identity: RunIdentity = {
 }
 
 describe('production kernel graph migration', () => {
-  it('reports production graph version v2', () => {
-    expect(productionKernelV3Graph().version).toBe('kernel-v3-production-v2')
+  it('reports production graph version v3', () => {
+    expect(productionKernelV3Graph().version).toBe('kernel-v3-production-v3')
   })
 
   it.each(['prepare-tools', 'commit-tools']) (
@@ -94,13 +94,14 @@ describe('production kernel graph migration', () => {
       expect((await events.listAfter(identity, 0))
         .filter((event) => event.eventType === 'node.started')
         .map((event) => event.stepId)).toEqual([
+        'account-model',
         'evaluate',
         'materialize-proposal',
         'prepare-tools',
         'commit-tools'
       ])
       await expect(snapshots.load(identity)).resolves.toMatchObject({
-        graphVersion: 'kernel-v3-production-v2'
+        graphVersion: 'kernel-v3-production-v3'
       })
     }
   )
@@ -193,7 +194,7 @@ describe('production kernel graph migration', () => {
     expect([...persisted.keys()]).toEqual([])
     expect((await events.listAfter(identity, 0))
       .filter((event) => event.eventType === 'node.started')
-      .map((event) => event.stepId)).toEqual(['evaluate', 'recover-context'])
+      .map((event) => event.stepId)).toEqual(['account-model', 'evaluate', 'recover-context'])
   })
 
   it('re-evaluates a v1 commit-assistant snapshot before materializing reasoning', async () => {
@@ -231,7 +232,7 @@ describe('production kernel graph migration', () => {
     expect([...persisted.keys()]).toEqual([])
     expect((await events.listAfter(identity, 0))
       .filter((event) => event.eventType === 'node.started')
-      .map((event) => event.stepId)).toEqual(['evaluate', 'recover-context'])
+      .map((event) => event.stepId)).toEqual(['account-model', 'evaluate', 'recover-context'])
   })
 
   it('aborts a prepared v1 tool call when re-evaluation recovers context', async () => {
@@ -341,13 +342,109 @@ describe('production kernel graph migration', () => {
 
     await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
     await expect(snapshots.load(identity)).resolves.toMatchObject({
-      graphVersion: 'kernel-v3-production-v2'
+      graphVersion: 'kernel-v3-production-v3'
     })
     expect((await events.listAfter(identity, 0))
       .filter((event) => event.eventType === 'node.started')
       .map((event) => event.stepId)).toEqual(['build-context'])
   })
+
+  it('routes an in-flight v2 normalized proposal through model accounting once', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const proposal = modelProposal({
+      proposalId: 'proposal-v2-accounting',
+      usage: {
+        promptTokens: 20,
+        completionTokens: 5,
+        totalTokens: 25,
+        cacheHitRate: null,
+        turns: 1,
+        costUsd: 0.1
+      }
+    })
+    await snapshots.save({
+      ...oldState('evaluate', proposal),
+      graphVersion: 'kernel-v3-production-v2'
+    })
+    const handlers = createKernelV3NodeHandlers({} as never)
+    const kernel = new RuntimeKernel({
+      graph: productionKernelV3Graph(),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'migration-test',
+      nodes: {
+        'account-model': handlers['account-model']!,
+        evaluate: () => ({
+          outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
+        })
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      graphVersion: 'kernel-v3-production-v3',
+      budgets: { stepsUsed: 1, inputTokens: 20, outputTokens: 5, costUsd: 0.1 }
+    })
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual(['account-model', 'evaluate'])
+  })
+
+  it('does not account stale v2 proposal data after entering the next model cycle', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    await snapshots.save({
+      ...oldState('build-context', modelProposal({ proposalId: 'proposal-already-processed' })),
+      graphVersion: 'kernel-v3-production-v2'
+    })
+    const kernel = new RuntimeKernel({
+      graph: productionKernelV3Graph(),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'migration-test',
+      nodes: { 'build-context': () => completeOutcome() }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      graphVersion: 'kernel-v3-production-v3',
+      budgets: { stepsUsed: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
+    })
+  })
+
+  it('resumes the exact v2 cursor after accounting an already-evaluated proposal', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    await snapshots.save({
+      ...oldState('prepare-tools'),
+      graphVersion: 'kernel-v3-production-v2'
+    })
+    const handlers = createKernelV3NodeHandlers({} as never)
+    const kernel = new RuntimeKernel({
+      graph: productionKernelV3Graph(),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'migration-test',
+      nodes: {
+        'account-model': handlers['account-model']!,
+        'prepare-tools': () => completeOutcome()
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual(['account-model', 'prepare-tools'])
+  })
 })
+
+function completeOutcome() {
+  return { outcome: { status: 'completed', reason: 'normal_stop', retryable: false } } as const
+}
 
 function modelProposal(overrides: Partial<ModelProposal> = {}): ModelProposal {
   return {

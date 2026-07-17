@@ -35,6 +35,7 @@ describe('Kernel v3 production node handlers', () => {
       'build-context',
       'invoke-model',
       'normalize-proposal',
+      'account-model',
       'evaluate',
       'commit-assistant'
     ])
@@ -64,8 +65,8 @@ describe('Kernel v3 production node handlers', () => {
     )
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'evaluate', 'recover-context', 'build-context',
-      'invoke-model', 'normalize-proposal', 'evaluate', 'commit-assistant'
+      'normalize-proposal', 'account-model', 'evaluate', 'recover-context', 'build-context',
+      'invoke-model', 'normalize-proposal', 'account-model', 'evaluate', 'commit-assistant'
     ])
   })
 
@@ -135,8 +136,8 @@ describe('Kernel v3 production node handlers', () => {
     })
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
-      'build-context', 'invoke-model', 'normalize-proposal', 'evaluate',
+      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
+      'build-context', 'invoke-model', 'normalize-proposal', 'account-model', 'evaluate',
       'commit-assistant'
     ])
   })
@@ -173,8 +174,8 @@ describe('Kernel v3 production node handlers', () => {
     ])
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
-      'build-context', 'invoke-model', 'normalize-proposal', 'evaluate',
+      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
+      'build-context', 'invoke-model', 'normalize-proposal', 'account-model', 'evaluate',
       'commit-assistant'
     ])
   })
@@ -197,6 +198,80 @@ describe('Kernel v3 production node handlers', () => {
       expect.objectContaining({ id: 'item_kernel_reasoning_proposal-replayed' }),
       expect.objectContaining({ id: 'item_kernel_text_proposal-replayed' })
     ])
+  })
+
+  it('accounts one normalized model proposal with sanitized facts', async () => {
+    const harness = await createHarness([])
+    const normalized = proposal({
+      proposalId: 'proposal-accounted',
+      stopClass: 'normal',
+      text: 'private model text',
+      reasoning: 'private reasoning',
+      usage: {
+        promptTokens: 12,
+        completionTokens: 4,
+        totalTokens: 16,
+        cacheHitRate: null,
+        turns: 1,
+        costUsd: 0.08
+      }
+    })
+
+    const result = await harness.handlers['account-model']?.({
+      identity,
+      state: { nodeData: { 'normalize-proposal': normalized, 'restore-task': task() } }
+    } as never)
+
+    expect(result).toMatchObject({
+      condition: 'next',
+      commands: [{
+        type: 'add-budget',
+        usageId: 'model:proposal-accounted',
+        delta: { stepsUsed: 1, inputTokens: 12, outputTokens: 4, costUsd: 0.08 }
+      }],
+      facts: {
+        proposalClass: 'final_text',
+        stopClass: 'normal',
+        inputTokens: 12,
+        outputTokens: 4,
+        costUsd: 0.08
+      }
+    })
+    expect(result?.facts).not.toHaveProperty('text')
+    expect(result?.facts).not.toHaveProperty('reasoning')
+  })
+
+  it('accounts each logical tool call absent from the persisted task ledger', async () => {
+    const harness = await createHarness([])
+    const restored = task()
+    restored.toolLedger = [{
+      callId: 'call-1',
+      toolName: 'read_data',
+      status: 'committed'
+    }]
+    const normalized = proposal({
+      proposalId: 'proposal-tools',
+      stopClass: 'tool_calls',
+      text: '',
+      toolIntents: [
+        { callId: 'call-1', toolName: 'read_data', arguments: { secret: 'hidden' } },
+        { callId: 'call-2', toolName: 'read_data', arguments: { path: 'data.json' } }
+      ]
+    })
+
+    const result = await harness.handlers['prepare-tools']?.({
+      identity,
+      state: { nodeData: { 'normalize-proposal': normalized, 'restore-task': restored } }
+    } as never)
+
+    expect(result?.commands).toEqual([{
+      type: 'add-budget',
+      usageId: 'tool:proposal-tools:call-2',
+      delta: { toolCallsUsed: 1 }
+    }])
+    expect(result?.commands).not.toContainEqual(expect.objectContaining({
+      arguments: expect.anything()
+    }))
   })
 })
 

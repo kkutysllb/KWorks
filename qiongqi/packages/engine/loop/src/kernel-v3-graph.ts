@@ -2,7 +2,7 @@ import type { ExecutionGraph } from './execution-graph.js'
 
 export function productionKernelV3Graph(): ExecutionGraph {
   return {
-    version: 'kernel-v3-production-v2',
+    version: 'kernel-v3-production-v3',
     startNodeId: 'prepare-turn',
     predicates: [
       'next',
@@ -20,6 +20,7 @@ export function productionKernelV3Graph(): ExecutionGraph {
       { id: 'build-context', kind: 'build_context', effect: 'pure', checkpoint: 'after' },
       { id: 'invoke-model', kind: 'invoke_model', effect: 'model', checkpoint: 'both' },
       { id: 'normalize-proposal', kind: 'normalize_proposal', effect: 'pure', checkpoint: 'after' },
+      { id: 'account-model', kind: 'account_model', effect: 'state', checkpoint: 'both' },
       { id: 'evaluate', kind: 'evaluate', effect: 'state', checkpoint: 'after' },
       { id: 'commit-assistant', kind: 'commit_assistant', effect: 'state', terminal: true, checkpoint: 'both' },
       { id: 'materialize-proposal', kind: 'materialize_proposal', effect: 'state', checkpoint: 'both' },
@@ -34,7 +35,8 @@ export function productionKernelV3Graph(): ExecutionGraph {
       { from: 'restore-task', to: 'build-context', when: 'next' },
       { from: 'build-context', to: 'invoke-model', when: 'next' },
       { from: 'invoke-model', to: 'normalize-proposal', when: 'next' },
-      { from: 'normalize-proposal', to: 'evaluate', when: 'next' },
+      { from: 'normalize-proposal', to: 'account-model', when: 'next' },
+      { from: 'account-model', to: 'evaluate', when: 'next' },
       { from: 'evaluate', to: 'commit-assistant', when: 'final' },
       { from: 'evaluate', to: 'materialize-proposal', when: 'tools' },
       { from: 'evaluate', to: 'recover-context', when: 'recover' },

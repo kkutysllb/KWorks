@@ -13,6 +13,7 @@ export type RuntimeNodeResult = {
   condition?: string
   outcome?: RunStateV3['outcome']
   commands?: MiddlewareCommand[]
+  facts?: Record<string, unknown>
   value?: unknown
 }
 

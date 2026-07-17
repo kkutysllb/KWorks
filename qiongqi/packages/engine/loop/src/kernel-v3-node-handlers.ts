@@ -210,6 +210,55 @@ export function createKernelV3NodeHandlers(
       value: ModelProposalSchema.parse(requireNodeValue(state, 'invoke-model'))
     }),
 
+    'account-model': ({ state }) => {
+      const task = requireNodeValue<TaskStateV1>(state, 'restore-task')
+      const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
+      const proposalClass = classifyProposal({ proposal, task })
+      const inputTokens = proposal.usage?.promptTokens ?? 0
+      const outputTokens = proposal.usage?.completionTokens ?? 0
+      const costUsd = proposal.usage?.costUsd ?? 0
+      const migration = nodeValue<{
+        resumeNodeId: string
+        consumed: boolean
+      }>(state, 'v2-accounting-migration')
+      const migrationCommands = migration && !migration.consumed
+        ? [
+            {
+              type: 'set-node-data' as const,
+              nodeId: 'v2-accounting-migration',
+              value: { ...migration, consumed: true }
+            },
+            {
+              type: 'jump' as const,
+              nodeId: migration.resumeNodeId,
+              condition: 'next',
+              reason: 'resume production graph v2 after model accounting'
+            }
+          ]
+        : []
+      return {
+        condition: 'next',
+        commands: [
+          {
+            type: 'add-budget',
+            usageId: `model:${proposal.proposalId}`,
+            delta: { stepsUsed: 1, inputTokens, outputTokens, costUsd }
+          },
+          ...migrationCommands
+        ],
+        facts: {
+          proposalClass,
+          stopClass: proposal.stopClass,
+          ...(proposal.providerReason ? { providerReason: proposal.providerReason } : {}),
+          inputTokens,
+          outputTokens,
+          costUsd,
+          proposalHasText: proposal.text.trim().length > 0,
+          hadToolResult: task.toolLedger.length > 0
+        }
+      }
+    },
+
     evaluate: async ({ identity, state }) => {
       const task = requireNodeValue<TaskStateV1>(state, 'restore-task')
       const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
@@ -303,6 +352,8 @@ export function createKernelV3NodeHandlers(
 
     'prepare-tools': async ({ identity, state }) => {
       const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
+      const task = requireNodeValue<TaskStateV1>(state, 'restore-task')
+      const ledgerCallIds = new Set(task.toolLedger.map((entry) => entry.callId))
       const calls: ToolCallLike[] = proposal.toolIntents.map((intent) => ({
         callId: intent.callId,
         toolName: intent.toolName,
@@ -319,7 +370,17 @@ export function createKernelV3NodeHandlers(
           status: 'running'
         }))
       }
-      return { condition: 'next', value: { calls } }
+      return {
+        condition: 'next',
+        value: { calls },
+        commands: calls
+          .filter((call) => !ledgerCallIds.has(call.callId))
+          .map((call) => ({
+            type: 'add-budget' as const,
+            usageId: `tool:${proposal.proposalId}:${call.callId}`,
+            delta: { toolCallsUsed: 1 }
+          }))
+      }
     },
 
     'commit-tools': async ({ identity, state }) => {

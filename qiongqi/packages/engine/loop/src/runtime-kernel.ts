@@ -35,6 +35,7 @@ type CompletedNodePayload = {
   stepIndex: number
   condition: string
   commands: MiddlewareCommand[]
+  facts?: Record<string, unknown>
   value?: unknown
   outcome?: RunOutcome
 }
@@ -131,6 +132,7 @@ export class RuntimeKernel {
         if (!handler) throw new Error(`missing runtime node handler: ${node.id}`)
         const result = await handler({ identity, state, node, hook: 'beforeNode' })
         const commands = [...(before?.commands ?? []), ...(result?.commands ?? [])]
+        this.applyCommands(state, commands)
         const condition = result?.condition ?? 'next'
         const outcome = result?.outcome
           ?? this.commandOutcome(commands)
@@ -142,6 +144,7 @@ export class RuntimeKernel {
           stepIndex: state.cursor.stepIndex,
           condition,
           commands,
+          ...(result?.facts ? { facts: result.facts } : {}),
           ...(result && 'value' in result ? { value: result.value } : {}),
           ...(outcome ? { outcome } : {})
         }
@@ -157,7 +160,7 @@ export class RuntimeKernel {
 
         const afterNode = await this.options.middleware.run(
           'afterNode',
-          this.middlewareContext(identity, state, 'afterNode', node)
+          this.middlewareContext(identity, state, 'afterNode', node, payload.facts)
         )
         if (isTerminal(state)) {
           // Terminal outcomes are monotonic. Middleware may record diagnostics,
@@ -235,6 +238,13 @@ export class RuntimeKernel {
     ) {
       return undefined
     }
+    if (
+      targetVersion === 'kernel-v3-production-v3'
+      && (state.graphVersion === 'kernel-v3-production-v1'
+        || state.graphVersion === 'kernel-v3-production-v2')
+    ) {
+      return undefined
+    }
     return {
       status: 'failed',
       reason: 'runtime_error',
@@ -250,8 +260,32 @@ export class RuntimeKernel {
   private migrateGraphState(state: RunStateV3): RunStateV3 {
     if (state.graphVersion === this.options.graph.version) return state
     if (
+      state.graphVersion === 'kernel-v3-production-v2'
+      && this.options.graph.version === 'kernel-v3-production-v3'
+    ) {
+      if (!proposalNeedsAccounting(state.cursor.nodeId)) {
+        return { ...state, graphVersion: this.options.graph.version }
+      }
+      requireMigratableProposal(state, 'production graph v2')
+      return {
+        ...state,
+        graphVersion: this.options.graph.version,
+        cursor: { ...state.cursor, nodeId: 'account-model' },
+        nodeData: state.cursor.nodeId === 'evaluate'
+          ? state.nodeData
+          : {
+              ...state.nodeData,
+              'v2-accounting-migration': {
+                resumeNodeId: state.cursor.nodeId,
+                consumed: false
+              }
+            }
+      }
+    }
+    if (
       state.graphVersion !== 'kernel-v3-production-v1'
-      || this.options.graph.version !== 'kernel-v3-production-v2'
+      || (this.options.graph.version !== 'kernel-v3-production-v2'
+        && this.options.graph.version !== 'kernel-v3-production-v3')
     ) {
       return state
     }
@@ -259,6 +293,17 @@ export class RuntimeKernel {
       || state.cursor.nodeId === 'commit-tools'
       || state.cursor.nodeId === 'commit-assistant'
     if (!revalidatesProposal) {
+      if (
+        this.options.graph.version === 'kernel-v3-production-v3'
+        && proposalNeedsAccounting(state.cursor.nodeId)
+      ) {
+        requireMigratableProposal(state, 'production graph v1')
+        return {
+          ...state,
+          graphVersion: this.options.graph.version,
+          cursor: { ...state.cursor, nodeId: 'account-model' }
+        }
+      }
       return { ...state, graphVersion: this.options.graph.version }
     }
     const proposal = ModelProposalSchema.safeParse(state.nodeData['normalize-proposal'])
@@ -282,7 +327,12 @@ export class RuntimeKernel {
     return {
       ...state,
       graphVersion: this.options.graph.version,
-      cursor: { ...state.cursor, nodeId: 'evaluate' },
+      cursor: {
+        ...state.cursor,
+        nodeId: this.options.graph.version === 'kernel-v3-production-v3'
+          ? 'account-model'
+          : 'evaluate'
+      },
       nodeData: prepared.length > 0
         ? {
             ...state.nodeData,
@@ -301,6 +351,13 @@ export class RuntimeKernel {
     if (
       state.graphVersion === 'kernel-v3-production-v1'
       && this.options.graph.version === 'kernel-v3-production-v2'
+    ) {
+      return { ...state, graphVersion: this.options.graph.version }
+    }
+    if (
+      this.options.graph.version === 'kernel-v3-production-v3'
+      && (state.graphVersion === 'kernel-v3-production-v1'
+        || state.graphVersion === 'kernel-v3-production-v2')
     ) {
       return { ...state, graphVersion: this.options.graph.version }
     }
@@ -330,7 +387,17 @@ export class RuntimeKernel {
           `run event cursor mismatch: expected ${state.cursor.nodeId}, received ${payload.nodeId}`
         )
       }
-      state = this.reduceCompletedNode(state, this.nodeFor(payload.nodeId), payload, event.seq)
+      const node = this.nodeFor(payload.nodeId)
+      state = this.reduceCompletedNode(state, node, payload, event.seq)
+      const afterNode = await this.options.middleware.run(
+        'afterNode',
+        this.middlewareContext(identity, state, 'afterNode', node, payload.facts)
+      )
+      if (!isTerminal(state)) {
+        state = this.applyCommands(state, afterNode?.commands)
+        const afterOutcome = this.commandOutcome(afterNode?.commands)
+        if (afterOutcome) state = this.withOutcome(state, afterOutcome)
+      }
     }
     return state
   }
@@ -379,9 +446,10 @@ export class RuntimeKernel {
     identity: RunIdentity,
     state: RunStateV3,
     hook: RuntimeHook,
-    node?: RuntimeNode
+    node?: RuntimeNode,
+    facts?: Readonly<Record<string, unknown>>
   ) {
-    return { identity, state, node, hook, commands: [] as const }
+    return { identity, state, node, hook, facts, commands: [] as const }
   }
 
   private applyCommands(
@@ -398,6 +466,9 @@ export class RuntimeKernel {
       }
       if (command.type === 'set-budget') {
         next = { ...next, budgets: { ...next.budgets, [command.key]: command.value } }
+      }
+      if (command.type === 'add-budget') {
+        next = addBudget(next, command)
       }
       if (command.type === 'set-node-data') {
         next = { ...next, nodeData: { ...next.nodeData, [command.nodeId]: command.value } }
@@ -530,6 +601,27 @@ function preparedCallIds(value: unknown): string[] {
   })
 }
 
+function proposalNeedsAccounting(nodeId: string): boolean {
+  return [
+    'evaluate',
+    'commit-assistant',
+    'materialize-proposal',
+    'prepare-tools',
+    'commit-tools',
+    'recover-context',
+    'wait-user',
+    'fail'
+  ].includes(nodeId)
+}
+
+function requireMigratableProposal(state: RunStateV3, source: string): void {
+  const proposal = ModelProposalSchema.safeParse(state.nodeData['normalize-proposal'])
+  const task = TaskStateV1Schema.safeParse(state.nodeData['restore-task'])
+  if (!proposal.success || !task.success) {
+    throw new Error(`${source} snapshot is missing a normalized proposal or task state`)
+  }
+}
+
 function parseCompletedNodePayload(value: unknown): CompletedNodePayload {
   if (!value || typeof value !== 'object') throw new Error('invalid node.completed payload')
   const record = value as Record<string, unknown>
@@ -543,5 +635,73 @@ function parseCompletedNodePayload(value: unknown): CompletedNodePayload {
     throw new Error('invalid node.completed condition')
   }
   if (!Array.isArray(record.commands)) throw new Error('invalid node.completed commands')
+  if (record.facts !== undefined && (!record.facts || typeof record.facts !== 'object' || Array.isArray(record.facts))) {
+    throw new Error('invalid node.completed facts')
+  }
   return record as CompletedNodePayload
+}
+
+const budgetKeys = [
+  'stepsUsed',
+  'toolCallsUsed',
+  'inputTokens',
+  'outputTokens',
+  'costUsd'
+] as const
+
+function addBudget(
+  state: RunStateV3,
+  command: Extract<MiddlewareCommand, { type: 'add-budget' }>
+): RunStateV3 {
+  const processedUsageIds = budgetUsageIds(state)
+  if (command.usageId && processedUsageIds.includes(command.usageId)) return state
+  if (command.usageId !== undefined && command.usageId.length === 0) {
+    throw new Error('invalid empty budget usage id')
+  }
+
+  for (const key of budgetKeys) {
+    const value = command.delta[key]
+    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+      throw new Error(`invalid budget delta: ${key}`)
+    }
+    if (key !== 'costUsd' && value !== undefined && !Number.isInteger(value)) {
+      throw new Error(`invalid budget delta: ${key}`)
+    }
+  }
+
+  const budgets = { ...state.budgets }
+  for (const key of budgetKeys) {
+    budgets[key] += command.delta[key] ?? 0
+    if (!Number.isFinite(budgets[key])) throw new Error(`budget overflow: ${key}`)
+  }
+  if (!command.usageId) return { ...state, budgets }
+
+  return {
+    ...state,
+    budgets,
+    middleware: {
+      ...state.middleware,
+      'budget-accounting': {
+        version: 1,
+        data: { processedUsageIds: [...processedUsageIds, command.usageId] }
+      }
+    }
+  }
+}
+
+function budgetUsageIds(state: RunStateV3): string[] {
+  const accounting = state.middleware['budget-accounting']
+  if (!accounting) return []
+  if (accounting.version !== 1) {
+    throw new Error(`unsupported budget-accounting middleware version: ${accounting.version}`)
+  }
+  const data = accounting.data
+  if (!data || typeof data !== 'object' || !Array.isArray((data as { processedUsageIds?: unknown }).processedUsageIds)) {
+    throw new Error('invalid budget-accounting middleware state')
+  }
+  const ids = (data as { processedUsageIds: unknown[] }).processedUsageIds
+  if (!ids.every((id) => typeof id === 'string' && id.length > 0)) {
+    throw new Error('invalid budget-accounting usage ids')
+  }
+  return ids as string[]
 }

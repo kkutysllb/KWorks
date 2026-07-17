@@ -14,8 +14,10 @@ export class ModelProposalRunner {
 
   async run(request: ModelRequest): Promise<ModelProposal> {
     const chunks: ModelStreamChunk[] = []
+    let usage: Extract<ModelStreamChunk, { kind: 'usage' }>['usage'] | undefined
     for await (const chunk of this.options.client.stream(request)) {
       chunks.push(chunk)
+      if (chunk.kind === 'usage') usage = chunk.usage
       await this.options.onDelta?.(chunk, request)
     }
     const completion = await normalizeModelCompletion(chunks, {
@@ -23,6 +25,9 @@ export class ModelProposalRunner {
       model: this.options.client.model,
       endpointFormat: this.options.endpointFormat
     })
-    return makeModelProposal(completion, { model: this.options.client.model })
+    return {
+      ...makeModelProposal(completion, { model: this.options.client.model }),
+      ...(usage ? { usage } : {})
+    }
   }
 }
