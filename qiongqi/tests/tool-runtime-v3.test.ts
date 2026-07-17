@@ -186,6 +186,42 @@ describe('ToolRuntimeV3', () => {
     await expect(events.listAfter(identity, 0)).resolves.toEqual([])
   })
 
+  it('rejects invalid effect policy before host preparation, execution, or effect events', async () => {
+    let preparations = 0
+    let executions = 0
+    const events = new InMemoryRunEventStore()
+    const invalidPolicyHost: ToolHost = {
+      id: 'invalid-policy',
+      async listTools() { return [] },
+      async prepare(call) {
+        preparations += 1
+        return { call }
+      },
+      async execute() {
+        executions += 1
+        return toolResult()
+      }
+    }
+    const runtime = new ToolRuntimeV3({
+      toolHost: invalidPolicyHost,
+      effects: new EffectCommitCoordinator({ events, results: new InMemoryEffectResultStore() })
+    })
+
+    await expect(runtime.execute({
+      identity,
+      state,
+      call: { callId: 'invalid-policy', toolName: 'write', arguments: {} },
+      context,
+      policy: { effect: 'read', replay: 'safe', extra: true } as never
+    })).rejects.toThrow()
+
+    expect(preparations).toBe(0)
+    expect(executions).toBe(0)
+    expect(state.pendingEffects).toEqual([])
+    expect(state.committedEffects).toEqual([])
+    await expect(events.listAfter(identity, 0)).resolves.toEqual([])
+  })
+
   it('commits an error-safe result when cyclic output cannot be serialized', async () => {
     const counter = { value: 0 }
     const cyclic: Record<string, unknown> = { ok: true }
@@ -212,8 +248,14 @@ describe('ToolRuntimeV3', () => {
       kind: 'tool_result',
       status: 'failed',
       isError: true,
-      output: { code: 'tool_result_normalization_failed', reason: 'circular_reference' }
+      output: {
+        code: 'tool_result_not_strict_json',
+        error: 'tool result was not strict JSON',
+        type: 'circular-reference'
+      }
     })
+    expect(first.result?.semantic).toBeUndefined()
+    expect(first.observation).toMatchObject({ failed: true, resourceKeys: [], artifactRefs: [] })
     expect(replay.result).toEqual(first.result)
   })
 

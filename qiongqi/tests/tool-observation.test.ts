@@ -148,6 +148,7 @@ describe('tool observations', () => {
     })
     expect(observation.resourceKeys).toHaveLength(1)
     expect(observation.resourceKeys[0]).toMatch(/^external:sha256:/)
+    expect(observation.resourceKeys[0]?.slice('external:sha256:'.length)).toHaveLength(64)
     expect(observation.resourceKeys.join(' ')).not.toContain('/etc')
   })
 
@@ -216,33 +217,72 @@ describe('tool observations', () => {
     expect(observation.failed).toBe(true)
   })
 
-  it('normalizes special result values into a deterministic JSON-safe representation', () => {
+  it('preserves strict JSON output exactly while normalizing negative zero', () => {
     const normalized = normalizeToolHostResult(result({
       item: {
         ...result().item,
         output: {
-          date: new Date('2026-07-17T00:00:00.000Z'),
-          missing: undefined,
-          nan: Number.NaN,
-          infinity: Number.POSITIVE_INFINITY,
           negativeZero: -0,
-          bigint: 42n,
-          sparse: [, undefined]
+          sentinelShaped: { __qiongqiType: 'date', value: 'legitimate' },
+          nested: [null, true, 'value', 42, { ok: false }]
         }
       }
     }), call(), context)
-    expect(normalized.item).toMatchObject({
-      kind: 'tool_result',
-      output: {
-        date: { __qiongqiType: 'date', value: '2026-07-17T00:00:00.000Z' },
-        missing: { __qiongqiType: 'undefined' },
-        nan: { __qiongqiType: 'nonfinite', value: 'NaN' },
-        infinity: { __qiongqiType: 'nonfinite', value: 'Infinity' },
-        negativeZero: 0,
-        bigint: { __qiongqiType: 'bigint', value: '42' },
-        sparse: [{ __qiongqiType: 'undefined' }, { __qiongqiType: 'undefined' }]
-      }
+    expect(normalized.item.kind).toBe('tool_result')
+    if (normalized.item.kind !== 'tool_result') throw new Error('expected tool result')
+    expect(normalized.item.output).toEqual({
+      negativeZero: 0,
+      sentinelShaped: { __qiongqiType: 'date', value: 'legitimate' },
+      nested: [null, true, 'value', 42, { ok: false }]
     })
+    expect(Object.is((normalized.item.output as { negativeZero: number }).negativeZero, -0)).toBe(false)
+  })
+
+  it('converts non-strict JSON output into a deterministic failed result without semantic metadata', () => {
+    const sparse: unknown[] = []
+    sparse.length = 1
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    const accessor = Object.defineProperty({}, 'value', {
+      enumerable: true,
+      get() { throw new Error('unreadable') }
+    })
+    const custom = Object.create({ inherited: true }) as Record<string, unknown>
+    custom.value = 'custom'
+    const cases: Array<[unknown, string]> = [
+      [undefined, 'undefined'],
+      [Number.NaN, 'number:NaN'],
+      [Number.POSITIVE_INFINITY, 'number:Infinity'],
+      [Number.MAX_SAFE_INTEGER + 1, 'number:unsafe-integer'],
+      [42n, 'bigint'],
+      [new Date('2026-07-17T00:00:00.000Z'), 'Date'],
+      [Buffer.from('bytes'), 'Buffer'],
+      [new Uint8Array([1, 2]), 'Uint8Array'],
+      [new Map([['key', 'value']]), 'Map'],
+      [new Set(['value']), 'Set'],
+      [/value/, 'RegExp'],
+      [custom, 'custom-prototype'],
+      [accessor, 'property-access-failed'],
+      [sparse, 'sparse-array'],
+      [cyclic, 'circular-reference']
+    ]
+
+    for (const [output, type] of cases) {
+      const normalized = normalizeToolHostResult(result({
+        item: { ...result().item, output }
+      }), call(), context)
+      expect(normalized.item).toMatchObject({
+        kind: 'tool_result',
+        status: 'failed',
+        isError: true,
+        output: {
+          code: 'tool_result_not_strict_json',
+          error: 'tool result was not strict JSON',
+          type
+        }
+      })
+      expect(normalized.semantic).toBeUndefined()
+    }
   })
 
   it('converts cyclic tool output into a deterministic failed result', () => {
@@ -256,10 +296,12 @@ describe('tool observations', () => {
       status: 'failed',
       isError: true,
       output: {
-        code: 'tool_result_normalization_failed',
-        reason: 'circular_reference'
+        code: 'tool_result_not_strict_json',
+        error: 'tool result was not strict JSON',
+        type: 'circular-reference'
       }
     })
+    expect(normalized.semantic).toBeUndefined()
   })
 
   it('rejects non-JSON argument values consistently', () => {

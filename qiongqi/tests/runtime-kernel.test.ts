@@ -92,4 +92,39 @@ describe('RuntimeKernel', () => {
       reason: 'normal_stop'
     })
   })
+
+  it('prevents a second RuntimeKernel holder from executing while the run lease is held', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    let entered = false
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const makeKernel = (holderId: string) => new RuntimeKernel({
+      graph: {
+        version: 'lease-v1',
+        startNodeId: 'prepare',
+        predicates: ['next'],
+        nodes: [{ id: 'prepare', kind: 'prepare', effect: 'pure', terminal: true }],
+        edges: []
+      },
+      snapshots,
+      events: new InMemoryRunEventStore(),
+      leases: snapshots,
+      holderId,
+      nodes: {
+        prepare: async () => {
+          entered = true
+          await gate
+          return { outcome: { status: 'completed', reason: 'normal_stop', retryable: false } }
+        }
+      }
+    })
+    const first = makeKernel('holder-a').run(identity)
+    while (!entered) await new Promise<void>((resolve) => setImmediate(resolve))
+    await expect(makeKernel('holder-b').run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      details: { code: 'lease_unavailable' }
+    })
+    release()
+    await expect(first).resolves.toMatchObject({ status: 'completed' })
+  })
 })

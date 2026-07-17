@@ -25,9 +25,10 @@ describe('EffectResultStore', () => {
     const results = new FileEffectResultStore(root)
     const events = new InMemoryRunEventStore()
     const counter = { value: 0 }
+    const firstEffects = new EffectCommitCoordinator({ events, results })
     const firstRuntime = new ToolRuntimeV3({
       toolHost: host(counter),
-      effects: new EffectCommitCoordinator({ events, results })
+      effects: firstEffects
     })
     const first = await firstRuntime.execute({
       identity,
@@ -36,6 +37,8 @@ describe('EffectResultStore', () => {
       context,
       policy: { effect: 'idempotent-write', replay: 'verify-first' }
     })
+    const stored = JSON.parse(await readFile(results.resultPath(identity, firstEffects.idempotencyKey(identity, 'call-1')), 'utf8')) as { result: Record<string, unknown> }
+    expect(stored.result).toMatchObject({ kind: 'tool_runtime_v3_result', version: 2 })
 
     const secondRuntime = new ToolRuntimeV3({
       toolHost: host(counter),
@@ -99,7 +102,43 @@ describe('EffectResultStore', () => {
     expect(replay.observation).toBeUndefined()
   })
 
-  it('replays normalized special values identically from file and memory stores', async () => {
+  it('replays an unversioned runtime wrapper without trusting its observation', async () => {
+    const results = new InMemoryEffectResultStore()
+    const effects = new EffectCommitCoordinator({ events: new InMemoryRunEventStore(), results })
+    const key = effects.idempotencyKey(identity, 'unversioned-call')
+    const legacyResult = await host({ value: 0 }).execute({
+      callId: 'unversioned-call',
+      toolName: 'write',
+      arguments: { path: 'original.txt' }
+    }, context)
+    const unversionedWrapper = {
+      kind: 'tool_runtime_v3_result',
+      result: legacyResult,
+      observation: { replayed: false }
+    }
+    await results.save(identity, key, digestValue(unversionedWrapper), unversionedWrapper)
+    const runtime = new ToolRuntimeV3({ toolHost: host({ value: 0 }), effects })
+    const current = state()
+    current.committedEffects.push({
+      idempotencyKey: key,
+      resultDigest: digestValue(unversionedWrapper),
+      status: 'committed',
+      committedAt: 'now'
+    })
+
+    const replay = await runtime.execute({
+      identity,
+      state: current,
+      call: { callId: 'unversioned-call', toolName: 'bash', arguments: { command: 'changed' } },
+      context,
+      policy: { effect: 'idempotent-write', replay: 'verify-first' }
+    })
+
+    expect(replay.result).toEqual(legacyResult)
+    expect(replay.observation).toBeUndefined()
+  })
+
+  it('replays strict JSON diagnostics identically from file and memory stores', async () => {
     async function run(results: InMemoryEffectResultStore | FileEffectResultStore) {
       const runtime = new ToolRuntimeV3({
         toolHost: specialValueHost(),
@@ -120,6 +159,13 @@ describe('EffectResultStore', () => {
     const memory = await run(new InMemoryEffectResultStore())
     expect(file.first.result).toEqual(memory.first.result)
     expect(file.first.observation).toEqual(memory.first.observation)
+    expect(file.first.result?.item).toMatchObject({
+      kind: 'tool_result',
+      status: 'failed',
+      isError: true,
+      output: { code: 'tool_result_not_strict_json', type: 'bigint' }
+    })
+    expect(file.first.result?.semantic).toBeUndefined()
     expect(file.replay.result).toEqual(file.first.result)
     expect(memory.replay.result).toEqual(memory.first.result)
   })
@@ -142,6 +188,13 @@ describe('EffectResultStore', () => {
     const memory = await run(new InMemoryEffectResultStore())
     expect(file.result).toEqual(memory.result)
     expect(file.observation).toEqual(memory.observation)
+    expect(file.result?.item).toMatchObject({
+      kind: 'tool_result',
+      status: 'failed',
+      isError: true,
+      output: { code: 'tool_result_not_strict_json', type: 'circular-reference' }
+    })
+    expect(file.result?.semantic).toBeUndefined()
   })
 
   it('rejects a stored runtime wrapper with an invalid observation schema', async () => {

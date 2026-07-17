@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ToolObservationSchema, type RunIdentity, type RunOutcome, type RunStateV3, type ToolEffectPolicy, type ToolObservation } from '@qiongqi/contracts'
+import { ToolEffectPolicySchema, ToolObservationSchema, type RunIdentity, type RunOutcome, type RunStateV3, type ToolEffectPolicy, type ToolObservation } from '@qiongqi/contracts'
 import type { ToolCallLike, ToolHost, ToolHostContext, ToolHostPreparation, ToolHostResult } from '@qiongqi/ports'
 import { EffectCommitCoordinator } from './effect-commit.js'
 import { NormalizedToolHostResultSchema, normalizeToolCall, normalizeToolHostResult, observeNormalizedTool } from './tool-observation.js'
@@ -11,27 +11,32 @@ export type ToolRuntimeV3Result = { state: RunStateV3; result?: ToolHostResult; 
 
 type StoredToolRuntimeV3Result = {
   kind: 'tool_runtime_v3_result'
+  version: 2
   result: ToolHostResult
   observation?: ToolObservation
 }
 
 const StoredToolRuntimeV3ResultSchema = z.object({
   kind: z.literal('tool_runtime_v3_result'),
+  version: z.literal(2),
   result: NormalizedToolHostResultSchema,
   observation: ToolObservationSchema.optional()
 }).strict()
 
 export class ToolRuntimeV3 {
+  // This only coalesces duplicate effects within one ToolRuntimeV3 instance.
+  // RuntimeKernel's durable run lease is the cross-instance serialization boundary.
   private readonly inFlight = new Map<string, Promise<ToolRuntimeV3Result>>()
 
   constructor(private readonly options: ToolRuntimeV3Options) {}
 
   async execute(input: ToolRuntimeV3Input): Promise<ToolRuntimeV3Result> {
+    const policy = ToolEffectPolicySchema.parse(input.policy)
     const call = normalizeToolCall(input.call)
     const key = this.options.effects.idempotencyKey(input.identity, call.callId)
     const running = this.inFlight.get(key)
     if (running) return running
-    const promise = this.executeSingle({ ...input, call }, key)
+    const promise = this.executeSingle({ ...input, call, policy }, key)
     this.inFlight.set(key, promise)
     try {
       return await promise
@@ -53,6 +58,13 @@ export class ToolRuntimeV3 {
           return {
             state: input.state,
             result: NormalizedToolHostResultSchema.parse(stored),
+            replayed: true
+          }
+        }
+        if (!('version' in stored)) {
+          return {
+            state: input.state,
+            result: NormalizedToolHostResultSchema.parse(stored.result),
             replayed: true
           }
         }
@@ -99,6 +111,7 @@ export class ToolRuntimeV3 {
       : undefined
     const stored = StoredToolRuntimeV3ResultSchema.parse({
       kind: 'tool_runtime_v3_result',
+      version: 2,
       result,
       ...(observation ? { observation } : {})
     })
@@ -113,7 +126,7 @@ export class ToolRuntimeV3 {
   }
 }
 
-function isStoredToolRuntimeV3ResultCandidate(value: unknown): value is StoredToolRuntimeV3Result {
+function isStoredToolRuntimeV3ResultCandidate(value: unknown): value is Record<string, unknown> & { kind: 'tool_runtime_v3_result' } {
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return record.kind === 'tool_runtime_v3_result'

@@ -20,6 +20,7 @@ function canonicalize(value: unknown): unknown {
 
 export class EffectCommitCoordinator {
   private readonly nowIso: () => string
+  private readonly appendQueues = new Map<string, Promise<void>>()
 
   constructor(private readonly options: EffectCommitOptions) {
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
@@ -54,7 +55,20 @@ export class EffectCommitCoordinator {
   }
 
   private async append(identity: RunIdentity, state: RunStateV3, eventType: string, payload: unknown, idempotencyKey: string): Promise<RunEventEnvelope> {
-    const events = await this.options.events.listAfter(identity, 0)
-    return this.options.events.append({ eventId: randomUUID(), seq: Math.max(0, ...events.map((event) => event.seq)) + 1, ...identity, stepId: state.cursor.nodeId, nodeAttemptId: `${state.cursor.nodeId}:${state.cursor.attempt}`, eventType, idempotencyKey, payload, timestamp: this.nowIso() })
+    // This queue protects concurrent appends inside one coordinator. Cross-instance
+    // writers must hold the RuntimeKernel run lease for this identity.
+    const queueKey = `${identity.ownerUserId}\0${identity.workspaceKey}\0${identity.threadId}\0${identity.turnId}\0${identity.runId}`
+    const previous = this.appendQueues.get(queueKey) ?? Promise.resolve()
+    const operation = previous.then(async () => {
+      const events = await this.options.events.listAfter(identity, 0)
+      return this.options.events.append({ eventId: randomUUID(), seq: Math.max(0, ...events.map((event) => event.seq)) + 1, ...identity, stepId: state.cursor.nodeId, nodeAttemptId: `${state.cursor.nodeId}:${state.cursor.attempt}`, eventType, idempotencyKey, payload, timestamp: this.nowIso() })
+    })
+    const settled = operation.then(() => undefined, () => undefined)
+    this.appendQueues.set(queueKey, settled)
+    try {
+      return await operation
+    } finally {
+      if (this.appendQueues.get(queueKey) === settled) this.appendQueues.delete(queueKey)
+    }
   }
 }

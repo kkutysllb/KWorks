@@ -71,10 +71,12 @@ export function normalizeToolHostResult(
     rawItem = undefined
   }
   let item: ToolHostResult['item']
+  let normalizationFailed = false
   try {
     const normalizedItem = canonicalResultValue(rawItem)
     item = TurnItemSchema.parse(normalizedItem)
   } catch (error) {
+    normalizationFailed = true
     item = normalizationFailureItem(rawItem, call, context, error)
   }
   let approved = false
@@ -89,7 +91,7 @@ export function normalizeToolHostResult(
   } catch {
     rawSemantic = undefined
   }
-  const semantic = normalizeSemantic(rawSemantic, call.toolName)
+  const semantic = normalizationFailed ? undefined : normalizeSemantic(rawSemantic, call.toolName)
   return NormalizedToolHostResultSchema.parse({
     item,
     approved,
@@ -230,7 +232,7 @@ function toPosixPath(value: string): string {
 }
 
 function externalResourceKey(value: string): string {
-  return `external:sha256:${digest('tool-resource:v1', toPosixPath(value)).slice(0, 24)}`
+  return `external:sha256:${digest('tool-resource:v1', toPosixPath(value))}`
 }
 
 function digest(domain: string, value: unknown): string {
@@ -271,44 +273,77 @@ function canonicalArgumentValue(value: unknown, seen = new Set<object>()): unkno
 }
 
 function canonicalResultValue(value: unknown, seen = new Set<object>()): unknown {
-  if (value === undefined) return { __qiongqiType: 'undefined' }
+  if (value === undefined) throw new ResultNormalizationError('undefined')
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
   if (typeof value === 'number') {
     if (Object.is(value, -0)) return 0
-    if (Number.isNaN(value)) return { __qiongqiType: 'nonfinite', value: 'NaN' }
-    if (value === Number.POSITIVE_INFINITY) return { __qiongqiType: 'nonfinite', value: 'Infinity' }
-    if (value === Number.NEGATIVE_INFINITY) return { __qiongqiType: 'nonfinite', value: '-Infinity' }
+    if (Number.isNaN(value)) throw new ResultNormalizationError('number:NaN')
+    if (value === Number.POSITIVE_INFINITY) throw new ResultNormalizationError('number:Infinity')
+    if (value === Number.NEGATIVE_INFINITY) throw new ResultNormalizationError('number:-Infinity')
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new ResultNormalizationError('number:unsafe-integer')
+    }
     return value
   }
-  if (typeof value === 'bigint') return { __qiongqiType: 'bigint', value: value.toString() }
-  if (typeof value === 'function' || typeof value === 'symbol') {
-    return { __qiongqiType: 'unsupported', value: typeof value }
-  }
-  if (seen.has(value)) throw new ResultNormalizationError('circular_reference')
+  if (typeof value === 'bigint') throw new ResultNormalizationError('bigint')
+  if (typeof value === 'function') throw new ResultNormalizationError('function')
+  if (typeof value === 'symbol') throw new ResultNormalizationError('symbol')
+  if (seen.has(value)) throw new ResultNormalizationError('circular-reference')
   seen.add(value)
   try {
-    if (value instanceof Date) {
-      return {
-        __qiongqiType: 'date',
-        value: Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
-      }
-    }
-    if (Buffer.isBuffer(value)) {
-      return { __qiongqiType: 'bytes', value: value.toString('base64') }
+    if (value instanceof Date) throw new ResultNormalizationError('Date')
+    if (Buffer.isBuffer(value)) throw new ResultNormalizationError('Buffer')
+    if (value instanceof Map) throw new ResultNormalizationError('Map')
+    if (value instanceof Set) throw new ResultNormalizationError('Set')
+    if (value instanceof RegExp) throw new ResultNormalizationError('RegExp')
+    if (ArrayBuffer.isView(value)) {
+      throw new ResultNormalizationError(value.constructor?.name || 'typed-array')
     }
     if (Array.isArray(value)) {
-      return Array.from({ length: value.length }, (_, index) =>
-        canonicalResultValue(index in value ? value[index] : undefined, seen))
+      return Array.from({ length: value.length }, (_, index) => {
+        if (!Object.hasOwn(value, index)) throw new ResultNormalizationError('sparse-array')
+        return canonicalResultValue(readResultProperty(value, index), seen)
+      })
+    }
+    const prototype = readResultPrototype(value)
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new ResultNormalizationError('custom-prototype')
     }
     const record = value as Record<string, unknown>
-    return Object.fromEntries(
-      Object.keys(record).sort().map((key) => [key, canonicalResultValue(record[key], seen)])
-    )
+    const keys = readResultKeys(record)
+    return Object.fromEntries(keys.sort().map((key) => [
+      key,
+      canonicalResultValue(readResultProperty(record, key), seen)
+    ]))
   } catch (error) {
     if (error instanceof ResultNormalizationError) throw error
-    throw new ResultNormalizationError('normalization_error')
+    throw new ResultNormalizationError('property-access-failed')
   } finally {
     seen.delete(value)
+  }
+}
+
+function readResultKeys(value: object): string[] {
+  try {
+    return Object.keys(value)
+  } catch {
+    throw new ResultNormalizationError('property-access-failed')
+  }
+}
+
+function readResultPrototype(value: object): object | null {
+  try {
+    return Object.getPrototypeOf(value)
+  } catch {
+    throw new ResultNormalizationError('property-access-failed')
+  }
+}
+
+function readResultProperty(value: object, key: PropertyKey): unknown {
+  try {
+    return (value as Record<PropertyKey, unknown>)[key]
+  } catch {
+    throw new ResultNormalizationError('property-access-failed')
   }
 }
 
@@ -332,7 +367,7 @@ function normalizationFailureItem(
   error: unknown
 ): ToolHostResult['item'] {
   const source = rawItem && typeof rawItem === 'object' ? rawItem as Record<string, unknown> : {}
-  const reason = error instanceof ResultNormalizationError ? error.reason : 'normalization_error'
+  const type = error instanceof ResultNormalizationError ? error.type : 'invalid-tool-result'
   return TurnItemSchema.parse({
     id: safeStringProperty(source, 'id') ?? `item_${call.callId}`,
     turnId: safeStringProperty(source, 'turnId') ?? nonEmptyOrFallback(context.turnId, 'unknown-turn'),
@@ -346,9 +381,9 @@ function normalizationFailureItem(
     callId: call.callId,
     toolKind: call.toolKind ?? 'tool_call',
     output: {
-      code: 'tool_result_normalization_failed',
-      error: 'tool result was not JSON-safe',
-      reason
+      code: 'tool_result_not_strict_json',
+      error: 'tool result was not strict JSON',
+      type
     },
     isError: true
   })
@@ -373,7 +408,7 @@ function nonEmptyOrFallback(value: string, fallback: string): string {
 }
 
 class ResultNormalizationError extends Error {
-  constructor(readonly reason: 'circular_reference' | 'normalization_error') {
-    super(reason)
+  constructor(readonly type: string) {
+    super(type)
   }
 }
