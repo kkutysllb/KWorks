@@ -16,6 +16,7 @@ import {
   type RuntimeNode
 } from './execution-graph.js'
 import type { MiddlewareCommand, RuntimeHook } from './runtime-middleware.js'
+import { canonicalizeMiddlewareCommands } from './runtime-middleware-command-validator.js'
 import type { RuntimeNodeHandler, RuntimeNodeResult } from './runtime-kernel-context.js'
 
 export type RuntimeKernelOptions = {
@@ -99,6 +100,8 @@ export class RuntimeKernel {
         const checkpointSeq = state.cursor.checkpointSeq
         state = await this.replayAfterCheckpoint(identity, state)
         if (state.cursor.checkpointSeq > checkpointSeq) {
+          // afterRun is best-effort observability/cleanup only.
+          // Production correctness must not depend on it.
           await this.options.middleware.run(
             'afterRun',
             this.middlewareContext(identity, state, 'afterRun')
@@ -138,9 +141,10 @@ export class RuntimeKernel {
         'beforeRun',
         this.middlewareContext(identity, state, 'beforeRun')
       )
-      const beforeRunOutcome = this.commandOutcome(beforeRun?.commands)
+      const beforeRunCommands = canonicalizeMiddlewareCommands(beforeRun?.commands ?? [])
+      const beforeRunOutcome = this.commandOutcome(beforeRunCommands)
       if (beforeRunOutcome) {
-        state = this.withOutcome(this.applyCommands(state, beforeRun?.commands), beforeRunOutcome)
+        state = this.withOutcome(this.applyCommands(state, beforeRunCommands), beforeRunOutcome)
         await snapshots.save(state)
         return beforeRunOutcome
       }
@@ -163,9 +167,10 @@ export class RuntimeKernel {
           'beforeNode',
           this.middlewareContext(identity, state, 'beforeNode', node)
         )
-        const beforeOutcome = this.commandOutcome(before?.commands)
+        const beforeCommands = canonicalizeMiddlewareCommands(before?.commands ?? [])
+        const beforeOutcome = this.commandOutcome(beforeCommands)
         if (beforeOutcome) {
-          state = this.withOutcome(this.applyCommands(state, before?.commands), beforeOutcome)
+          state = this.withOutcome(this.applyCommands(state, beforeCommands), beforeOutcome)
           await snapshots.save(state)
           return beforeOutcome
         }
@@ -173,7 +178,10 @@ export class RuntimeKernel {
         const handler = this.options.nodes[node.id]
         if (!handler) throw new Error(`missing runtime node handler: ${node.id}`)
         const result = await handler({ identity, state, node, hook: 'beforeNode' })
-        const commands = [...(before?.commands ?? []), ...(result?.commands ?? [])]
+        const commands = canonicalizeMiddlewareCommands([
+          ...beforeCommands,
+          ...(result?.commands ?? [])
+        ])
         this.applyCommands(state, commands)
         const condition = result?.condition ?? 'next'
         const outcome = result?.outcome
@@ -500,7 +508,7 @@ export class RuntimeKernel {
         pending.completed.facts
       )
     )
-    const commands = [...(result?.commands ?? [])]
+    const commands = canonicalizeMiddlewareCommands(result?.commands ?? [])
     this.applyCommands(state, commands)
     await this.reachCrashPoint('after_node_middleware')
     const payload = canonicalizeJsonObject({
@@ -604,7 +612,7 @@ export class RuntimeKernel {
   ): RunStateV3 {
     let next = state
     let processedUsageIds: Set<string> | undefined
-    for (const command of commands ?? []) {
+    for (const command of canonicalizeMiddlewareCommands(commands ?? [])) {
       if (command.type === 'set-middleware-state') {
         next = {
           ...next,
@@ -796,7 +804,10 @@ function parseCompletedNodePayload(value: unknown): CompletedNodePayload {
   if (record.facts !== undefined && (!record.facts || typeof record.facts !== 'object' || Array.isArray(record.facts))) {
     throw new Error('invalid node.completed facts')
   }
-  return record as CompletedNodePayload
+  return {
+    ...record,
+    commands: canonicalizeMiddlewareCommands(record.commands)
+  } as CompletedNodePayload
 }
 
 function parseAfterMiddlewarePayload(value: unknown): AfterMiddlewarePayload {
@@ -809,7 +820,10 @@ function parseAfterMiddlewarePayload(value: unknown): AfterMiddlewarePayload {
     throw new Error('invalid node.after_middleware stepIndex')
   }
   if (!Array.isArray(record.commands)) throw new Error('invalid node.after_middleware commands')
-  return record as AfterMiddlewarePayload
+  return {
+    ...record,
+    commands: canonicalizeMiddlewareCommands(record.commands)
+  } as AfterMiddlewarePayload
 }
 
 function assertAfterMiddlewareMatches(
@@ -850,13 +864,6 @@ function addBudget(
   command: Extract<MiddlewareCommand, { type: 'add-budget' }>,
   processedUsageIds: Set<string>
 ): RunStateV3 {
-  validateBudgetDelta(command.delta)
-  if (
-    command.usageId !== undefined
-    && (typeof command.usageId !== 'string' || command.usageId.length === 0)
-  ) {
-    throw new Error('invalid budget usage id')
-  }
   if (command.usageId && processedUsageIds.has(command.usageId)) return state
 
   const budgets = { ...state.budgets }
@@ -880,23 +887,6 @@ function addBudget(
         version: 1,
         data: { processedUsageIds: [...processedUsageIds].sort() }
       }
-    }
-  }
-}
-
-function validateBudgetDelta(delta: unknown): asserts delta is Partial<RunStateV3['budgets']> {
-  if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
-    throw new Error('invalid budget delta: expected object')
-  }
-  for (const [key, value] of Object.entries(delta)) {
-    if (!budgetKeys.includes(key as typeof budgetKeys[number])) {
-      throw new Error(`invalid budget delta key: ${key}`)
-    }
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-      throw new Error(`invalid budget delta: ${key}`)
-    }
-    if (key !== 'costUsd' && !Number.isSafeInteger(value)) {
-      throw new Error(`invalid budget delta: ${key}`)
     }
   }
 }
