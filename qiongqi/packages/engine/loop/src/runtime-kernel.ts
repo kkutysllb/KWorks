@@ -139,12 +139,15 @@ export class RuntimeKernel {
           ?? (node.terminal
             ? { status: 'completed', reason: 'normal_stop', retryable: false } as const
             : undefined)
+        const facts = result?.facts === undefined
+          ? undefined
+          : canonicalizeFacts(result.facts)
         const payload: CompletedNodePayload = {
           nodeId: node.id,
           stepIndex: state.cursor.stepIndex,
           condition,
           commands,
-          ...(result?.facts ? { facts: result.facts } : {}),
+          ...(facts ? { facts } : {}),
           ...(result && 'value' in result ? { value: result.value } : {}),
           ...(outcome ? { outcome } : {})
         }
@@ -155,12 +158,13 @@ export class RuntimeKernel {
           'node.completed',
           payload
         )
-        state = this.reduceCompletedNode(state, node, payload, completed.seq)
+        const committedPayload = parseCompletedNodePayload(completed.payload)
+        state = this.reduceCompletedNode(state, node, committedPayload, completed.seq)
         if (checkpointsAfter(node) || isTerminal(state)) await snapshots.save(state)
 
         const afterNode = await this.options.middleware.run(
           'afterNode',
-          this.middlewareContext(identity, state, 'afterNode', node, payload.facts)
+          this.middlewareContext(identity, state, 'afterNode', node, committedPayload.facts)
         )
         if (isTerminal(state)) {
           // Terminal outcomes are monotonic. Middleware may record diagnostics,
@@ -301,7 +305,16 @@ export class RuntimeKernel {
         return {
           ...state,
           graphVersion: this.options.graph.version,
-          cursor: { ...state.cursor, nodeId: 'account-model' }
+          cursor: { ...state.cursor, nodeId: 'account-model' },
+          nodeData: state.cursor.nodeId === 'evaluate'
+            ? state.nodeData
+            : {
+                ...state.nodeData,
+                'v1-accounting-migration': {
+                  resumeNodeId: state.cursor.nodeId,
+                  consumed: false
+                }
+              }
         }
       }
       return { ...state, graphVersion: this.options.graph.version }
@@ -641,6 +654,15 @@ function parseCompletedNodePayload(value: unknown): CompletedNodePayload {
   return record as CompletedNodePayload
 }
 
+function canonicalizeFacts(facts: Record<string, unknown>): Record<string, unknown> {
+  const serialized = JSON.stringify(facts)
+  const canonical = serialized === undefined ? {} : JSON.parse(serialized) as unknown
+  if (!canonical || typeof canonical !== 'object' || Array.isArray(canonical)) {
+    throw new Error('runtime node facts must serialize to a JSON object')
+  }
+  return canonical as Record<string, unknown>
+}
+
 const budgetKeys = [
   'stepsUsed',
   'toolCallsUsed',
@@ -653,21 +675,15 @@ function addBudget(
   state: RunStateV3,
   command: Extract<MiddlewareCommand, { type: 'add-budget' }>
 ): RunStateV3 {
+  validateBudgetDelta(command.delta)
+  if (
+    command.usageId !== undefined
+    && (typeof command.usageId !== 'string' || command.usageId.length === 0)
+  ) {
+    throw new Error('invalid budget usage id')
+  }
   const processedUsageIds = budgetUsageIds(state)
   if (command.usageId && processedUsageIds.includes(command.usageId)) return state
-  if (command.usageId !== undefined && command.usageId.length === 0) {
-    throw new Error('invalid empty budget usage id')
-  }
-
-  for (const key of budgetKeys) {
-    const value = command.delta[key]
-    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-      throw new Error(`invalid budget delta: ${key}`)
-    }
-    if (key !== 'costUsd' && value !== undefined && !Number.isInteger(value)) {
-      throw new Error(`invalid budget delta: ${key}`)
-    }
-  }
 
   const budgets = { ...state.budgets }
   for (const key of budgetKeys) {
@@ -685,6 +701,23 @@ function addBudget(
         version: 1,
         data: { processedUsageIds: [...processedUsageIds, command.usageId] }
       }
+    }
+  }
+}
+
+function validateBudgetDelta(delta: unknown): asserts delta is Partial<RunStateV3['budgets']> {
+  if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+    throw new Error('invalid budget delta: expected object')
+  }
+  for (const [key, value] of Object.entries(delta)) {
+    if (!budgetKeys.includes(key as typeof budgetKeys[number])) {
+      throw new Error(`invalid budget delta key: ${key}`)
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new Error(`invalid budget delta: ${key}`)
+    }
+    if (key !== 'costUsd' && !Number.isInteger(value)) {
+      throw new Error(`invalid budget delta: ${key}`)
     }
   }
 }

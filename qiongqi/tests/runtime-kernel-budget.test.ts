@@ -1,5 +1,12 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { InMemoryRunEventStore, InMemoryRunStateStore } from '@qiongqi/adapter-storage'
+import {
+  FileRunEventStore,
+  InMemoryRunEventStore,
+  InMemoryRunStateStore
+} from '@qiongqi/adapter-storage'
 import type { BudgetState, RunIdentity, RunStateV3 } from '@qiongqi/contracts'
 import {
   MiddlewareChain,
@@ -142,6 +149,80 @@ describe('RuntimeKernel budget accounting', () => {
         }
       }
     })
+  })
+
+  it('validates a duplicate usage-id delta before deduplicating it', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const kernel = new RuntimeKernel({
+      graph: graph(['first', 'second', 'complete']),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'budget-test',
+      nodes: {
+        first: () => ({
+          condition: 'next',
+          commands: [{
+            type: 'add-budget',
+            usageId: 'model:proposal-duplicate',
+            delta: { stepsUsed: 1 }
+          }]
+        }),
+        second: () => ({
+          condition: 'next',
+          commands: [{
+            type: 'add-budget',
+            usageId: 'model:proposal-duplicate',
+            delta: { stepsUsed: -1 }
+          } as MiddlewareCommand]
+        }),
+        complete
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'runtime_error'
+    })
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      budgets: { stepsUsed: 1 }
+    })
+    expect((await events.listAfter(identity, 0)).filter(
+      (event) => event.eventType === 'node.completed'
+    )).toHaveLength(1)
+  })
+
+  it.each([
+    { label: 'unknown key', delta: { stepsUsed: 1, secretTokens: 2 } },
+    { label: 'array', delta: [] },
+    { label: 'non-object', delta: 'stepsUsed=1' }
+  ])('rejects an invalid $label delta shape before persistence', async ({ delta }) => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const kernel = new RuntimeKernel({
+      graph: graph(['count', 'complete']),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'budget-test',
+      nodes: {
+        count: () => ({
+          condition: 'next',
+          commands: [{ type: 'add-budget', delta } as unknown as MiddlewareCommand]
+        }),
+        complete
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'runtime_error'
+    })
+    expect((await snapshots.load(identity))?.budgets).toEqual(zeroBudget)
+    expect((await events.listAfter(identity, 0)).filter(
+      (event) => event.eventType === 'node.completed'
+    )).toEqual([])
   })
 
   it('accounts two model proposals and two logical tool calls', async () => {
@@ -419,7 +500,79 @@ describe('RuntimeKernel committed node facts', () => {
 
     expect(seen).toEqual([{ proposalClass: 'tool_intents', stopClass: 'tool_calls' }])
   })
+
+  it('passes the same JSON-canonical committed facts during normal run and replay', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'qiongqi-kernel-facts-'))
+    const events = new FileRunEventStore(rootDir)
+    const originalFacts = {
+      proposalClass: 'final_text',
+      omitted: undefined,
+      nested: { kept: 'yes', omitted: undefined },
+      list: ['kept', undefined]
+    }
+    try {
+      const normalSeen: unknown[] = []
+      const normalSnapshots = new InMemoryRunStateStore()
+      const normalKernel = new RuntimeKernel({
+        graph: graph(['count', 'complete']),
+        snapshots: normalSnapshots,
+        events,
+        leases: normalSnapshots,
+        holderId: 'facts-normal',
+        middleware: factsMiddleware(normalSeen),
+        nodes: {
+          count: () => ({ condition: 'next', facts: originalFacts }),
+          complete
+        }
+      })
+
+      await normalKernel.run(identity)
+      const committed = (await events.listAfter(identity, 0)).find(
+        (event) => event.eventType === 'node.completed' && event.stepId === 'count'
+      )?.payload as { facts?: unknown }
+
+      const replaySeen: unknown[] = []
+      const replaySnapshots = new InMemoryRunStateStore()
+      await replaySnapshots.save(state())
+      const replayKernel = new RuntimeKernel({
+        graph: graph(['count', 'complete']),
+        snapshots: replaySnapshots,
+        events,
+        leases: replaySnapshots,
+        holderId: 'facts-replay',
+        middleware: factsMiddleware(replaySeen),
+        nodes: {
+          count: () => { throw new Error('completed node must replay') },
+          complete
+        }
+      })
+
+      await replayKernel.run(identity)
+
+      expect(committed.facts).toEqual({
+        proposalClass: 'final_text',
+        nested: { kept: 'yes' },
+        list: ['kept', null]
+      })
+      expect(normalSeen).toEqual([committed.facts])
+      expect(replaySeen).toEqual([committed.facts])
+    } finally {
+      await rm(rootDir, { recursive: true, force: true })
+    }
+  })
 })
+
+function factsMiddleware(seen: unknown[]): MiddlewareChain {
+  return new MiddlewareChain([{
+    id: 'canonical-facts',
+    version: 1,
+    hooks: ['afterNode'],
+    handle: async (context, next) => {
+      if (context.node?.id === 'count') seen.push(context.facts)
+      return next(context)
+    }
+  }])
+}
 
 describe('budgetMiddleware', () => {
   it('returns a compatible structured outcome for the tool-call cap', async () => {

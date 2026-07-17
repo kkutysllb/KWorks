@@ -217,22 +217,31 @@ export function createKernelV3NodeHandlers(
       const inputTokens = proposal.usage?.promptTokens ?? 0
       const outputTokens = proposal.usage?.completionTokens ?? 0
       const costUsd = proposal.usage?.costUsd ?? 0
-      const migration = nodeValue<{
+      const v2Migration = nodeValue<{
         resumeNodeId: string
         consumed: boolean
       }>(state, 'v2-accounting-migration')
-      const migrationCommands = migration && !migration.consumed
+      const v1Migration = nodeValue<{
+        resumeNodeId: string
+        consumed: boolean
+      }>(state, 'v1-accounting-migration')
+      const migration = v2Migration && !v2Migration.consumed
+        ? { nodeId: 'v2-accounting-migration', value: v2Migration }
+        : v1Migration && !v1Migration.consumed
+          ? { nodeId: 'v1-accounting-migration', value: v1Migration }
+          : undefined
+      const migrationCommands = migration
         ? [
             {
               type: 'set-node-data' as const,
-              nodeId: 'v2-accounting-migration',
-              value: { ...migration, consumed: true }
+              nodeId: migration.nodeId,
+              value: { ...migration.value, consumed: true }
             },
             {
               type: 'jump' as const,
-              nodeId: migration.resumeNodeId,
+              nodeId: migration.value.resumeNodeId,
               condition: 'next',
-              reason: 'resume production graph v2 after model accounting'
+              reason: 'resume migrated production graph after model accounting'
             }
           ]
         : []

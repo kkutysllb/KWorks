@@ -440,6 +440,52 @@ describe('production kernel graph migration', () => {
       .filter((event) => event.eventType === 'node.started')
       .map((event) => event.stepId)).toEqual(['account-model', 'prepare-tools'])
   })
+
+  it('resumes an exact v1 recovery cursor after accounting without re-evaluation', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    await snapshots.save({
+      ...oldState('recover-context', modelProposal({
+        proposalId: 'proposal-v1-recovery',
+        usage: {
+          promptTokens: 8,
+          completionTokens: 2,
+          totalTokens: 10,
+          cacheHitRate: null,
+          turns: 1,
+          costUsd: 0.04
+        }
+      })),
+      recovery: { attempts: 1, maxAttempts: 2, lastReason: 'context_discontinuity' }
+    })
+    const handlers = createKernelV3NodeHandlers({} as never)
+    let evaluations = 0
+    const kernel = new RuntimeKernel({
+      graph: productionKernelV3Graph(),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'migration-test',
+      nodes: {
+        'account-model': handlers['account-model']!,
+        evaluate: () => {
+          evaluations += 1
+          return completeOutcome()
+        },
+        'recover-context': () => completeOutcome()
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    expect(evaluations).toBe(0)
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      budgets: { stepsUsed: 1, inputTokens: 8, outputTokens: 2, costUsd: 0.04 },
+      recovery: { attempts: 1, maxAttempts: 2, lastReason: 'context_discontinuity' }
+    })
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual(['account-model', 'recover-context'])
+  })
 })
 
 function completeOutcome() {
