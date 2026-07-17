@@ -133,6 +133,40 @@ describe('tool observations', () => {
     expect(observation.resourceKeys.join(' ')).not.toContain('relative')
   })
 
+  it('parses uppercase file URLs before applying external confinement', () => {
+    const observation = observeTool({
+      call: call(),
+      result: result({
+        semantic: {
+          capabilityClass: 'file.read',
+          resourceKeys: ['FILE:///etc/passwd']
+        }
+      }),
+      context,
+      policy: { effect: 'read', replay: 'safe' },
+      replayed: false
+    })
+    expect(observation.resourceKeys).toHaveLength(1)
+    expect(observation.resourceKeys[0]).toMatch(/^external:sha256:/)
+    expect(observation.resourceKeys.join(' ')).not.toContain('/etc')
+  })
+
+  it('uses Windows workspace semantics for Windows drive file URLs', () => {
+    const observation = observeTool({
+      call: call(),
+      result: result({
+        semantic: {
+          capabilityClass: 'file.read',
+          resourceKeys: ['file:///C:/repo/src/a.ts']
+        }
+      }),
+      context: { workspace: 'C:\\repo' },
+      policy: { effect: 'read', replay: 'safe' },
+      replayed: false
+    })
+    expect(observation.resourceKeys).toEqual(['src/a.ts'])
+  })
+
   it('keeps result digests stable across volatile turn item fields', () => {
     const first = observeTool({
       call: call(),

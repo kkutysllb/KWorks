@@ -165,9 +165,9 @@ function normalizeResourceKey(resourceKey: string, workspace: string): string | 
     if (!isWindowsAbsolute(trimmed)) return externalResourceKey(trimmed)
     return workspaceRelativePath(trimmed, workspace) ?? externalResourceKey(trimmed)
   }
-  if (trimmed.startsWith('file:')) {
+  if (/^file:/i.test(trimmed)) {
     try {
-      const filePath = fileURLToPath(trimmed)
+      const filePath = crossPlatformFileUrlPath(trimmed, workspace)
       return workspaceRelativePath(filePath, workspace) ?? externalResourceKey(filePath)
     } catch {
       return externalResourceKey(trimmed)
@@ -175,6 +175,21 @@ function normalizeResourceKey(resourceKey: string, workspace: string): string | 
   }
   if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) return trimmed
   return workspaceRelativePath(trimmed, workspace) ?? externalResourceKey(trimmed)
+}
+
+function crossPlatformFileUrlPath(value: string, workspace: string): string {
+  const url = new URL(value)
+  if (url.protocol.toLowerCase() !== 'file:') throw new TypeError('resource is not a file URL')
+  if (/%(?:2f|5c)/i.test(url.pathname)) throw new TypeError('encoded file URL separators are invalid')
+  const pathname = decodeURIComponent(url.pathname)
+  const drivePath = /^\/([a-z]:)(\/.*)?$/i.exec(pathname)
+  if (drivePath) return `${drivePath[1]}${drivePath[2] ?? '\\'}`.replace(/\//g, '\\')
+  if (url.hostname) return `\\\\${url.hostname}${pathname.replace(/\//g, '\\')}`
+  if (isWindowsAbsolute(workspace)) {
+    const root = win32.parse(workspace).root
+    return win32.resolve(root, pathname.replace(/^\/+/, ''))
+  }
+  return fileURLToPath(url)
 }
 
 function workspaceRelativePath(candidate: string, workspace: string): string | null {
