@@ -497,6 +497,25 @@ describe('Qiongqi built-in tools', () => {
     })
   })
 
+  it('falls back safely when semantic metadata derivation throws', async () => {
+    const fallbackHost = new LocalToolHost({
+      tools: [LocalToolHost.defineTool({
+        name: 'fragile_semantic',
+        description: 'Has a broken semantic callback.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        semantic: () => { throw new Error('metadata failed') },
+        execute: async () => ({ output: { ok: true } })
+      })]
+    })
+    const result = await fallbackHost.execute(
+      { callId: 'call_fragile_semantic', toolName: 'fragile_semantic', arguments: {} },
+      buildContext(workspace)
+    )
+    expect(result.item).toMatchObject({ kind: 'tool_result', isError: false })
+    expect(result.semantic).toEqual({ capabilityClass: 'fragile_semantic', resourceKeys: [] })
+  })
+
   it('executes bash commands in the workspace', async () => {
     await writeFile(join(workspace, 'cmd.txt'), 'from bash\n', 'utf8')
     const output = await executeTool(host, workspace, 'bash', {

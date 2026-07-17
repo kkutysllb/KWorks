@@ -50,6 +50,7 @@ import type {
   ToolHost,
   ToolHostContext,
   ToolHostResult,
+  ToolHostPreparation,
   ToolCallLike,
   ModelClient
 } from '@qiongqi/ports'
@@ -602,12 +603,17 @@ class RefreshableToolHost implements ToolHost {
     return this.delegate.listTools(context)
   }
 
+  prepare(call: ToolCallLike, context: ToolHostContext): Promise<ToolHostPreparation> {
+    return this.delegate.prepare(call, context)
+  }
+
   execute(
     call: ToolCallLike,
     context: ToolHostContext,
-    onUpdate?: (item: TurnItem) => Promise<void> | void
+    onUpdate?: (item: TurnItem) => Promise<void> | void,
+    preparation?: ToolHostPreparation
   ): Promise<ToolHostResult> {
-    return this.delegate.execute(call, context, onUpdate)
+    return this.delegate.execute(call, context, onUpdate, preparation)
   }
 
   clearReadTracker(threadId?: string): void {

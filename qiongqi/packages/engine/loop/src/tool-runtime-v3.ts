@@ -1,7 +1,8 @@
-import type { RunIdentity, RunOutcome, RunStateV3, ToolEffectPolicy, ToolObservation } from '@qiongqi/contracts'
-import type { ToolCallLike, ToolHost, ToolHostContext, ToolHostResult } from '@qiongqi/ports'
+import { z } from 'zod'
+import { ToolObservationSchema, type RunIdentity, type RunOutcome, type RunStateV3, type ToolEffectPolicy, type ToolObservation } from '@qiongqi/contracts'
+import type { ToolCallLike, ToolHost, ToolHostContext, ToolHostPreparation, ToolHostResult } from '@qiongqi/ports'
 import { EffectCommitCoordinator } from './effect-commit.js'
-import { observeTool } from './tool-observation.js'
+import { NormalizedToolHostResultSchema, normalizeToolCall, normalizeToolHostResult, observeNormalizedTool } from './tool-observation.js'
 
 export type CrashPoint = 'prepare' | 'after_tool_execute' | 'before_commit' | 'after_commit'
 export type ToolRuntimeV3Options = { toolHost: ToolHost; effects: EffectCommitCoordinator; crashPoint?: (point: CrashPoint) => void }
@@ -14,26 +15,56 @@ type StoredToolRuntimeV3Result = {
   observation?: ToolObservation
 }
 
+const StoredToolRuntimeV3ResultSchema = z.object({
+  kind: z.literal('tool_runtime_v3_result'),
+  result: NormalizedToolHostResultSchema,
+  observation: ToolObservationSchema.optional()
+}).strict()
+
 export class ToolRuntimeV3 {
+  private readonly inFlight = new Map<string, Promise<ToolRuntimeV3Result>>()
+
   constructor(private readonly options: ToolRuntimeV3Options) {}
 
   async execute(input: ToolRuntimeV3Input): Promise<ToolRuntimeV3Result> {
-    const key = this.options.effects.idempotencyKey(input.identity, input.call.callId)
+    const call = normalizeToolCall(input.call)
+    const key = this.options.effects.idempotencyKey(input.identity, call.callId)
+    const running = this.inFlight.get(key)
+    if (running) return running
+    const promise = this.executeSingle({ ...input, call }, key)
+    this.inFlight.set(key, promise)
+    try {
+      return await promise
+    } finally {
+      if (this.inFlight.get(key) === promise) this.inFlight.delete(key)
+    }
+  }
+
+  private async executeSingle(
+    input: ToolRuntimeV3Input,
+    key: string
+  ): Promise<ToolRuntimeV3Result> {
+    const call = input.call
     const committed = input.state.committedEffects.find((effect) => effect.idempotencyKey === key)
     if (committed) {
       const stored = await this.options.effects.storedResult(input.identity, key)
       if (stored) {
-        const persisted = isStoredToolRuntimeV3Result(stored)
-          ? stored
-          : { kind: 'tool_runtime_v3_result' as const, result: stored as ToolHostResult }
+        if (!isStoredToolRuntimeV3ResultCandidate(stored)) {
+          return {
+            state: input.state,
+            result: NormalizedToolHostResultSchema.parse(stored),
+            replayed: true
+          }
+        }
+        const parsed = StoredToolRuntimeV3ResultSchema.safeParse(stored)
+        if (!parsed.success) throw new Error(`invalid stored tool runtime result: ${parsed.error.message}`)
+        const persisted = parsed.data
         return {
           state: input.state,
           result: persisted.result,
           observation: persisted.observation
             ? { ...persisted.observation, replayed: true }
-            : persisted.result.item.kind === 'tool_result'
-              ? observeTool({ ...input, result: persisted.result, replayed: true })
-              : undefined,
+            : undefined,
           replayed: true
         }
       }
@@ -45,21 +76,32 @@ export class ToolRuntimeV3 {
     if (pending && input.policy.replay !== 'safe') {
       return { state: input.state, replayed: true, outcome: { status: 'suspended', reason: 'required_action_missing', retryable: true, details: { code: 'effect_requires_verification', idempotencyKey: key } } }
     }
-    const prepared = this.options.effects.prepare(input.state, input.identity, { callId: input.call.callId, target: input.call.toolName, arguments: input.call.arguments }, input.policy)
+    const hostPreparation = this.options.toolHost.prepare
+      ? await this.options.toolHost.prepare(call, input.context)
+      : ({ call } satisfies ToolHostPreparation)
+    const effectiveCall = normalizeToolCall(hostPreparation.call)
+    if (effectiveCall.callId !== call.callId) throw new Error('tool host preparation changed callId')
+    const prepared = this.options.effects.prepare(input.state, input.identity, { callId: effectiveCall.callId, target: effectiveCall.toolName, arguments: effectiveCall.arguments }, input.policy)
     this.options.crashPoint?.('prepare')
     await this.options.effects.recordPrepared(input.identity, prepared.state, prepared.intent)
-    const result = await this.options.toolHost.execute(input.call, input.context)
+    const rawResult = hostPreparation.result
+      ?? await this.options.toolHost.execute(effectiveCall, input.context, undefined, hostPreparation)
+    const result = normalizeToolHostResult(
+      rawResult,
+      effectiveCall,
+      input.context
+    )
     this.options.crashPoint?.('after_tool_execute')
     if (input.crashAfterExecute) return { state: prepared.state, replayed: false, outcome: { status: 'suspended', reason: 'runtime_error', retryable: true, details: { code: 'crash_between_execute_and_commit', idempotencyKey: key } } }
     this.options.crashPoint?.('before_commit')
     const observation = result.item.kind === 'tool_result'
-      ? observeTool({ ...input, result, replayed: false })
+      ? observeNormalizedTool({ ...input, call: effectiveCall, result, replayed: false })
       : undefined
-    const stored: StoredToolRuntimeV3Result = {
+    const stored = StoredToolRuntimeV3ResultSchema.parse({
       kind: 'tool_runtime_v3_result',
       result,
       ...(observation ? { observation } : {})
-    }
+    })
     const committedResult = await this.options.effects.commit(input.identity, prepared.state, prepared.intent, stored)
     this.options.crashPoint?.('after_commit')
     return {
@@ -71,11 +113,8 @@ export class ToolRuntimeV3 {
   }
 }
 
-function isStoredToolRuntimeV3Result(value: unknown): value is StoredToolRuntimeV3Result {
+function isStoredToolRuntimeV3ResultCandidate(value: unknown): value is StoredToolRuntimeV3Result {
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return record.kind === 'tool_runtime_v3_result'
-    && !!record.result
-    && typeof record.result === 'object'
-    && 'item' in record.result
 }

@@ -353,6 +353,47 @@ describe('LocalToolHost', () => {
     })
   })
 
+  it('returns a deterministic failed result when post-processing fails after execution', async () => {
+    let executions = 0
+    const host = new LocalToolHost({
+      tools: [LocalToolHost.defineTool({
+        name: 'postprocess_failure',
+        description: 'Produces output that fails host post-processing.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        execute: async () => {
+          executions += 1
+          return {
+            output: new Proxy({}, {
+              ownKeys: () => { throw new Error('post-processing failed') }
+            })
+          }
+        }
+      })]
+    })
+    const result = await host.execute(
+      { callId: 'c_postprocess', toolName: 'postprocess_failure', arguments: {} },
+      {
+        threadId: 'th',
+        turnId: 'tu',
+        workspace: '/tmp',
+        approvalPolicy: 'on-request',
+        abortSignal: new AbortController().signal,
+        awaitApproval: async () => 'allow'
+      }
+    )
+    expect(executions).toBe(1)
+    expect(result.item).toMatchObject({
+      kind: 'tool_result',
+      status: 'completed',
+      isError: true,
+      output: {
+        code: 'tool_postprocess_failed',
+        error: 'tool result post-processing failed'
+      }
+    })
+  })
+
   it('enforces read-before-edit within the same turn', async () => {
     const read = LocalToolHost.defineTool({
       name: 'read',

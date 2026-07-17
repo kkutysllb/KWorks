@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalToolDigest, observeTool } from '@qiongqi/loop'
+import { canonicalToolDigest, normalizeToolHostResult, observeTool } from '@qiongqi/loop'
 import type { ToolCallLike, ToolHostContext, ToolHostResult } from '@qiongqi/ports'
 
 const context = {
@@ -79,9 +79,58 @@ describe('tool observations', () => {
       replayed: false
     })
     expect(observation.resourceKeys).toEqual([
-      '/workspace/project/src/main.ts',
-      '/workspace/project/src/other.ts'
+      'src/main.ts',
+      'src/other.ts'
     ])
+  })
+
+  it('uses stable external digests for workspace escapes and absolute outside paths', () => {
+    const observation = observeTool({
+      call: call(),
+      result: result({
+        semantic: {
+          capabilityClass: 'file.read',
+          resourceKeys: ['../secret.txt', '/etc/passwd', 'src/main.ts'],
+          artifactRefs: [
+            { path: '../secret.txt', kind: 'file' },
+            { path: 'dist/report.json', kind: 'file' }
+          ]
+        }
+      }),
+      context,
+      policy: { effect: 'read', replay: 'safe' },
+      replayed: false
+    })
+    expect(observation.resourceKeys).toContain('src/main.ts')
+    expect(observation.resourceKeys.filter((key) => key.startsWith('external:sha256:'))).toHaveLength(2)
+    expect(observation.resourceKeys.join(' ')).not.toContain('secret')
+    expect(observation.resourceKeys.join(' ')).not.toContain('/etc')
+    expect(observation.artifactRefs).toEqual([{ path: 'dist/report.json', kind: 'file' }])
+  })
+
+  it('normalizes Windows drive and UNC paths before URI detection', () => {
+    const observation = observeTool({
+      call: call(),
+      result: result({
+        semantic: {
+          capabilityClass: 'file.read',
+          resourceKeys: [
+            'C:\\repo\\src\\main.ts',
+            'C:/repo/src/other.ts',
+            'C:relative\\secret.txt',
+            '\\\\server\\share\\secret.txt'
+          ]
+        }
+      }),
+      context: { workspace: 'C:\\repo' },
+      policy: { effect: 'read', replay: 'safe' },
+      replayed: false
+    })
+    expect(observation.resourceKeys).toContain('src/main.ts')
+    expect(observation.resourceKeys).toContain('src/other.ts')
+    expect(observation.resourceKeys.filter((key) => key.startsWith('external:sha256:'))).toHaveLength(2)
+    expect(observation.resourceKeys.join(' ')).not.toContain('server')
+    expect(observation.resourceKeys.join(' ')).not.toContain('relative')
   })
 
   it('keeps result digests stable across volatile turn item fields', () => {
@@ -113,7 +162,7 @@ describe('tool observations', () => {
     expect(second.resultDigest).toBe(first.resultDigest)
   })
 
-  it('preserves semantic artifact references and failure state', () => {
+  it('drops semantic artifact references when the result failed', () => {
     const failedResult = result({
       item: { ...result().item, status: 'failed', isError: true },
       semantic: {
@@ -129,15 +178,66 @@ describe('tool observations', () => {
       policy: { effect: 'idempotent-write', replay: 'verify-first' },
       replayed: false
     })
-    expect(observation.artifactRefs).toEqual([
-      { path: 'dist/report.json', kind: 'file', producedByCallId: 'call-1' }
-    ])
+    expect(observation.artifactRefs).toEqual([])
     expect(observation.failed).toBe(true)
+  })
+
+  it('normalizes special result values into a deterministic JSON-safe representation', () => {
+    const normalized = normalizeToolHostResult(result({
+      item: {
+        ...result().item,
+        output: {
+          date: new Date('2026-07-17T00:00:00.000Z'),
+          missing: undefined,
+          nan: Number.NaN,
+          infinity: Number.POSITIVE_INFINITY,
+          negativeZero: -0,
+          bigint: 42n,
+          sparse: [, undefined]
+        }
+      }
+    }), call(), context)
+    expect(normalized.item).toMatchObject({
+      kind: 'tool_result',
+      output: {
+        date: { __qiongqiType: 'date', value: '2026-07-17T00:00:00.000Z' },
+        missing: { __qiongqiType: 'undefined' },
+        nan: { __qiongqiType: 'nonfinite', value: 'NaN' },
+        infinity: { __qiongqiType: 'nonfinite', value: 'Infinity' },
+        negativeZero: 0,
+        bigint: { __qiongqiType: 'bigint', value: '42' },
+        sparse: [{ __qiongqiType: 'undefined' }, { __qiongqiType: 'undefined' }]
+      }
+    })
+  })
+
+  it('converts cyclic tool output into a deterministic failed result', () => {
+    const output: Record<string, unknown> = { ok: true }
+    output.self = output
+    const normalized = normalizeToolHostResult(result({
+      item: { ...result().item, output }
+    }), call(), context)
+    expect(normalized.item).toMatchObject({
+      kind: 'tool_result',
+      status: 'failed',
+      isError: true,
+      output: {
+        code: 'tool_result_normalization_failed',
+        reason: 'circular_reference'
+      }
+    })
   })
 
   it('rejects non-JSON argument values consistently', () => {
     expect(() => canonicalToolDigest(call({ arguments: { value: undefined } }))).toThrow(/JSON/i)
     expect(() => canonicalToolDigest(call({ arguments: { value: Number.NaN } }))).toThrow(/JSON/i)
     expect(() => canonicalToolDigest(call({ arguments: { value: 1n } }))).toThrow(/JSON/i)
+    expect(() => canonicalToolDigest(call({ arguments: { value: new Date() } }))).toThrow(/JSON/i)
+    const sparse: unknown[] = []
+    sparse.length = 1
+    expect(() => canonicalToolDigest(call({ arguments: { value: sparse } }))).toThrow(/sparse/i)
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => canonicalToolDigest(call({ arguments: cyclic }))).toThrow(/acyclic/i)
   })
 })

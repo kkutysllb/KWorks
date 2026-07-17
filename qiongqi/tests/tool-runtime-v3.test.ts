@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { EffectCommitCoordinator, ToolRuntimeV3 } from '@qiongqi/loop'
+import { canonicalToolDigest, digestValue, EffectCommitCoordinator, ToolRuntimeV3 } from '@qiongqi/loop'
 import { InMemoryEffectResultStore, InMemoryRunEventStore } from '@qiongqi/adapter-storage'
+import { LocalToolHost } from '@qiongqi/adapter-tools'
 import type { RunIdentity, RunStateV3 } from '@qiongqi/contracts'
 import type { ToolHost, ToolHostContext, ToolHostResult } from '@qiongqi/ports'
 
@@ -51,7 +52,7 @@ describe('ToolRuntimeV3', () => {
       toolName: 'write',
       effect: 'idempotent-write',
       capabilityClass: 'file.write',
-      resourceKeys: ['/tmp/report.txt'],
+      resourceKeys: ['report.txt'],
       resultItemId: 'item-c1',
       replayed: false,
       failed: false
@@ -165,5 +166,189 @@ describe('ToolRuntimeV3', () => {
     })
     expect(result.result?.item.kind).toBe('approval')
     expect(result.observation).toBeUndefined()
+  })
+
+  it('rejects invalid arguments before effect preparation or host execution', async () => {
+    const counter = { value: 0 }
+    const events = new InMemoryRunEventStore()
+    const runtime = new ToolRuntimeV3({
+      toolHost: host(counter),
+      effects: new EffectCommitCoordinator({ events, results: new InMemoryEffectResultStore() })
+    })
+    await expect(runtime.execute({
+      identity,
+      state,
+      call: { callId: 'invalid', toolName: 'write', arguments: { value: undefined } },
+      context,
+      policy: { effect: 'idempotent-write', replay: 'verify-first' }
+    })).rejects.toThrow(/JSON/i)
+    expect(counter.value).toBe(0)
+    await expect(events.listAfter(identity, 0)).resolves.toEqual([])
+  })
+
+  it('commits an error-safe result when cyclic output cannot be serialized', async () => {
+    const counter = { value: 0 }
+    const cyclic: Record<string, unknown> = { ok: true }
+    cyclic.self = cyclic
+    const cyclicResult = toolResult()
+    if (cyclicResult.item.kind !== 'tool_result') throw new Error('expected tool result')
+    cyclicResult.item.output = cyclic
+    const runtime = new ToolRuntimeV3({
+      toolHost: host(counter, cyclicResult),
+      effects: new EffectCommitCoordinator({ events: new InMemoryRunEventStore(), results: new InMemoryEffectResultStore() })
+    })
+    const input = {
+      identity,
+      state,
+      call: { callId: 'c1', toolName: 'write', arguments: {} },
+      context,
+      policy: { effect: 'idempotent-write' as const, replay: 'verify-first' as const }
+    }
+    const first = await runtime.execute(input)
+    const replay = await runtime.execute({ ...input, state: first.state })
+    expect(counter.value).toBe(1)
+    expect(first.state.committedEffects).toHaveLength(1)
+    expect(first.result?.item).toMatchObject({
+      kind: 'tool_result',
+      status: 'failed',
+      isError: true,
+      output: { code: 'tool_result_normalization_failed', reason: 'circular_reference' }
+    })
+    expect(replay.result).toEqual(first.result)
+  })
+
+  it('uses one hook-rewritten effective call for preparation, execution, and observation', async () => {
+    let hookCalls = 0
+    let executedPath: unknown
+    const events = new InMemoryRunEventStore()
+    const localHost = new LocalToolHost({
+      hooks: [{
+        phase: 'PreToolUse',
+        run: () => {
+          hookCalls += 1
+          return { arguments: { path: 'B.txt' } }
+        }
+      }],
+      tools: [LocalToolHost.defineTool({
+        name: 'write',
+        description: 'Writes a test path.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        capabilityClass: 'file.write',
+        semantic: (args) => ({ capabilityClass: 'file.write', resourceKeys: [String(args.path)] }),
+        execute: async (args) => {
+          executedPath = args.path
+          return { output: { path: args.path } }
+        }
+      })]
+    })
+    const runtime = new ToolRuntimeV3({
+      toolHost: localHost,
+      effects: new EffectCommitCoordinator({ events, results: new InMemoryEffectResultStore() })
+    })
+    const result = await runtime.execute({
+      identity,
+      state,
+      call: { callId: 'rewrite', toolName: 'write', arguments: { path: 'A.txt' } },
+      context,
+      policy: { effect: 'idempotent-write', replay: 'verify-first' }
+    })
+    const preparedEvent = (await events.listAfter(identity, 0)).find((event) => event.eventType === 'effect.prepared')
+    expect(hookCalls).toBe(1)
+    expect(executedPath).toBe('B.txt')
+    expect(preparedEvent?.payload).toMatchObject({ payloadDigest: digestValue({ path: 'B.txt' }) })
+    expect(result.observation?.canonicalArgumentsDigest).toBe(canonicalToolDigest({
+      callId: 'rewrite',
+      toolName: 'write',
+      arguments: { path: 'B.txt' }
+    }))
+    expect(result.observation?.resourceKeys).toEqual(['B.txt'])
+  })
+
+  it('single-flights concurrent execution of the same logical effect', async () => {
+    const counter = { value: 0 }
+    const delayedHost: ToolHost = {
+      id: 'delayed',
+      async listTools() { return [] },
+      async execute() {
+        counter.value += 1
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        return toolResult()
+      }
+    }
+    const runtime = new ToolRuntimeV3({
+      toolHost: delayedHost,
+      effects: new EffectCommitCoordinator({ events: new InMemoryRunEventStore(), results: new InMemoryEffectResultStore() })
+    })
+    const input = {
+      identity,
+      state,
+      call: { callId: 'c1', toolName: 'write', arguments: {} },
+      context,
+      policy: { effect: 'idempotent-write' as const, replay: 'verify-first' as const }
+    }
+    const [first, second] = await Promise.all([runtime.execute(input), runtime.execute(input)])
+    expect(counter.value).toBe(1)
+    expect(second).toEqual(first)
+    expect(first.state.committedEffects).toHaveLength(1)
+  })
+
+  it('cleans the single-flight reservation after execution rejects', async () => {
+    let attempts = 0
+    const retryHost: ToolHost = {
+      id: 'retry',
+      async listTools() { return [] },
+      async execute() {
+        attempts += 1
+        if (attempts === 1) throw new Error('first attempt failed')
+        return toolResult()
+      }
+    }
+    const runtime = new ToolRuntimeV3({
+      toolHost: retryHost,
+      effects: new EffectCommitCoordinator({ events: new InMemoryRunEventStore(), results: new InMemoryEffectResultStore() })
+    })
+    const input = {
+      identity,
+      state,
+      call: { callId: 'c1', toolName: 'write', arguments: {} },
+      context,
+      policy: { effect: 'idempotent-write' as const, replay: 'safe' as const }
+    }
+    await expect(runtime.execute(input)).rejects.toThrow('first attempt failed')
+    const second = await runtime.execute(input)
+    expect(attempts).toBe(2)
+    expect(second.state.committedEffects).toHaveLength(1)
+  })
+
+  it('rejects an invalid hook rewrite before preparing or executing the effect', async () => {
+    let executions = 0
+    const events = new InMemoryRunEventStore()
+    const localHost = new LocalToolHost({
+      hooks: [{ phase: 'PreToolUse', run: () => ({ arguments: { path: undefined } }) }],
+      tools: [LocalToolHost.defineTool({
+        name: 'write',
+        description: 'Writes a test path.',
+        inputSchema: { type: 'object' },
+        policy: 'auto',
+        execute: async () => {
+          executions += 1
+          return { output: { ok: true } }
+        }
+      })]
+    })
+    const runtime = new ToolRuntimeV3({
+      toolHost: localHost,
+      effects: new EffectCommitCoordinator({ events, results: new InMemoryEffectResultStore() })
+    })
+    await expect(runtime.execute({
+      identity,
+      state,
+      call: { callId: 'invalid-rewrite', toolName: 'write', arguments: { path: 'A.txt' } },
+      context,
+      policy: { effect: 'idempotent-write', replay: 'safe' }
+    })).rejects.toThrow(/JSON/i)
+    expect(executions).toBe(0)
+    await expect(events.listAfter(identity, 0)).resolves.toEqual([])
   })
 })

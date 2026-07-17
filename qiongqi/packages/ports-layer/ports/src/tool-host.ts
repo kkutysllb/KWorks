@@ -132,6 +132,13 @@ export type ToolHostResult = {
   }
 }
 
+export type ToolHostPreparation = {
+  call: ToolCallLike
+  result?: ToolHostResult
+  /** Host-private state passed back to execute so preparation is applied exactly once. */
+  state?: unknown
+}
+
 /**
  * Port for executing tool calls. The local tool host uses approval
  * boundaries and abort-signal cancellation; a remote host can fan out
@@ -154,10 +161,13 @@ export interface ToolHost {
     providerKind?: ToolProviderKind
     effectPolicy?: ToolEffectPolicy
   }[]>
+  /** Resolve provider-neutral rewrites/denials before an effect is prepared. */
+  prepare?(call: ToolCallLike, context: ToolHostContext): Promise<ToolHostPreparation>
   execute(
     call: ToolCallLike,
     context: ToolHostContext,
-    onUpdate?: (item: TurnItem) => Promise<void> | void
+    onUpdate?: (item: TurnItem) => Promise<void> | void,
+    preparation?: ToolHostPreparation
   ): Promise<ToolHostResult>
   /** Optional runtime hygiene hook used when compaction/discard invalidates read context. */
   clearReadTracker?(threadId?: string): void

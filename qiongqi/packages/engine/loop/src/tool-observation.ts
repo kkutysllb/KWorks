@@ -1,32 +1,112 @@
 import { createHash } from 'node:crypto'
-import { isAbsolute, normalize, resolve } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { z } from 'zod'
 import {
+  TaskArtifactRefSchema,
   ToolObservationSchema,
+  TurnItem as TurnItemSchema,
   type ToolEffectPolicy,
   type ToolObservation
 } from '@qiongqi/contracts'
 import type { ToolCallLike, ToolHostContext, ToolHostResult } from '@qiongqi/ports'
 
+const ToolHostSemanticSchema = z.object({
+  capabilityClass: z.string().trim().min(1),
+  resourceKeys: z.array(z.string()),
+  artifactRefs: z.array(TaskArtifactRefSchema).optional()
+}).strict()
+
+export const NormalizedToolHostResultSchema = z.object({
+  item: TurnItemSchema,
+  approved: z.boolean(),
+  semantic: ToolHostSemanticSchema.optional()
+}).strict()
+
 export type ObserveToolInput = {
   call: ToolCallLike
   result: ToolHostResult
-  context: Pick<ToolHostContext, 'workspace'>
+  context: Pick<ToolHostContext, 'workspace' | 'threadId' | 'turnId'>
   policy: ToolEffectPolicy
   replayed: boolean
 }
 
+export function normalizeToolCall(call: ToolCallLike): ToolCallLike {
+  const canonicalArguments = canonicalArgumentValue(call.arguments)
+  if (!canonicalArguments || typeof canonicalArguments !== 'object' || Array.isArray(canonicalArguments)) {
+    throw new TypeError('tool arguments must be a JSON object')
+  }
+  if (call.toolKind && !['tool_call', 'command_execution', 'file_change'].includes(call.toolKind)) {
+    throw new TypeError('tool kind is invalid')
+  }
+  return {
+    callId: requireNonEmptyString(call.callId, 'tool call id'),
+    toolName: requireNonEmptyString(call.toolName, 'tool name'),
+    ...(call.providerId ? { providerId: requireNonEmptyString(call.providerId, 'provider id') } : {}),
+    ...(call.toolKind ? { toolKind: call.toolKind } : {}),
+    arguments: canonicalArguments as Record<string, unknown>,
+    ...(call.effectPolicy ? { effectPolicy: call.effectPolicy } : {})
+  }
+}
+
 export function canonicalToolDigest(call: ToolCallLike): string {
-  return digest({
-    toolName: call.toolName,
-    providerId: call.providerId ?? null,
-    toolKind: call.toolKind ?? null,
-    arguments: canonicalJsonValue(call.arguments)
+  const normalized = normalizeToolCall(call)
+  return digest('tool-arguments:v1', {
+    toolName: normalized.toolName,
+    providerId: normalized.providerId ?? null,
+    toolKind: normalized.toolKind ?? null,
+    arguments: normalized.arguments
+  })
+}
+
+export function normalizeToolHostResult(
+  result: ToolHostResult,
+  call: ToolCallLike,
+  context: Pick<ToolHostContext, 'threadId' | 'turnId'>
+): ToolHostResult {
+  let rawItem: unknown
+  try {
+    rawItem = result.item
+  } catch {
+    rawItem = undefined
+  }
+  let item: ToolHostResult['item']
+  try {
+    const normalizedItem = canonicalResultValue(rawItem)
+    item = TurnItemSchema.parse(normalizedItem)
+  } catch (error) {
+    item = normalizationFailureItem(rawItem, call, context, error)
+  }
+  let approved = false
+  try {
+    approved = result.approved === true
+  } catch {
+    approved = false
+  }
+  let rawSemantic: ToolHostResult['semantic']
+  try {
+    rawSemantic = result.semantic
+  } catch {
+    rawSemantic = undefined
+  }
+  const semantic = normalizeSemantic(rawSemantic, call.toolName)
+  return NormalizedToolHostResultSchema.parse({
+    item,
+    approved,
+    ...(semantic ? { semantic } : {})
   })
 }
 
 export function observeTool(input: ObserveToolInput): ToolObservation {
-  const item = input.result.item
+  const call = normalizeToolCall(input.call)
+  const result = normalizeToolHostResult(input.result, call, input.context)
+  return observeNormalizedTool({ ...input, call, result })
+}
+
+export function observeNormalizedTool(input: ObserveToolInput): ToolObservation {
+  const call = input.call
+  const result = NormalizedToolHostResultSchema.parse(input.result)
+  const item = result.item
   const failed = item.kind === 'tool_result'
     ? item.isError || item.status === 'failed' || item.status === 'aborted'
     : item.status === 'failed' || item.status === 'aborted'
@@ -35,62 +115,118 @@ export function observeTool(input: ObserveToolInput): ToolObservation {
         kind: item.kind,
         toolName: item.toolName,
         toolKind: item.toolKind,
-        output: canonicalSerializableValue(item.output),
+        output: item.output,
         isError: item.isError,
         status: item.status
       }
-    : {
-        kind: item.kind,
-        status: item.status
-      }
+    : { kind: item.kind, status: item.status }
   return ToolObservationSchema.parse({
-    callId: input.call.callId,
-    toolName: input.call.toolName,
+    callId: call.callId,
+    toolName: call.toolName,
     effect: input.policy.effect,
-    capabilityClass: input.result.semantic?.capabilityClass
-      ?? input.call.toolName,
-    resourceKeys: normalizeResourceKeys(
-      input.result.semantic?.resourceKeys ?? [],
-      input.context.workspace
-    ),
-    canonicalArgumentsDigest: canonicalToolDigest(input.call),
-    resultDigest: digest(resultContent),
+    capabilityClass: result.semantic?.capabilityClass ?? call.toolName,
+    resourceKeys: normalizeResourceKeys(result.semantic?.resourceKeys ?? [], input.context.workspace),
+    canonicalArgumentsDigest: canonicalToolDigest(call),
+    resultDigest: digest('tool-result:v1', resultContent),
     resultItemId: item.id,
-    artifactRefs: input.result.semantic?.artifactRefs ?? [],
+    artifactRefs: failed
+      ? []
+      : normalizeArtifactRefs(result.semantic?.artifactRefs ?? [], input.context.workspace),
     failed,
     replayed: input.replayed
   })
 }
 
-export function normalizeResourceKeys(
-  resourceKeys: readonly string[],
-  workspace: string
-): string[] {
+export function normalizeResourceKeys(resourceKeys: readonly string[], workspace: string): string[] {
   const normalized = resourceKeys
+    .filter((key): key is string => typeof key === 'string')
     .map((key) => normalizeResourceKey(key, workspace))
     .filter((key): key is string => key !== null)
   return [...new Set(normalized)].sort()
 }
 
+function normalizeArtifactRefs(
+  artifactRefs: readonly z.infer<typeof TaskArtifactRefSchema>[],
+  workspace: string
+): z.infer<typeof TaskArtifactRefSchema>[] {
+  const normalized: z.infer<typeof TaskArtifactRefSchema>[] = []
+  for (const artifact of artifactRefs) {
+    const path = workspaceRelativePath(artifact.path, workspace)
+    if (!path) continue
+    normalized.push({ ...artifact, path })
+  }
+  return normalized
+}
+
 function normalizeResourceKey(resourceKey: string, workspace: string): string | null {
   const trimmed = resourceKey.trim()
   if (!trimmed) return null
+  if (isWindowsPathLike(trimmed)) {
+    if (!isWindowsAbsolute(trimmed)) return externalResourceKey(trimmed)
+    return workspaceRelativePath(trimmed, workspace) ?? externalResourceKey(trimmed)
+  }
   if (trimmed.startsWith('file:')) {
     try {
-      return normalize(fileURLToPath(trimmed))
+      const filePath = fileURLToPath(trimmed)
+      return workspaceRelativePath(filePath, workspace) ?? externalResourceKey(filePath)
     } catch {
-      return trimmed
+      return externalResourceKey(trimmed)
     }
   }
   if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) return trimmed
-  return normalize(isAbsolute(trimmed) ? trimmed : resolve(workspace, trimmed))
+  return workspaceRelativePath(trimmed, workspace) ?? externalResourceKey(trimmed)
 }
 
-function digest(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+function workspaceRelativePath(candidate: string, workspace: string): string | null {
+  const windowsWorkspace = isWindowsAbsolute(workspace)
+  const windowsCandidate = isWindowsAbsolute(candidate)
+  if (windowsWorkspace || windowsCandidate) {
+    if (!windowsWorkspace) return null
+    const root = win32.resolve(workspace)
+    const absolute = windowsCandidate ? win32.resolve(candidate) : win32.resolve(root, candidate)
+    const relative = win32.relative(root, absolute)
+    if (isOutsideRelative(relative, win32.isAbsolute(relative))) return null
+    return toPosixPath(relative || '.')
+  }
+  const root = posix.resolve(toPosixPath(workspace))
+  const normalizedCandidate = toPosixPath(candidate)
+  const absolute = posix.isAbsolute(normalizedCandidate)
+    ? posix.resolve(normalizedCandidate)
+    : posix.resolve(root, normalizedCandidate)
+  const relative = posix.relative(root, absolute)
+  if (isOutsideRelative(relative, posix.isAbsolute(relative))) return null
+  return relative || '.'
 }
 
-function canonicalJsonValue(value: unknown, seen = new Set<object>()): unknown {
+function isOutsideRelative(relative: string, absolute: boolean): boolean {
+  return absolute || relative === '..' || relative.startsWith('../') || relative.startsWith('..\\')
+}
+
+function isWindowsAbsolute(value: string): boolean {
+  return /^[a-z]:[\\/]/i.test(value) || /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/.test(value)
+}
+
+function isWindowsPathLike(value: string): boolean {
+  return /^[a-z]:/i.test(value) || /^(?:\\\\|\/\/)/.test(value)
+}
+
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, '/')
+}
+
+function externalResourceKey(value: string): string {
+  return `external:sha256:${digest('tool-resource:v1', toPosixPath(value)).slice(0, 24)}`
+}
+
+function digest(domain: string, value: unknown): string {
+  return createHash('sha256')
+    .update(domain)
+    .update('\0')
+    .update(JSON.stringify(value))
+    .digest('hex')
+}
+
+function canonicalArgumentValue(value: unknown, seen = new Set<object>()): unknown {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new TypeError('tool arguments must contain JSON values')
@@ -100,27 +236,129 @@ function canonicalJsonValue(value: unknown, seen = new Set<object>()): unknown {
   if (seen.has(value)) throw new TypeError('tool arguments must contain acyclic JSON values')
   seen.add(value)
   try {
-    if (Array.isArray(value)) return value.map((entry) => canonicalJsonValue(entry, seen))
+    if (Array.isArray(value)) {
+      return Array.from({ length: value.length }, (_, index) => {
+        if (!(index in value)) throw new TypeError('tool arguments must not contain sparse arrays')
+        return canonicalArgumentValue(value[index], seen)
+      })
+    }
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError('tool arguments must contain JSON objects')
     }
     const record = value as Record<string, unknown>
     return Object.fromEntries(
-      Object.keys(record).sort().map((key) => [key, canonicalJsonValue(record[key], seen)])
+      Object.keys(record).sort().map((key) => [key, canonicalArgumentValue(record[key], seen)])
     )
   } finally {
     seen.delete(value)
   }
 }
 
-function canonicalSerializableValue(value: unknown): unknown {
-  let serialized: string | undefined
-  try {
-    serialized = JSON.stringify(value)
-  } catch {
-    throw new TypeError('tool result must be JSON serializable')
+function canonicalResultValue(value: unknown, seen = new Set<object>()): unknown {
+  if (value === undefined) return { __qiongqiType: 'undefined' }
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (Object.is(value, -0)) return 0
+    if (Number.isNaN(value)) return { __qiongqiType: 'nonfinite', value: 'NaN' }
+    if (value === Number.POSITIVE_INFINITY) return { __qiongqiType: 'nonfinite', value: 'Infinity' }
+    if (value === Number.NEGATIVE_INFINITY) return { __qiongqiType: 'nonfinite', value: '-Infinity' }
+    return value
   }
-  if (serialized === undefined) return null
-  return canonicalJsonValue(JSON.parse(serialized) as unknown)
+  if (typeof value === 'bigint') return { __qiongqiType: 'bigint', value: value.toString() }
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    return { __qiongqiType: 'unsupported', value: typeof value }
+  }
+  if (seen.has(value)) throw new ResultNormalizationError('circular_reference')
+  seen.add(value)
+  try {
+    if (value instanceof Date) {
+      return {
+        __qiongqiType: 'date',
+        value: Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
+      }
+    }
+    if (Buffer.isBuffer(value)) {
+      return { __qiongqiType: 'bytes', value: value.toString('base64') }
+    }
+    if (Array.isArray(value)) {
+      return Array.from({ length: value.length }, (_, index) =>
+        canonicalResultValue(index in value ? value[index] : undefined, seen))
+    }
+    const record = value as Record<string, unknown>
+    return Object.fromEntries(
+      Object.keys(record).sort().map((key) => [key, canonicalResultValue(record[key], seen)])
+    )
+  } catch (error) {
+    if (error instanceof ResultNormalizationError) throw error
+    throw new ResultNormalizationError('normalization_error')
+  } finally {
+    seen.delete(value)
+  }
+}
+
+function normalizeSemantic(
+  semantic: ToolHostResult['semantic'],
+  fallbackCapabilityClass: string
+): ToolHostResult['semantic'] {
+  try {
+    const parsed = ToolHostSemanticSchema.safeParse(semantic)
+    if (parsed.success) return parsed.data
+  } catch {
+    // Host metadata is advisory and must never strand an executed effect.
+  }
+  return { capabilityClass: fallbackCapabilityClass, resourceKeys: [] }
+}
+
+function normalizationFailureItem(
+  rawItem: unknown,
+  call: ToolCallLike,
+  context: Pick<ToolHostContext, 'threadId' | 'turnId'>,
+  error: unknown
+): ToolHostResult['item'] {
+  const source = rawItem && typeof rawItem === 'object' ? rawItem as Record<string, unknown> : {}
+  const reason = error instanceof ResultNormalizationError ? error.reason : 'normalization_error'
+  return TurnItemSchema.parse({
+    id: safeStringProperty(source, 'id') ?? `item_${call.callId}`,
+    turnId: safeStringProperty(source, 'turnId') ?? nonEmptyOrFallback(context.turnId, 'unknown-turn'),
+    threadId: safeStringProperty(source, 'threadId') ?? nonEmptyOrFallback(context.threadId, 'unknown-thread'),
+    role: 'tool',
+    status: 'failed',
+    createdAt: safeStringProperty(source, 'createdAt') ?? '1970-01-01T00:00:00.000Z',
+    finishedAt: safeStringProperty(source, 'finishedAt') ?? '1970-01-01T00:00:00.000Z',
+    kind: 'tool_result',
+    toolName: call.toolName,
+    callId: call.callId,
+    toolKind: call.toolKind ?? 'tool_call',
+    output: {
+      code: 'tool_result_normalization_failed',
+      error: 'tool result was not JSON-safe',
+      reason
+    },
+    isError: true
+  })
+}
+
+function safeStringProperty(source: Record<string, unknown>, key: string): string | undefined {
+  try {
+    const value = source[key]
+    return typeof value === 'string' && value ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function requireNonEmptyString(value: string, label: string): string {
+  if (!value.trim()) throw new TypeError(`${label} must be nonempty`)
+  return value
+}
+
+function nonEmptyOrFallback(value: string, fallback: string): string {
+  return value.trim() ? value : fallback
+}
+
+class ResultNormalizationError extends Error {
+  constructor(readonly reason: 'circular_reference' | 'normalization_error') {
+    super(reason)
+  }
 }
