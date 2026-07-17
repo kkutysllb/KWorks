@@ -228,6 +228,12 @@ export class RuntimeKernel {
         details: { message: error instanceof Error ? error.message : String(error) }
       }
       const state = await snapshots.load(identity)
+      if (state) {
+        await this.options.middleware.run(
+          'onError',
+          this.middlewareContext(identity, state, 'onError', undefined, undefined, error)
+        )
+      }
       if (state && !isTerminal(state)) {
         await snapshots.save(this.withOutcome(state, outcome))
       }
@@ -433,6 +439,9 @@ export class RuntimeKernel {
         if (event.eventType === 'node.completed') {
           const completed = parseCompletedNodePayload(event.payload)
           pending = { node: this.nodeFor(completed.nodeId), completed }
+        } else if (event.eventType === 'node.after_middleware') {
+          const after = parseAfterMiddlewarePayload(event.payload)
+          this.applyCommands(state, after.commands)
         }
         continue
       }
@@ -467,6 +476,7 @@ export class RuntimeKernel {
         if (!pending) throw new Error('node.after_middleware has no matching completion')
         const after = parseAfterMiddlewarePayload(event.payload)
         assertAfterMiddlewareMatches(pending.completed, after)
+        this.applyCommands(state, after.commands)
         state = this.reduceAfterMiddleware(state, after, event.seq)
         pending = undefined
       }
@@ -491,7 +501,7 @@ export class RuntimeKernel {
       )
     )
     const commands = [...(result?.commands ?? [])]
-    if (!isTerminal(state)) this.applyCommands(state, commands)
+    this.applyCommands(state, commands)
     await this.reachCrashPoint('after_node_middleware')
     const payload = canonicalizeJsonObject({
       nodeId: pending.node.id,
@@ -582,9 +592,10 @@ export class RuntimeKernel {
     state: RunStateV3,
     hook: RuntimeHook,
     node?: RuntimeNode,
-    facts?: Readonly<Record<string, unknown>>
+    facts?: Readonly<Record<string, unknown>>,
+    error?: unknown
   ) {
-    return { identity, state, node, hook, facts, commands: [] as const }
+    return { identity, state, node, hook, facts, error, commands: [] as const }
   }
 
   private applyCommands(

@@ -239,4 +239,196 @@ describe('RuntimeKernel durable afterNode middleware', () => {
       cursor: { checkpointSeq: 3 }
     })
   })
+
+  it.each([
+    { label: 'negative', delta: { stepsUsed: -1 } },
+    { label: 'malformed', delta: [] }
+  ])('rejects $label terminal afterNode commands before persistence', async ({ delta }) => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const terminalGraph: ExecutionGraph = {
+      version: 'terminal-after-validation-v1',
+      startNodeId: 'complete',
+      predicates: ['next'],
+      nodes: [{ id: 'complete', kind: 'complete', effect: 'state', terminal: true }],
+      edges: []
+    }
+    const runtime = new RuntimeKernel({
+      graph: terminalGraph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'terminal-after-validation',
+      middleware: new MiddlewareChain([{
+        id: 'invalid-terminal-command',
+        version: 1,
+        hooks: ['afterNode'],
+        handle: async () => ({
+          commands: [{ type: 'add-budget', delta } as never]
+        })
+      }]),
+      nodes: {
+        complete: () => ({
+          outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
+        })
+      }
+    })
+
+    await expect(runtime.run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'runtime_error'
+    })
+    expect((await snapshots.load(identity))?.budgets).toMatchObject({ stepsUsed: 0 })
+    expect((await events.listAfter(identity, 0)).filter(
+      (event) => event.eventType === 'node.after_middleware'
+    )).toEqual([])
+  })
+
+  it('rejects invalid terminal commands while repairing completion-only replay', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    await snapshots.save({
+      version: 3,
+      graphVersion: graph.version,
+      runtimeMode: 'kernel_v3',
+      ...identity,
+      status: 'running',
+      cursor: { stepIndex: 0, nodeId: 'work', attempt: 0, checkpointSeq: 1 },
+      budgets: { stepsUsed: 0, toolCallsUsed: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      recovery: { attempts: 0, maxAttempts: 1 },
+      middleware: {},
+      nodeData: {},
+      taskRevision: 0,
+      pendingEffects: [],
+      committedEffects: [],
+      createdAt: 'now',
+      updatedAt: 'now'
+    })
+    await events.append({
+      eventId: 'completed-terminal-replay',
+      seq: 2,
+      ...identity,
+      stepId: 'work',
+      nodeAttemptId: 'work:0',
+      eventType: 'node.completed',
+      payload: {
+        nodeId: 'work',
+        stepIndex: 0,
+        condition: 'next',
+        commands: [],
+        facts: { decision: 'invalid' },
+        outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
+      },
+      timestamp: 'now'
+    })
+    const runtime = new RuntimeKernel({
+      graph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'terminal-replay-validation',
+      middleware: new MiddlewareChain([{
+        id: 'invalid-terminal-command',
+        version: 1,
+        hooks: ['afterNode'],
+        handle: async () => ({
+          commands: [{ type: 'add-budget', delta: { costUsd: Number.POSITIVE_INFINITY } }]
+        })
+      }]),
+      nodes: nodes()
+    })
+
+    await expect(runtime.run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'runtime_error'
+    })
+    expect((await events.listAfter(identity, 0)).filter(
+      (event) => event.eventType === 'node.after_middleware'
+    )).toEqual([])
+    expect((await snapshots.load(identity))?.budgets.costUsd).toBe(0)
+  })
+
+  it('reports a corrupt recorded terminal after-middleware event without replacing outcome', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const errors: string[] = []
+    await snapshots.save({
+      version: 3,
+      graphVersion: graph.version,
+      runtimeMode: 'kernel_v3',
+      ...identity,
+      status: 'completed',
+      cursor: { stepIndex: 0, nodeId: 'work', attempt: 0, checkpointSeq: 2 },
+      budgets: { stepsUsed: 0, toolCallsUsed: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      recovery: { attempts: 0, maxAttempts: 1 },
+      middleware: {},
+      nodeData: {},
+      taskRevision: 0,
+      pendingEffects: [],
+      committedEffects: [],
+      outcome: { status: 'completed', reason: 'normal_stop', retryable: false },
+      createdAt: 'now',
+      updatedAt: 'now'
+    })
+    await events.append({
+      eventId: 'completed-corrupt-terminal',
+      seq: 2,
+      ...identity,
+      stepId: 'work',
+      nodeAttemptId: 'work:0',
+      eventType: 'node.completed',
+      payload: {
+        nodeId: 'work',
+        stepIndex: 0,
+        condition: 'next',
+        commands: [],
+        facts: { decision: 'invalid' },
+        outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
+      },
+      timestamp: 'now'
+    })
+    await events.append({
+      eventId: 'after-corrupt-terminal',
+      seq: 3,
+      ...identity,
+      stepId: 'work',
+      nodeAttemptId: 'work:0',
+      eventType: 'node.after_middleware',
+      payload: {
+        nodeId: 'work',
+        stepIndex: 0,
+        commands: [{ type: 'add-budget', delta: { toolCallsUsed: -1 } }]
+      },
+      timestamp: 'now'
+    })
+    const runtime = new RuntimeKernel({
+      graph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'terminal-corruption',
+      middleware: new MiddlewareChain([{
+        id: 'error-observer',
+        version: 1,
+        hooks: ['onError'],
+        handle: async (context, next) => {
+          errors.push(context.error instanceof Error ? context.error.message : String(context.error))
+          return next(context)
+        }
+      }]),
+      nodes: nodes()
+    })
+
+    await expect(runtime.run(identity)).resolves.toEqual({
+      status: 'completed',
+      reason: 'normal_stop',
+      retryable: false
+    })
+    expect(errors).toEqual([expect.stringContaining('invalid budget delta')])
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      status: 'completed',
+      cursor: { checkpointSeq: 2 },
+      budgets: { toolCallsUsed: 0 }
+    })
+  })
 })
