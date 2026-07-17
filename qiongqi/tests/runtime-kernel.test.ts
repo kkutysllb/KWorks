@@ -48,7 +48,7 @@ describe('RuntimeKernel', () => {
     expect(persisted?.status).toBe('completed')
     expect(persisted?.nodeData.prepare).toEqual({ taskRevision: 2 })
     expect(persisted?.taskRevision).toBe(2)
-    await expect(events.listAfter(identity, 0)).resolves.toHaveLength(8)
+    await expect(events.listAfter(identity, 0)).resolves.toHaveLength(12)
   })
 
   it('keeps a terminal outcome monotonic when afterNode middleware tries to replace it', async () => {

@@ -2,13 +2,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { InMemorySessionStore } from '@qiongqi/adapter-storage'
-import { InMemoryThreadStore } from '@qiongqi/adapter-storage'
+import {
+  FileRunEventStore,
+  FileRunStateStore,
+  InMemorySessionStore,
+  InMemoryThreadStore
+} from '@qiongqi/adapter-storage'
+import { createImmutablePrefix } from '@qiongqi/cache'
 import { createThreadRecord } from '@qiongqi/domain'
 import { UsageService } from '@qiongqi/services'
-import { createAgent, createModelAdapter, seedUsageCarryover } from '@qiongqi/http'
+import {
+  createAgent,
+  createCore,
+  createKernelV3TurnRunner,
+  createModelAdapter,
+  seedUsageCarryover
+} from '@qiongqi/http'
 import { DEFAULT_QIONGQI_CAPABILITIES_CONFIG, type UsageSnapshot } from '@qiongqi/contracts'
-import type { ModelRequest, ModelStreamChunk } from '@qiongqi/ports'
+import type { ModelClient, ModelRequest, ModelStreamChunk } from '@qiongqi/ports'
+import { PromptBuilder, modelCapabilitiesForModel } from '@qiongqi/loop'
 
 function usage(overrides: Partial<UsageSnapshot>): UsageSnapshot {
   const promptTokens = overrides.promptTokens ?? 10
@@ -189,6 +201,108 @@ describe('runtime factory usage carryover', () => {
       misses: 8,
       hitRate: 0.9
     })
+  })
+})
+
+describe('kernel runtime factory usage accounting', () => {
+  it('records the latest cumulative model usage once across runtime observers', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-kernel-usage-'))
+    const dataDir = join(dir, 'data')
+    const runtimeV3Root = join(dir, 'runtime-v3')
+    const core = await createCore({ dataDir, storage: { backend: 'file' } })
+    const pressure = vi.spyOn(PromptBuilder.prototype, 'recordPromptPressure')
+    try {
+      const thread = await core.threadService.create({
+        workspace: dir,
+        model: 'test-model'
+      }, {
+        id: 'thread-kernel-usage'
+      })
+      const started = await core.turnService.startTurn({
+        threadId: thread.id,
+        request: { prompt: 'report usage' }
+      })
+      const first = usage({ promptTokens: 10, completionTokens: 2, totalTokens: 12 })
+      const latest = usage({ promptTokens: 10, completionTokens: 5, totalTokens: 15 })
+      const modelClient: ModelClient = {
+        provider: 'test-provider',
+        model: 'test-model',
+        async *stream() {
+          yield { kind: 'usage', usage: first }
+          yield { kind: 'assistant_text_delta', text: 'done' }
+          yield { kind: 'usage', usage: latest }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      }
+      const runEvents = new FileRunEventStore(runtimeV3Root)
+      const runner = createKernelV3TurnRunner({
+        options: {
+          dataDir,
+          model: 'test-model',
+          endpointFormat: 'chat_completions',
+          approvalPolicy: 'trusted',
+          sandboxMode: 'workspace-write',
+          capabilities: DEFAULT_QIONGQI_CAPABILITIES_CONFIG
+        } as never,
+        core,
+        model: {
+          modelCapabilities: () => modelCapabilitiesForModel('test-model')
+        } as never,
+        modelClient,
+        tools: {
+          toolHost: {
+            id: 'empty-tools',
+            listTools: async () => [],
+            execute: async () => { throw new Error('no tools expected') }
+          }
+        } as never,
+        prefix: createImmutablePrefix({ systemPrompt: 'be brief' }),
+        tokenEconomy: undefined as never,
+        runtimeV3Root,
+        events: runEvents,
+        toolRuntime: {} as never
+      })
+
+      const status = await runner.runTurn(thread.id, started.turnId)
+      const runIdentity = {
+        ownerUserId: 'local-default-owner',
+        workspaceKey: dir,
+        threadId: thread.id,
+        turnId: started.turnId,
+        runId: `run_${thread.id}_${started.turnId}`
+      }
+      const persistedRun = await new FileRunStateStore(runtimeV3Root).load(runIdentity)
+      expect(status, JSON.stringify(persistedRun?.outcome)).toBe('completed')
+
+      expect(core.usageService.forThread(thread.id)).toMatchObject({
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15
+      })
+      const usageEvents = (await core.sessionStore.loadEventsSince(thread.id, 0)).filter(
+        (event) => event.kind === 'usage'
+      )
+      expect(usageEvents).toEqual([
+        expect.objectContaining({
+          kind: 'usage',
+          usage: expect.objectContaining({ promptTokens: 10, completionTokens: 5, totalTokens: 15 })
+        })
+      ])
+      expect(pressure).toHaveBeenCalledTimes(1)
+      expect(pressure).toHaveBeenCalledWith(
+        expect.objectContaining({ threadId: thread.id, turnId: started.turnId }),
+        'test-model',
+        10
+      )
+      expect(persistedRun).toMatchObject({
+        budgets: { stepsUsed: 1, inputTokens: 10, outputTokens: 5 }
+      })
+    } finally {
+      pressure.mockRestore()
+      await core.storesShutdown?.()
+      core.userDataShutdown?.()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
 

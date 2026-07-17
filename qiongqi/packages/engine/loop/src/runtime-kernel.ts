@@ -28,7 +28,13 @@ export type RuntimeKernelOptions = {
   leaseTtlMs?: number
   middleware?: MiddlewareChain
   nodes: Record<string, RuntimeNodeHandler>
+  crashPoint?: (point: RuntimeKernelCrashPoint) => Promise<void> | void
 }
+
+export type RuntimeKernelCrashPoint =
+  | 'after_node_completed'
+  | 'after_node_middleware'
+  | 'after_node_after_middleware_event'
 
 type CompletedNodePayload = {
   nodeId: string
@@ -40,9 +46,28 @@ type CompletedNodePayload = {
   outcome?: RunOutcome
 }
 
+type AfterMiddlewarePayload = {
+  nodeId: string
+  stepIndex: number
+  commands: MiddlewareCommand[]
+  outcome?: RunOutcome
+}
+
+type PendingAfterMiddleware = {
+  node: RuntimeNode
+  completed: CompletedNodePayload
+}
+
+class RuntimeKernelCrash extends Error {
+  constructor(readonly original: unknown) {
+    super('runtime kernel crash injection')
+  }
+}
+
 export class RuntimeKernel {
-  private readonly options: Omit<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware'> &
-    Required<Pick<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware'>>
+  private readonly options: Omit<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware' | 'crashPoint'> &
+    Required<Pick<RuntimeKernelOptions, 'nowIso' | 'leaseTtlMs' | 'middleware'>> &
+    Pick<RuntimeKernelOptions, 'crashPoint'>
 
   constructor(options: RuntimeKernelOptions) {
     validateExecutionGraph(options.graph)
@@ -71,16 +96,33 @@ export class RuntimeKernel {
       if (!state) state = this.initialState(identity)
       this.assertStateIdentity(identity, state)
       if (isTerminal(state)) {
+        const checkpointSeq = state.cursor.checkpointSeq
+        state = await this.replayAfterCheckpoint(identity, state)
+        if (state.cursor.checkpointSeq > checkpointSeq) {
+          await this.options.middleware.run(
+            'afterRun',
+            this.middlewareContext(identity, state, 'afterRun')
+          )
+        }
         const outcome = outcomeFromTerminalState(state)
         const migrated = this.migrateTerminalGraphMetadata(state)
-        if (migrated !== state) await snapshots.save(migrated)
+        if (migrated !== state || state.cursor.checkpointSeq > checkpointSeq) {
+          await snapshots.save(migrated)
+        }
         return outcome
       }
       const graphCompatibility = this.graphCompatibility(state)
       if (graphCompatibility) return graphCompatibility
 
+      const replayCheckpointSeq = state.cursor.checkpointSeq
       state = await this.replayAfterCheckpoint(identity, state)
       if (isTerminal(state)) {
+        if (state.cursor.checkpointSeq > replayCheckpointSeq) {
+          await this.options.middleware.run(
+            'afterRun',
+            this.middlewareContext(identity, state, 'afterRun')
+          )
+        }
         state = this.migrateTerminalGraphMetadata(state)
         await snapshots.save(state)
         return outcomeFromTerminalState(state)
@@ -158,14 +200,14 @@ export class RuntimeKernel {
           'node.completed',
           payload
         )
+        await this.reachCrashPoint('after_node_completed')
         const committedPayload = parseCompletedNodePayload(completed.payload)
         state = this.reduceCompletedNode(state, node, committedPayload, completed.seq)
+        state = await this.commitAfterMiddleware(identity, state, {
+          node,
+          completed: committedPayload
+        })
         if (checkpointsAfter(node) || isTerminal(state)) await snapshots.save(state)
-
-        const afterNode = await this.options.middleware.run(
-          'afterNode',
-          this.middlewareContext(identity, state, 'afterNode', node, committedPayload.facts)
-        )
         if (isTerminal(state)) {
           // Terminal outcomes are monotonic. Middleware may record diagnostics,
           // but cannot reopen or replace an already committed terminal result.
@@ -176,15 +218,9 @@ export class RuntimeKernel {
           return outcomeFromTerminalState(state)
         }
 
-        state = this.applyCommands(state, afterNode?.commands)
-        const afterOutcome = this.commandOutcome(afterNode?.commands)
-        if (afterOutcome) {
-          state = this.withOutcome(state, afterOutcome)
-          await snapshots.save(state)
-          return afterOutcome
-        }
       }
     } catch (error) {
+      if (error instanceof RuntimeKernelCrash) throw error.original
       const outcome: RunOutcome = {
         status: 'failed',
         reason: 'runtime_error',
@@ -280,7 +316,9 @@ export class RuntimeKernel {
           : {
               ...state.nodeData,
               'v2-accounting-migration': {
-                resumeNodeId: state.cursor.nodeId,
+                resumeNodeId: state.cursor.nodeId === 'commit-tools'
+                  ? 'prepare-tools'
+                  : state.cursor.nodeId,
                 consumed: false
               }
             }
@@ -382,37 +420,118 @@ export class RuntimeKernel {
     initial: RunStateV3
   ): Promise<RunStateV3> {
     let state = initial
-    const events = await this.options.events.listAfter(identity, state.cursor.checkpointSeq)
+    const initialCheckpointSeq = state.cursor.checkpointSeq
+    const events = await this.options.events.listAfter(
+      identity,
+      Math.max(0, initialCheckpointSeq - 1)
+    )
+    let pending: PendingAfterMiddleware | undefined
     for (const event of events.sort((left, right) => left.seq - right.seq)) {
       this.assertEventIdentity(identity, event)
+      if (event.seq < initialCheckpointSeq) continue
+      if (event.seq === initialCheckpointSeq) {
+        if (event.eventType === 'node.completed') {
+          const completed = parseCompletedNodePayload(event.payload)
+          pending = { node: this.nodeFor(completed.nodeId), completed }
+        }
+        continue
+      }
+      if (pending && event.eventType !== 'node.after_middleware') {
+        state = await this.commitAfterMiddleware(identity, state, pending)
+        pending = undefined
+      }
       if (event.eventType === 'node.started') {
         state = {
           ...state,
-          cursor: { ...state.cursor, checkpointSeq: event.seq },
+          cursor: {
+            ...state.cursor,
+            checkpointSeq: Math.max(state.cursor.checkpointSeq, event.seq)
+          },
           updatedAt: event.timestamp
         }
         continue
       }
-      if (event.eventType !== 'node.completed') continue
-      const payload = parseCompletedNodePayload(event.payload)
-      if (payload.nodeId !== state.cursor.nodeId) {
-        throw new Error(
-          `run event cursor mismatch: expected ${state.cursor.nodeId}, received ${payload.nodeId}`
-        )
+      if (event.eventType === 'node.completed') {
+        const completed = parseCompletedNodePayload(event.payload)
+        if (completed.nodeId !== state.cursor.nodeId) {
+          throw new Error(
+            `run event cursor mismatch: expected ${state.cursor.nodeId}, received ${completed.nodeId}`
+          )
+        }
+        const node = this.nodeFor(completed.nodeId)
+        state = this.reduceCompletedNode(state, node, completed, event.seq)
+        pending = { node, completed }
+        continue
       }
-      const node = this.nodeFor(payload.nodeId)
-      state = this.reduceCompletedNode(state, node, payload, event.seq)
-      const afterNode = await this.options.middleware.run(
-        'afterNode',
-        this.middlewareContext(identity, state, 'afterNode', node, payload.facts)
-      )
-      if (!isTerminal(state)) {
-        state = this.applyCommands(state, afterNode?.commands)
-        const afterOutcome = this.commandOutcome(afterNode?.commands)
-        if (afterOutcome) state = this.withOutcome(state, afterOutcome)
+      if (event.eventType === 'node.after_middleware') {
+        if (!pending) throw new Error('node.after_middleware has no matching completion')
+        const after = parseAfterMiddlewarePayload(event.payload)
+        assertAfterMiddlewareMatches(pending.completed, after)
+        state = this.reduceAfterMiddleware(state, after, event.seq)
+        pending = undefined
       }
     }
+    if (pending) state = await this.commitAfterMiddleware(identity, state, pending)
     return state
+  }
+
+  private async commitAfterMiddleware(
+    identity: RunIdentity,
+    state: RunStateV3,
+    pending: PendingAfterMiddleware
+  ): Promise<RunStateV3> {
+    const result = await this.options.middleware.run(
+      'afterNode',
+      this.middlewareContext(
+        identity,
+        state,
+        'afterNode',
+        pending.node,
+        pending.completed.facts
+      )
+    )
+    const commands = [...(result?.commands ?? [])]
+    if (!isTerminal(state)) this.applyCommands(state, commands)
+    await this.reachCrashPoint('after_node_middleware')
+    const payload = canonicalizeJsonObject({
+      nodeId: pending.node.id,
+      stepIndex: pending.completed.stepIndex,
+      commands,
+      ...(this.commandOutcome(commands) ? { outcome: this.commandOutcome(commands) } : {})
+    }, 'node.after_middleware payload')
+    const recorded = await this.recordEvent(
+      identity,
+      state,
+      pending.node.id,
+      'node.after_middleware',
+      payload
+    )
+    const committed = parseAfterMiddlewarePayload(recorded.payload)
+    assertAfterMiddlewareMatches(pending.completed, committed)
+    const next = this.reduceAfterMiddleware(state, committed, recorded.seq)
+    await this.reachCrashPoint('after_node_after_middleware_event')
+    return next
+  }
+
+  private reduceAfterMiddleware(
+    state: RunStateV3,
+    payload: AfterMiddlewarePayload,
+    checkpointSeq: number
+  ): RunStateV3 {
+    let next = state
+    if (!isTerminal(next)) {
+      next = this.applyCommands(next, payload.commands)
+      const outcome = payload.outcome ?? this.commandOutcome(payload.commands)
+      if (outcome) next = this.withOutcome(next, outcome)
+    }
+    return {
+      ...next,
+      cursor: {
+        ...next.cursor,
+        checkpointSeq: Math.max(next.cursor.checkpointSeq, checkpointSeq)
+      },
+      updatedAt: this.options.nowIso()
+    }
   }
 
   private reduceCompletedNode(
@@ -431,7 +550,10 @@ export class RuntimeKernel {
     if (payload.outcome) {
       return {
         ...this.withOutcome(next, payload.outcome),
-        cursor: { ...next.cursor, checkpointSeq },
+        cursor: {
+          ...next.cursor,
+          checkpointSeq: Math.max(next.cursor.checkpointSeq, checkpointSeq)
+        },
         updatedAt: this.options.nowIso()
       }
     }
@@ -449,7 +571,7 @@ export class RuntimeKernel {
         stepIndex: next.cursor.stepIndex + 1,
         nodeId: edge.to,
         attempt: edge.loop ? next.cursor.attempt + 1 : 0,
-        checkpointSeq
+        checkpointSeq: Math.max(next.cursor.checkpointSeq, checkpointSeq)
       },
       updatedAt: this.options.nowIso()
     }
@@ -470,18 +592,21 @@ export class RuntimeKernel {
     commands: readonly MiddlewareCommand[] | undefined
   ): RunStateV3 {
     let next = state
+    let processedUsageIds: Set<string> | undefined
     for (const command of commands ?? []) {
       if (command.type === 'set-middleware-state') {
         next = {
           ...next,
           middleware: { ...next.middleware, [command.id]: command.state }
         }
+        if (command.id === 'budget-accounting') processedUsageIds = undefined
       }
       if (command.type === 'set-budget') {
         next = { ...next, budgets: { ...next.budgets, [command.key]: command.value } }
       }
       if (command.type === 'add-budget') {
-        next = addBudget(next, command)
+        processedUsageIds ??= budgetUsageIdSet(next)
+        next = addBudget(next, command, processedUsageIds)
       }
       if (command.type === 'set-node-data') {
         next = { ...next, nodeData: { ...next.nodeData, [command.nodeId]: command.value } }
@@ -569,6 +694,15 @@ export class RuntimeKernel {
       timestamp: this.options.nowIso()
     })
   }
+
+  private async reachCrashPoint(point: RuntimeKernelCrashPoint): Promise<void> {
+    if (!this.options.crashPoint) return
+    try {
+      await this.options.crashPoint(point)
+    } catch (error) {
+      throw new RuntimeKernelCrash(error)
+    }
+  }
 }
 
 const identityFields = [
@@ -654,11 +788,40 @@ function parseCompletedNodePayload(value: unknown): CompletedNodePayload {
   return record as CompletedNodePayload
 }
 
+function parseAfterMiddlewarePayload(value: unknown): AfterMiddlewarePayload {
+  if (!value || typeof value !== 'object') throw new Error('invalid node.after_middleware payload')
+  const record = value as Record<string, unknown>
+  if (typeof record.nodeId !== 'string' || !record.nodeId) {
+    throw new Error('invalid node.after_middleware nodeId')
+  }
+  if (!Number.isInteger(record.stepIndex) || (record.stepIndex as number) < 0) {
+    throw new Error('invalid node.after_middleware stepIndex')
+  }
+  if (!Array.isArray(record.commands)) throw new Error('invalid node.after_middleware commands')
+  return record as AfterMiddlewarePayload
+}
+
+function assertAfterMiddlewareMatches(
+  completed: CompletedNodePayload,
+  after: AfterMiddlewarePayload
+): void {
+  if (after.nodeId !== completed.nodeId || after.stepIndex !== completed.stepIndex) {
+    throw new Error('node.after_middleware does not match node.completed')
+  }
+}
+
 function canonicalizeFacts(facts: Record<string, unknown>): Record<string, unknown> {
-  const serialized = JSON.stringify(facts)
+  return canonicalizeJsonObject(facts, 'runtime node facts')
+}
+
+function canonicalizeJsonObject(
+  value: Record<string, unknown>,
+  label: string
+): Record<string, unknown> {
+  const serialized = JSON.stringify(value)
   const canonical = serialized === undefined ? {} : JSON.parse(serialized) as unknown
   if (!canonical || typeof canonical !== 'object' || Array.isArray(canonical)) {
-    throw new Error('runtime node facts must serialize to a JSON object')
+    throw new Error(`${label} must serialize to a JSON object`)
   }
   return canonical as Record<string, unknown>
 }
@@ -673,7 +836,8 @@ const budgetKeys = [
 
 function addBudget(
   state: RunStateV3,
-  command: Extract<MiddlewareCommand, { type: 'add-budget' }>
+  command: Extract<MiddlewareCommand, { type: 'add-budget' }>,
+  processedUsageIds: Set<string>
 ): RunStateV3 {
   validateBudgetDelta(command.delta)
   if (
@@ -682,15 +846,19 @@ function addBudget(
   ) {
     throw new Error('invalid budget usage id')
   }
-  const processedUsageIds = budgetUsageIds(state)
-  if (command.usageId && processedUsageIds.includes(command.usageId)) return state
+  if (command.usageId && processedUsageIds.has(command.usageId)) return state
 
   const budgets = { ...state.budgets }
   for (const key of budgetKeys) {
     budgets[key] += command.delta[key] ?? 0
-    if (!Number.isFinite(budgets[key])) throw new Error(`budget overflow: ${key}`)
+    if (key === 'costUsd') {
+      if (!Number.isFinite(budgets[key])) throw new Error(`budget overflow: ${key}`)
+    } else if (!Number.isSafeInteger(budgets[key])) {
+      throw new Error(`unsafe budget total: ${key}`)
+    }
   }
   if (!command.usageId) return { ...state, budgets }
+  processedUsageIds.add(command.usageId)
 
   return {
     ...state,
@@ -699,7 +867,7 @@ function addBudget(
       ...state.middleware,
       'budget-accounting': {
         version: 1,
-        data: { processedUsageIds: [...processedUsageIds, command.usageId] }
+        data: { processedUsageIds: [...processedUsageIds].sort() }
       }
     }
   }
@@ -716,15 +884,15 @@ function validateBudgetDelta(delta: unknown): asserts delta is Partial<RunStateV
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
       throw new Error(`invalid budget delta: ${key}`)
     }
-    if (key !== 'costUsd' && !Number.isInteger(value)) {
+    if (key !== 'costUsd' && !Number.isSafeInteger(value)) {
       throw new Error(`invalid budget delta: ${key}`)
     }
   }
 }
 
-function budgetUsageIds(state: RunStateV3): string[] {
+function budgetUsageIdSet(state: RunStateV3): Set<string> {
   const accounting = state.middleware['budget-accounting']
-  if (!accounting) return []
+  if (!accounting) return new Set()
   if (accounting.version !== 1) {
     throw new Error(`unsupported budget-accounting middleware version: ${accounting.version}`)
   }
@@ -736,5 +904,5 @@ function budgetUsageIds(state: RunStateV3): string[] {
   if (!ids.every((id) => typeof id === 'string' && id.length > 0)) {
     throw new Error('invalid budget-accounting usage ids')
   }
-  return ids as string[]
+  return new Set(ids as string[])
 }

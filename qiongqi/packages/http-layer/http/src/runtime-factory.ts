@@ -1204,17 +1204,15 @@ export function createKernelV3TurnRunner(input: {
   const proposalRunner = new ModelProposalRunner({
     client: input.modelClient,
     endpointFormat: options.endpointFormat,
-    onDelta: async (chunk, request) => {
-      // Proposal text remains quarantined until evaluate/commit-assistant.
-      if (chunk.kind !== 'usage') return
+    onUsage: async (snapshot, request) => {
       const thread = await core.threadStore.get(request.threadId)
       promptBuilder.recordPromptPressure({
         ownerUserId: thread?.ownerUserId ?? 'local-default-owner',
         workspaceKey: thread?.workspace ?? options.dataDir,
         threadId: request.threadId,
         turnId: request.turnId
-      }, request.model, chunk.usage.promptTokens)
-      const usage = core.usageService.record(request.threadId, chunk.usage)
+      }, request.model, snapshot.promptTokens)
+      const usage = core.usageService.record(request.threadId, snapshot)
       await core.events.record({
         kind: 'usage',
         threadId: request.threadId,

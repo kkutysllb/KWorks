@@ -7,6 +7,10 @@ export type ModelProposalRunnerOptions = {
   provider?: string
   endpointFormat?: 'chat_completions' | 'responses' | 'messages'
   onDelta?: (chunk: ModelStreamChunk, request: ModelRequest) => Promise<void> | void
+  onUsage?: (
+    usage: Extract<ModelStreamChunk, { kind: 'usage' }>['usage'],
+    request: ModelRequest
+  ) => Promise<void> | void
 }
 
 export class ModelProposalRunner {
@@ -20,6 +24,7 @@ export class ModelProposalRunner {
       if (chunk.kind === 'usage') usage = chunk.usage
       await this.options.onDelta?.(chunk, request)
     }
+    if (usage) await this.options.onUsage?.(usage, request)
     const completion = await normalizeModelCompletion(chunks, {
       provider: this.options.provider ?? this.options.client.provider,
       model: this.options.client.model,

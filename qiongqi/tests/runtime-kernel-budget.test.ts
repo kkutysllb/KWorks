@@ -13,6 +13,7 @@ import {
   RuntimeKernel,
   budgetMiddleware,
   createKernelV3NodeHandlers,
+  digestValue,
   type ExecutionGraph,
   type MiddlewareCommand,
   type RuntimeMiddleware
@@ -356,6 +357,88 @@ describe('RuntimeKernel budget accounting', () => {
     expect((await snapshots.load(identity))?.budgets.costUsd).toBeCloseTo(0.3)
   })
 
+  it('persists one processed usage id for a large tool proposal batch', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const calls = Array.from({ length: 200 }, (_, index) => ({
+      callId: `call-${index}`,
+      toolName: 'read_data',
+      arguments: {}
+    }))
+    const proposal = {
+      proposalId: 'proposal-large-processed-batch',
+      model: 'test-model',
+      stopClass: 'tool_calls' as const,
+      integrity: {
+        leakedProtocolText: false,
+        malformedToolCall: false,
+        completeToolCalls: true
+      },
+      text: '',
+      reasoning: '',
+      toolIntents: calls
+    }
+    const task = {
+      version: 1 as const,
+      identity,
+      revision: 1,
+      source: {
+        objectiveItemId: 'user-1',
+        sourceItemIds: ['user-1'],
+        sourceDigest: 'source-1'
+      },
+      objective: 'finish',
+      constraints: [],
+      completedActions: [],
+      pendingActions: [{ id: 'next-1', text: 'finish', status: 'pending' as const, evidenceItemIds: [] }],
+      activeSkillIds: [],
+      artifacts: [],
+      toolLedger: [],
+      createdAt: 'now',
+      updatedAt: 'now'
+    }
+    await snapshots.save(state({
+      graphVersion: 'large-tool-batch-v1',
+      cursor: { stepIndex: 0, nodeId: 'prepare-tools', attempt: 0, checkpointSeq: 0 },
+      nodeData: { 'normalize-proposal': proposal, 'restore-task': task }
+    }))
+    const handlers = createKernelV3NodeHandlers({
+      turns: { applyItemOnce: async () => true }
+    } as never)
+    const batchGraph: ExecutionGraph = {
+      version: 'large-tool-batch-v1',
+      startNodeId: 'prepare-tools',
+      predicates: ['next'],
+      nodes: [
+        { id: 'prepare-tools', kind: 'prepare-tools', effect: 'state', checkpoint: 'both' },
+        { id: 'complete', kind: 'complete', effect: 'state', terminal: true, checkpoint: 'both' }
+      ],
+      edges: [{ from: 'prepare-tools', to: 'complete', when: 'next' }]
+    }
+    const kernel = new RuntimeKernel({
+      graph: batchGraph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'large-tool-batch',
+      nodes: { 'prepare-tools': handlers['prepare-tools']!, complete }
+    })
+
+    await kernel.run(identity)
+
+    const persisted = await snapshots.load(identity)
+    expect(persisted?.budgets.toolCallsUsed).toBe(200)
+    expect(persisted?.middleware['budget-accounting']).toEqual({
+      version: 1,
+      data: {
+        processedUsageIds: [`tools:${digestValue({
+          proposalId: proposal.proposalId,
+          callIds: calls.map((call) => call.callId)
+        })}`]
+      }
+    })
+  })
+
   it('applies a no-usage-id command once when replaying its completed event', async () => {
     const snapshots = new InMemoryRunStateStore()
     const events = new InMemoryRunEventStore()
@@ -396,7 +479,8 @@ describe('RuntimeKernel budget accounting', () => {
   it.each([
     { stepsUsed: -1 },
     { inputTokens: Number.NaN },
-    { costUsd: Number.POSITIVE_INFINITY }
+    { costUsd: Number.POSITIVE_INFINITY },
+    { stepsUsed: Number.MAX_SAFE_INTEGER + 1 }
   ] as Array<Partial<BudgetState>>)('rejects invalid delta $stepsUsed$inputTokens$costUsd', async (delta) => {
     const snapshots = new InMemoryRunStateStore()
     const events = new InMemoryRunEventStore()
@@ -420,6 +504,37 @@ describe('RuntimeKernel budget accounting', () => {
       reason: 'runtime_error'
     })
     expect((await snapshots.load(identity))?.budgets).toEqual(zeroBudget)
+    expect((await events.listAfter(identity, 0)).filter(
+      (event) => event.eventType === 'node.completed'
+    )).toEqual([])
+  })
+
+  it('rejects an unsafe accumulated integer before persistence', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    await snapshots.save(state({
+      cursor: { stepIndex: 0, nodeId: 'count', attempt: 0, checkpointSeq: 0 },
+      budgets: { ...zeroBudget, stepsUsed: Number.MAX_SAFE_INTEGER }
+    }))
+    const kernel = new RuntimeKernel({
+      graph: graph(['count', 'complete']),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'budget-test',
+      nodes: {
+        count: () => ({
+          condition: 'next',
+          commands: [{ type: 'add-budget', delta: { stepsUsed: 1 } }]
+        }),
+        complete
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'runtime_error'
+    })
     expect((await events.listAfter(identity, 0)).filter(
       (event) => event.eventType === 'node.completed'
     )).toEqual([])
@@ -503,6 +618,7 @@ describe('RuntimeKernel committed node facts', () => {
 
   it('passes the same JSON-canonical committed facts during normal run and replay', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'qiongqi-kernel-facts-'))
+    const replayRootDir = await mkdtemp(join(tmpdir(), 'qiongqi-kernel-facts-replay-'))
     const events = new FileRunEventStore(rootDir)
     const originalFacts = {
       proposalClass: 'final_text',
@@ -527,17 +643,22 @@ describe('RuntimeKernel committed node facts', () => {
       })
 
       await normalKernel.run(identity)
-      const committed = (await events.listAfter(identity, 0)).find(
+      const normalEvents = await events.listAfter(identity, 0)
+      const committed = normalEvents.find(
         (event) => event.eventType === 'node.completed' && event.stepId === 'count'
       )?.payload as { facts?: unknown }
 
       const replaySeen: unknown[] = []
       const replaySnapshots = new InMemoryRunStateStore()
+      const replayEvents = new FileRunEventStore(replayRootDir)
+      for (const event of normalEvents.filter((event) => event.seq <= 2)) {
+        await replayEvents.append(event)
+      }
       await replaySnapshots.save(state())
       const replayKernel = new RuntimeKernel({
         graph: graph(['count', 'complete']),
         snapshots: replaySnapshots,
-        events,
+        events: replayEvents,
         leases: replaySnapshots,
         holderId: 'facts-replay',
         middleware: factsMiddleware(replaySeen),
@@ -558,6 +679,7 @@ describe('RuntimeKernel committed node facts', () => {
       expect(replaySeen).toEqual([committed.facts])
     } finally {
       await rm(rootDir, { recursive: true, force: true })
+      await rm(replayRootDir, { recursive: true, force: true })
     }
   })
 })
@@ -575,14 +697,14 @@ function factsMiddleware(seen: unknown[]): MiddlewareChain {
 }
 
 describe('budgetMiddleware', () => {
-  it('returns a compatible structured outcome for the tool-call cap', async () => {
+  it('returns a compatible structured outcome when already over the tool-call cap', async () => {
     const result = await new MiddlewareChain([
       budgetMiddleware({ maxToolCalls: 2 })
     ]).run('beforeNode', {
       identity,
       state: state({
         cursor: { stepIndex: 0, nodeId: 'count', attempt: 0, checkpointSeq: 0 },
-        budgets: { ...zeroBudget, toolCallsUsed: 2 }
+        budgets: { ...zeroBudget, toolCallsUsed: 3 }
       }),
       hook: 'beforeNode',
       commands: []
@@ -592,8 +714,104 @@ describe('budgetMiddleware', () => {
       type: 'terminate',
       outcome: {
         reason: 'step_capped',
-        details: { code: 'tool_call_cap', maxToolCalls: 2, toolCallsUsed: 2 }
+        details: { code: 'tool_call_cap', maxToolCalls: 2, toolCallsUsed: 3 }
       }
     })
+  })
+
+  it.each([
+    { label: 'below', current: 1, pending: 1, max: 3, status: 'completed', items: 1 },
+    { label: 'equal', current: 1, pending: 2, max: 3, status: 'completed', items: 2 },
+    { label: 'above', current: 2, pending: 2, max: 3, status: 'degraded', items: 0 }
+  ])('enforces a $label prospective tool batch before materialization', async ({
+    current,
+    pending,
+    max,
+    status,
+    items
+  }) => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const applied: string[] = []
+    let commits = 0
+    const proposal = {
+      proposalId: `proposal-cap-${current}-${pending}`,
+      model: 'test-model',
+      stopClass: 'tool_calls' as const,
+      integrity: {
+        leakedProtocolText: false,
+        malformedToolCall: false,
+        completeToolCalls: true
+      },
+      text: '',
+      reasoning: '',
+      toolIntents: Array.from({ length: pending }, (_, index) => ({
+        callId: `call-${index}`,
+        toolName: 'read_data',
+        arguments: {}
+      }))
+    }
+    const task = {
+      version: 1 as const,
+      identity,
+      revision: 1,
+      source: {
+        objectiveItemId: 'user-1',
+        sourceItemIds: ['user-1'],
+        sourceDigest: 'source-1'
+      },
+      objective: 'finish',
+      constraints: [],
+      completedActions: [],
+      pendingActions: [{ id: 'next-1', text: 'finish', status: 'pending' as const, evidenceItemIds: [] }],
+      activeSkillIds: [],
+      artifacts: [],
+      toolLedger: [],
+      createdAt: 'now',
+      updatedAt: 'now'
+    }
+    await snapshots.save(state({
+      graphVersion: 'tool-cap-v1',
+      cursor: { stepIndex: 0, nodeId: 'prepare-tools', attempt: 0, checkpointSeq: 0 },
+      budgets: { ...zeroBudget, toolCallsUsed: current },
+      nodeData: { 'normalize-proposal': proposal, 'restore-task': task }
+    }))
+    const handlers = createKernelV3NodeHandlers({
+      turns: {
+        applyItemOnce: async (_threadId: string, item: { id: string }) => {
+          applied.push(item.id)
+          return true
+        }
+      }
+    } as never)
+    const capGraph: ExecutionGraph = {
+      version: 'tool-cap-v1',
+      startNodeId: 'prepare-tools',
+      predicates: ['next'],
+      nodes: [
+        { id: 'prepare-tools', kind: 'prepare-tools', effect: 'state', checkpoint: 'both' },
+        { id: 'commit-tools', kind: 'commit-tools', effect: 'tool', terminal: true, checkpoint: 'both' }
+      ],
+      edges: [{ from: 'prepare-tools', to: 'commit-tools', when: 'next' }]
+    }
+    const kernel = new RuntimeKernel({
+      graph: capGraph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'tool-cap',
+      middleware: new MiddlewareChain([budgetMiddleware({ maxToolCalls: max })]),
+      nodes: {
+        'prepare-tools': handlers['prepare-tools']!,
+        'commit-tools': () => {
+          commits += 1
+          return complete()
+        }
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status })
+    expect(applied).toHaveLength(items)
+    expect(commits).toBe(status === 'completed' ? 1 : 0)
   })
 })

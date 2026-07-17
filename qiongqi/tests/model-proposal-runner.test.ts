@@ -49,6 +49,41 @@ describe('ModelProposalRunner usage', () => {
     expect(seen).toEqual(['assistant_text_delta', 'usage', 'usage', 'completed'])
   })
 
+  it('notifies accounting observers once with the latest usage after streaming', async () => {
+    const first = usage(10, 2)
+    const latest = usage(10, 5)
+    const order: string[] = []
+    const recorded: UsageSnapshot[] = []
+    const client: ModelClient = {
+      provider: 'test-provider',
+      model: 'test-model',
+      async *stream() {
+        yield { kind: 'usage', usage: first }
+        yield { kind: 'assistant_text_delta', text: 'done' }
+        yield { kind: 'usage', usage: latest }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+
+    await new ModelProposalRunner({
+      client,
+      onDelta: (chunk) => order.push(`delta:${chunk.kind}`),
+      onUsage: (snapshot) => {
+        order.push('usage:final')
+        recorded.push(snapshot)
+      }
+    } as never).run(request)
+
+    expect(recorded).toEqual([latest])
+    expect(order).toEqual([
+      'delta:usage',
+      'delta:assistant_text_delta',
+      'delta:usage',
+      'delta:completed',
+      'usage:final'
+    ])
+  })
+
   it('leaves usage undefined when the provider emits no usage snapshot', async () => {
     const client: ModelClient = {
       provider: 'test-provider',

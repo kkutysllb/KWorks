@@ -441,6 +441,63 @@ describe('production kernel graph migration', () => {
       .map((event) => event.stepId)).toEqual(['account-model', 'prepare-tools'])
   })
 
+  it('re-enters prepare-tools for a v2 commit-tools snapshot to account prepared calls', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const proposal = modelProposal({
+      proposalId: 'proposal-v2-prepared-tools',
+      toolIntents: [
+        { callId: 'call-1', toolName: 'read_data', arguments: {} },
+        { callId: 'call-2', toolName: 'read_data', arguments: {} }
+      ]
+    })
+    await snapshots.save({
+      ...oldState('commit-tools', proposal),
+      graphVersion: 'kernel-v3-production-v2',
+      nodeData: {
+        ...oldState('commit-tools', proposal).nodeData,
+        'prepare-tools': { calls: proposal.toolIntents }
+      }
+    })
+    const persistedItems = new Set<string>()
+    const handlers = createKernelV3NodeHandlers({
+      turns: {
+        applyItemOnce: async (_threadId: string, item: TurnItem) => {
+          persistedItems.add(item.id)
+          return true
+        }
+      }
+    } as never)
+    const kernel = new RuntimeKernel({
+      graph: productionKernelV3Graph(),
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'migration-test',
+      nodes: {
+        'account-model': handlers['account-model']!,
+        'prepare-tools': handlers['prepare-tools']!,
+        'commit-tools': () => completeOutcome()
+      }
+    })
+
+    await expect(kernel.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    await expect(snapshots.load(identity)).resolves.toMatchObject({
+      budgets: { stepsUsed: 1, toolCallsUsed: 2 }
+    })
+    expect(persistedItems).toEqual(new Set([
+      `item_tool_${identity.turnId}_call-1`,
+      `item_tool_${identity.turnId}_call-2`
+    ]))
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual([
+      'account-model',
+      'prepare-tools',
+      'commit-tools'
+    ])
+  })
+
   it('resumes an exact v1 recovery cursor after accounting without re-evaluation', async () => {
     const snapshots = new InMemoryRunStateStore()
     const events = new InMemoryRunEventStore()

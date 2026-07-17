@@ -379,16 +379,22 @@ export function createKernelV3NodeHandlers(
           status: 'running'
         }))
       }
+      const unledgeredCallIds = calls
+        .filter((call) => !ledgerCallIds.has(call.callId))
+        .map((call) => call.callId)
       return {
         condition: 'next',
         value: { calls },
-        commands: calls
-          .filter((call) => !ledgerCallIds.has(call.callId))
-          .map((call) => ({
-            type: 'add-budget' as const,
-            usageId: `tool:${proposal.proposalId}:${call.callId}`,
-            delta: { toolCallsUsed: 1 }
-          }))
+        commands: unledgeredCallIds.length > 0
+          ? [{
+              type: 'add-budget' as const,
+              usageId: `tools:${digestValue({
+                proposalId: proposal.proposalId,
+                callIds: unledgeredCallIds
+              })}`,
+              delta: { toolCallsUsed: unledgeredCallIds.length }
+            }]
+          : []
       }
     },
 

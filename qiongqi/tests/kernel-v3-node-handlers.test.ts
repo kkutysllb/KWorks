@@ -5,6 +5,7 @@ import { makeToolResultItem, makeUserItem } from '@qiongqi/domain'
 import {
   RuntimeKernel,
   createKernelV3NodeHandlers,
+  digestValue,
   productionKernelV3Graph
 } from '@qiongqi/loop'
 
@@ -266,12 +267,46 @@ describe('Kernel v3 production node handlers', () => {
 
     expect(result?.commands).toEqual([{
       type: 'add-budget',
-      usageId: 'tool:proposal-tools:call-2',
+      usageId: `tools:${digestValue({
+        proposalId: 'proposal-tools',
+        callIds: ['call-2']
+      })}`,
       delta: { toolCallsUsed: 1 }
     }])
     expect(result?.commands).not.toContainEqual(expect.objectContaining({
       arguments: expect.anything()
     }))
+  })
+
+  it('uses one stable accounting command for a large ordered tool batch', async () => {
+    const harness = await createHarness([])
+    const calls = Array.from({ length: 200 }, (_, index) => ({
+      callId: `call-${index}`,
+      toolName: 'read_data',
+      arguments: { index }
+    }))
+    const normalized = proposal({
+      proposalId: 'proposal-large-batch',
+      stopClass: 'tool_calls',
+      text: '',
+      toolIntents: calls
+    })
+
+    const result = await harness.handlers['prepare-tools']?.({
+      identity,
+      state: {
+        nodeData: { 'normalize-proposal': normalized, 'restore-task': task() }
+      }
+    } as never)
+
+    expect(result?.commands).toEqual([{
+      type: 'add-budget',
+      usageId: `tools:${digestValue({
+        proposalId: 'proposal-large-batch',
+        callIds: calls.map((call) => call.callId)
+      })}`,
+      delta: { toolCallsUsed: 200 }
+    }])
   })
 })
 
