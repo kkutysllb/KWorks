@@ -60,6 +60,8 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                 stocks[net_col] = pd.to_numeric(stocks[net_col], errors="coerce")
                 in_count = int((stocks[net_col] > 0).sum())
                 out_count = int((stocks[net_col] < 0).sum())
+                # Tushare moneyflow returns net_amount in 万元; convert to 元 for yi()
+                stocks[net_col] = stocks[net_col] * 1e4
                 stock_cols = [c for c in ("ts_code", "name", net_col) if c in stocks.columns]
                 top_in = (
                     stocks[stocks[net_col] > 0]
@@ -95,7 +97,7 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                 # Tushare moneyflow returns net_amount in 万元 (10k yuan).
                 total_net_wan = float(sector_df[sector_net_col].sum())
                 total_net_yi = total_net_wan / 1e4  # 万 → 亿
-                detail["total_net"] = total_net_wan
+                detail["total_net"] = total_net_wan * 1e4  # 万元 → 元
                 detail["total_net_yi"] = total_net_yi
                 if total_net_yi > 0:
                     flow_label = "流入"
@@ -107,6 +109,8 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                     f"全市场主力资金净{flow_label} "
                     f"{total_net_yi:+.1f}亿，净流入个股 {detail.get('in_count', '?')} vs 净流出 {detail.get('out_count', '?')}"
                 )
+                # Tushare moneyflow_dc returns net_amount in 万元; convert to 元 for yi()
+                sector_df[sector_net_col] = sector_df[sector_net_col] * 1e4
                 sector_cols = [c for c in (name_col, sector_net_col) if c]
                 top_sec_in = (
                     sector_df[sector_df[sector_net_col] > 0]
@@ -122,10 +126,10 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                 detail["top_sectors_out"] = top_sec_out.to_dict("records")
 
         # ----- 评分 -----
-        # total_net is in 万元 from Tushare moneyflow.
-        # Thresholds: 50亿 = 5_000_000万, 10亿 = 1_000_000万
+        # total_net is now in 元 (converted from 万元 before storing in detail).
+        # total_net_yi is the preferred field for scoring (already in 亿).
         total_net = detail.get("total_net", 0.0)
-        total_net_yi = detail.get("total_net_yi", total_net / 1e4 if total_net else 0)
+        total_net_yi = detail.get("total_net_yi", total_net / 1e8 if total_net else 0)
         score = 50
         if total_net_yi > 50:
             score = 75; res["bias"] = "bullish"

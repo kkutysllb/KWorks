@@ -79,13 +79,13 @@ class NorthboundAnalyzer(BaseAnalyzer):
 
         detail = {
             "trade_date": latest["trade_date"].strftime("%Y%m%d"),
-            "latest_net": latest_net,
-            # Tushare moneyflow_hsgt returns north_money in 万元 (10k yuan),
-            # not yuan. Convert to 亿 (100M yuan) by dividing by 1e4.
+            # Tushare moneyflow_hsgt returns values in 万元 (10k yuan);
+            # store in 元 so yi() formatter (元→亿) works correctly.
+            "latest_net": latest_net * 1e4,
             "latest_net_yi": latest_net / 1e4,
-            "latest_sh": float(latest[sh_col]) / 1e4 if sh_col else None,
-            "latest_sz": float(latest[sz_col]) / 1e4 if sz_col else None,
-            "cum_net": cum_net,
+            "latest_sh": float(latest[sh_col]) * 1e4 if sh_col else None,
+            "latest_sz": float(latest[sz_col]) * 1e4 if sz_col else None,
+            "cum_net": cum_net * 1e4,
             "cum_net_yi": cum_net / 1e4,
             "net_positive_days": net_positive_days,
             "total_days": len(df),
@@ -103,7 +103,7 @@ class NorthboundAnalyzer(BaseAnalyzer):
                 detail["top10"] = top.to_dict("records")
 
         # 信号评分
-        # NOTE: latest_net and cum_net are in 万元 from Tushare moneyflow_hsgt.
+        # latest_net and cum_net local vars are in 万元 (from Tushare moneyflow_hsgt).
         # NORTH_STRONG_IN/OUT are in 亿. Convert: 1亿 = 10000万.
         score = 50
         signals = []
@@ -136,7 +136,7 @@ class NorthboundAnalyzer(BaseAnalyzer):
         res["score"] = score
         res["bias"] = "bullish" if score > 55 else ("bearish" if score < 45 else "neutral")
         res["summary"] = (
-            f"北向资金{streak_sign} {yi(latest_net)}（{len(df)}日累计 {yi(cum_net)}），"
+            f"北向资金{streak_sign} {latest_net_yi:+.1f}亿（{len(df)}日累计 {cum_net_yi:+.1f}亿），"
             f"连续 {streak} 日，信号 {signal_cn(cum_net)}"
         )
         res["detail"] = detail

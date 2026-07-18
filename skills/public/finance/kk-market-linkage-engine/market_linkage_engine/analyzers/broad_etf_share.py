@@ -20,7 +20,7 @@ from typing import Dict, Any, Optional, List
 import pandas as pd
 
 from .base import BaseAnalyzer
-from ..utils import wan, pct_str, md_table
+from ..utils import pct_str, md_table
 from ..config import BROAD_ETFS, DATA_SOURCE_TUSHARE
 
 
@@ -136,8 +136,9 @@ class BroadETFShareAnalyzer(BaseAnalyzer):
                 continue
             rows.append({
                 "ETF": e["etf_name"],
-                "最新份额": wan(e.get("latest_share", 0)),
-                "份额变化": wan(e.get("share_chg", 0)),
+                # Tushare fund_share returns fd_share in 万份; convert to 亿份 for display
+                "最新份额": f"{e.get('latest_share', 0) / 1e4:.2f}亿份",
+                "份额变化": f"{e.get('share_chg', 0) / 1e4:.2f}亿份",
                 "变化率": pct_str(e.get("share_chg_pct", 0)),
                 "价格涨跌": pct_str(e.get("price_chg") or 0),
                 "背离/同步": e.get("divergence", ""),
