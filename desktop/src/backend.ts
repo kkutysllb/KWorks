@@ -608,7 +608,7 @@ export class BackendManager extends EventEmitter {
 
   private ensureDataDirs(): void {
     const home = getKworksHome();
-    const subdirs = ["", "logs", "data", "threads", "agents"];
+    const subdirs = ["", "logs"];
     for (const sub of subdirs) {
       const dir = join(home, sub);
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
