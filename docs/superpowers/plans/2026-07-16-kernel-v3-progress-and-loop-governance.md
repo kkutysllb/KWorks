@@ -1,6 +1,6 @@
 # Kernel v3 Progress and Loop Governance Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Persist and display provider reasoning or engine progress while preventing tool and compaction storms through run-scoped budgets, progress projection, and multi-signal governance.
 
@@ -63,7 +63,7 @@ Verification and sync files:
 - Modify: `qiongqi/packages/domain-layer/domain/src/item.ts`
 - Test: `qiongqi/tests/kernel-governance-contracts.test.ts`
 
-- [ ] **Step 1: Write the failing contract tests**
+- [x] **Step 1: Write the failing contract tests**
 
 ```ts
 it('parses runtime progress, proposal usage, and tool observations', () => {
@@ -82,13 +82,13 @@ it('accepts context capacity as a structured terminal reason', () => {
 })
 ```
 
-- [ ] **Step 2: Run the contract test and verify RED**
+- [x] **Step 2: Run the contract test and verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-governance-contracts.test.ts`
 
 Expected: FAIL because the schemas and `makeRuntimeProgressItem` do not exist.
 
-- [ ] **Step 3: Add the minimal contracts and constructor**
+- [x] **Step 3: Add the minimal contracts and constructor**
 
 Add these shapes, using strict Zod objects and exports through existing barrel files:
 
@@ -129,13 +129,13 @@ semantic?: {
 }
 ```
 
-- [ ] **Step 4: Run contracts and typecheck**
+- [x] **Step 4: Run contracts and typecheck**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-governance-contracts.test.ts tests/contracts.test.ts && pnpm --dir qiongqi typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the contract slice**
+- [x] **Step 5: Commit the contract slice**
 
 ```bash
 git add qiongqi/packages/foundation qiongqi/packages/ports-layer qiongqi/packages/domain-layer qiongqi/tests/kernel-governance-contracts.test.ts
@@ -152,7 +152,7 @@ git commit -m "feat(kernel): add governance contracts"
 - Test: `qiongqi/tests/kernel-v3-node-handlers.test.ts`
 - Test: `qiongqi/tests/proposal-materializer.test.ts`
 
-- [ ] **Step 1: Add RED tests for ordering, quarantine, and replay**
+- [x] **Step 1: Add RED tests for ordering, quarantine, and replay**
 
 ```ts
 it('commits reasoning and text before a valid tool proposal executes', async () => {
@@ -175,13 +175,13 @@ it.each(['leakedProtocolText', 'malformedToolCall'] as const)(
 )
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/proposal-materializer.test.ts tests/kernel-v3-node-handlers.test.ts`
 
 Expected: FAIL because tool proposals still go directly to `prepare-tools`.
 
-- [ ] **Step 3: Implement deterministic materialization**
+- [x] **Step 3: Implement deterministic materialization**
 
 Create a pure validator and an idempotent commit helper:
 
@@ -196,13 +196,13 @@ export function materializableProposal(proposal: ModelProposal) {
 
 Add a non-terminal `materialize-proposal` node between `evaluate(tools)` and `prepare-tools`. Reuse deterministic ids `item_kernel_reasoning_${proposalId}` and `item_kernel_text_${proposalId}`. Keep recovery/fatal branches quarantined and leave `materialize-final` terminal.
 
-- [ ] **Step 4: Verify ordering and existing recovery behavior**
+- [x] **Step 4: Verify ordering and existing recovery behavior**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/proposal-materializer.test.ts tests/kernel-v3-node-handlers.test.ts tests/task-context-recovery.test.ts`
 
 Expected: PASS; node sequence includes `materialize-proposal` before `prepare-tools`.
 
-- [ ] **Step 5: Commit proposal materialization**
+- [x] **Step 5: Commit proposal materialization**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/tests/proposal-materializer.test.ts qiongqi/tests/kernel-v3-node-handlers.test.ts
@@ -221,7 +221,7 @@ git commit -m "fix(kernel): preserve reasoning across tool proposals"
 - Create: `qiongqi/tests/model-proposal-runner.test.ts`
 - Test: `qiongqi/tests/runtime-kernel-budget.test.ts`
 
-- [ ] **Step 1: Write RED tests for aggregate usage and replay-safe counters**
+- [x] **Step 1: Write RED tests for aggregate usage and replay-safe counters**
 
 ```ts
 it('aggregates the last provider usage into the proposal', async () => {
@@ -238,13 +238,13 @@ it('counts model decisions once and each logical tool call once', async () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/model-proposal-runner.test.ts tests/runtime-kernel-budget.test.ts`
 
 Expected: FAIL with absent proposal usage and zero persisted budgets.
 
-- [ ] **Step 3: Add atomic budget deltas**
+- [x] **Step 3: Add atomic budget deltas**
 
 Add this command and apply it in RuntimeKernel event reduction:
 
@@ -267,13 +267,13 @@ Extend `RuntimeNodeResult` and the persisted `node.completed` payload with `fact
 
 `prepare-tools` increments `toolCallsUsed` by calls not already present in TaskState ledger. Store processed usage ids in versioned middleware state so event replay is idempotent.
 
-- [ ] **Step 4: Verify budget caps and crash replay**
+- [x] **Step 4: Verify budget caps and crash replay**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/runtime-kernel-budget.test.ts tests/runtime-kernel-crash-recovery.test.ts tests/runtime-middleware-governance.test.ts`
 
 Expected: PASS; replay leaves counters unchanged and configured caps return structured outcomes.
 
-- [ ] **Step 5: Commit budget accounting**
+- [x] **Step 5: Commit budget accounting**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/tests/model-proposal-runner.test.ts qiongqi/tests/runtime-kernel-budget.test.ts
@@ -290,7 +290,7 @@ git commit -m "feat(kernel): persist logical run budgets"
 - Test: `qiongqi/tests/tool-observation.test.ts`
 - Test: `qiongqi/tests/tool-runtime-v3.test.ts`
 
-- [ ] **Step 1: Write RED tests for canonicalization and replay**
+- [x] **Step 1: Write RED tests for canonicalization and replay**
 
 ```ts
 it('canonicalizes equivalent object key order to one fingerprint', () => {
@@ -307,13 +307,13 @@ it('marks replayed effects without creating a second logical observation', async
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/tool-observation.test.ts tests/tool-runtime-v3.test.ts`
 
 Expected: FAIL because ToolRuntimeV3 returns no observation.
 
-- [ ] **Step 3: Implement semantic observation without command regexes**
+- [x] **Step 3: Implement semantic observation without command regexes**
 
 Use stable recursive key sorting for argument digests. Prefer `ToolHostResult.semantic`; otherwise derive `capabilityClass` from registered tool name, use an empty resource list, and retain exact/result digest protection.
 
@@ -337,13 +337,13 @@ export function observeTool(input: ObserveToolInput): ToolObservation {
 
 Local file/read/write tools return explicit capability and normalized workspace-relative resource keys. Bash remains fallback unless its executor supplies parsed semantic metadata; the governor never parses raw command strings.
 
-- [ ] **Step 4: Verify tool runtime and host tests**
+- [x] **Step 4: Verify tool runtime and host tests**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/tool-observation.test.ts tests/tool-runtime-v3.test.ts tests/builtin-tools.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit structured observations**
+- [x] **Step 5: Commit structured observations**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/packages/adapters/adapter-tools qiongqi/tests/tool-observation.test.ts qiongqi/tests/tool-runtime-v3.test.ts
@@ -360,7 +360,7 @@ git commit -m "feat(kernel): observe tool effects structurally"
 - Test: `qiongqi/tests/task-progress-projector.test.ts`
 - Test: `qiongqi/tests/kernel-v3-node-handlers.test.ts`
 
-- [ ] **Step 1: Write RED tests for strong, weak, and ledger-only progress**
+- [x] **Step 1: Write RED tests for strong, weak, and ledger-only progress**
 
 ```ts
 it('projects todo completion and artifacts as strong progress', () => {
@@ -378,13 +378,13 @@ it('does not treat a ledger-only call as progress', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/task-progress-projector.test.ts`
 
 Expected: FAIL because the projector does not exist.
 
-- [ ] **Step 3: Implement a pure projector plus CAS node**
+- [x] **Step 3: Implement a pure projector plus CAS node**
 
 Return a stable digest that excludes call ids and ledger length:
 
@@ -397,13 +397,13 @@ type ProjectedProgress = {
 
 Map current thread todos by stable id/text, move completed actions, attach observation result item ids as evidence only when resource/result is novel, and merge structured artifact refs. `project-progress` loads current TaskState and todos, calculates the next revision, and commits with existing prepare/commit CAS. On revision conflict, reload once and recompute.
 
-- [ ] **Step 4: Verify projection and graph ordering**
+- [x] **Step 4: Verify projection and graph ordering**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/task-progress-projector.test.ts tests/kernel-v3-node-handlers.test.ts tests/task-state-store.test.ts`
 
 Expected: PASS; graph sequence places `project-progress` after `commit-tools`.
 
-- [ ] **Step 5: Commit task projection**
+- [x] **Step 5: Commit task projection**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/tests/task-progress-projector.test.ts qiongqi/tests/kernel-v3-node-handlers.test.ts
@@ -422,7 +422,7 @@ git commit -m "feat(kernel): project authoritative task progress"
 - Test: `qiongqi/tests/loop-governor.test.ts`
 - Test: `qiongqi/tests/kernel-v3-loop-governance.test.ts`
 
-- [ ] **Step 1: Write RED table tests for every signal**
+- [x] **Step 1: Write RED table tests for every signal**
 
 ```ts
 it.each([
@@ -443,13 +443,13 @@ it('resets windows on strong progress and isolates independent states', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/loop-governor.test.ts tests/kernel-v3-loop-governance.test.ts`
 
 Expected: FAIL because no persisted governor exists.
 
-- [ ] **Step 3: Implement the pure state machine and graph checkpoint**
+- [x] **Step 3: Implement the pure state machine and graph checkpoint**
 
 The transition API must remain deterministic:
 
@@ -462,13 +462,13 @@ export function advanceLoopGovernor(
 
 Persist state using `set-middleware-state`. Add `progress-checkpoint`, which updates the one runtime progress item and injects a structured TaskState checkpoint into the next build-context. Mark `checkpointUsed`; a second checkpoint request becomes `loop_capped` termination.
 
-- [ ] **Step 4: Verify crash recovery, checkpoint once, and isolation**
+- [x] **Step 4: Verify crash recovery, checkpoint once, and isolation**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/loop-governor.test.ts tests/kernel-v3-loop-governance.test.ts tests/runtime-kernel-crash-recovery.test.ts tests/runtime-kernel-isolation.test.ts`
 
 Expected: PASS; snapshot reload retains the governor window.
 
-- [ ] **Step 5: Commit LoopGovernor**
+- [x] **Step 5: Commit LoopGovernor**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/tests/loop-governor.test.ts qiongqi/tests/kernel-v3-loop-governance.test.ts
@@ -487,7 +487,7 @@ git commit -m "feat(kernel): govern tool loops persistently"
 - Test: `qiongqi/tests/context-compactor.test.ts`
 - Test: `qiongqi/tests/compaction-transaction.test.ts`
 
-- [ ] **Step 1: Write RED tests for fixed overhead, savings, cooldown, and lineage**
+- [x] **Step 1: Write RED tests for fixed overhead, savings, cooldown, and lineage**
 
 ```ts
 it('does not compact small history solely because fixed prompt overhead is high', () => {
@@ -507,13 +507,13 @@ it('never compacts a summary-only source', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/compaction-governor.test.ts tests/context-compactor.test.ts tests/compaction-transaction.test.ts`
 
 Expected: FAIL because total provider pressure still dominates planning.
 
-- [ ] **Step 3: Implement pressure breakdown and governed planning**
+- [x] **Step 3: Implement pressure breakdown and governed planning**
 
 Use this pure decision input:
 
@@ -532,13 +532,13 @@ Require `netSaving >= max(1024, compactableHistoryTokens * 0.10)`, at least 2048
 
 If fixed overhead remains over capacity after optional prompt shedding, return `context_capacity_exceeded`; do not issue another compaction plan.
 
-- [ ] **Step 4: Verify compaction transaction and recovery**
+- [x] **Step 4: Verify compaction transaction and recovery**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/compaction-governor.test.ts tests/context-compactor.test.ts tests/compaction-transaction.test.ts tests/task-context-recovery.test.ts`
 
 Expected: PASS; a simulated high fixed overhead produces zero repeated compactions.
 
-- [ ] **Step 5: Commit compaction governance**
+- [x] **Step 5: Commit compaction governance**
 
 ```bash
 git add qiongqi/packages/engine/loop qiongqi/tests/compaction-governor.test.ts qiongqi/tests/context-compactor.test.ts qiongqi/tests/compaction-transaction.test.ts
@@ -556,7 +556,7 @@ git commit -m "fix(kernel): prevent ineffective compaction loops"
 - Test: `qiongqi/tests/task-continuity-production-path.test.ts`
 - Test: `qiongqi/tests/kernel-v3-production-governance.test.ts`
 
-- [ ] **Step 1: Write a RED production-factory test**
+- [x] **Step 1: Write a RED production-factory test**
 
 ```ts
 it('wires persisted governance and commits diagnosis before loop termination', async () => {
@@ -569,13 +569,13 @@ it('wires persisted governance and commits diagnosis before loop termination', a
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-v3-production-governance.test.ts tests/kernel-v3-turn-runner.test.ts`
 
 Expected: FAIL because production runner has no middleware and no progress item.
 
-- [ ] **Step 3: Construct and inject the default chain**
+- [x] **Step 3: Construct and inject the default chain**
 
 Runtime factory constructs a chain with identity, commit integrity, budget, LoopGovernor, terminal response, and observability middleware. `KernelV3TurnRunnerOptions` requires the chain and passes it to RuntimeKernel. Node results expose proposal/usage/observation/progress facts through persisted node data.
 
@@ -591,13 +591,13 @@ await upsertRuntimeProgress({
 
 Set `RunOutcome.userVisibleItemId` to the deterministic progress item id.
 
-- [ ] **Step 4: Verify production path and existing Kernel behavior**
+- [x] **Step 4: Verify production path and existing Kernel behavior**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-v3-production-governance.test.ts tests/kernel-v3-turn-runner.test.ts tests/task-continuity-production-path.test.ts tests/runtime-middleware-governance.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit production wiring**
+- [x] **Step 5: Commit production wiring**
 
 ```bash
 git add qiongqi/packages/http-layer qiongqi/packages/engine/loop qiongqi/tests/kernel-v3-production-governance.test.ts qiongqi/tests/kernel-v3-turn-runner.test.ts qiongqi/tests/task-continuity-production-path.test.ts
@@ -617,7 +617,7 @@ git commit -m "feat(kernel): wire production loop governance"
 - Test: `frontend/tests/unit/core/qiongqi-stream.test.ts`
 - Test: `frontend/tests/unit/components/workspace/message-group-steps.test.tsx`
 
-- [ ] **Step 1: Write RED adapter and rendering tests**
+- [x] **Step 1: Write RED adapter and rendering tests**
 
 ```tsx
 test('keeps runtime progress separate from provider reasoning', () => {
@@ -636,13 +636,13 @@ test('updates one progress item in place from stream events', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `pnpm --dir frontend exec vitest run tests/unit/core/qiongqi-stream.test.ts tests/unit/components/workspace/message-group-steps.test.tsx`
 
 Expected: FAIL because frontend types and renderer do not know `runtime_progress`.
 
-- [ ] **Step 3: Implement typed progress rendering**
+- [x] **Step 3: Implement typed progress rendering**
 
 Map runtime progress to an AI message with `additional_kwargs.qiongqi_runtime_progress`. Extend `convertToSteps()` with:
 
@@ -654,13 +654,13 @@ type CoTProgressStep = GenericCoTStep<'progress'> & {
 
 Render a separate collapsed block using the existing Collapsible primitive, label it `t.toolCalls.runtimeProgress`, and keep reasoning under the existing Reasoning component. Do not place progress text into `reasoning_content`.
 
-- [ ] **Step 4: Verify frontend tests and typecheck**
+- [x] **Step 4: Verify frontend tests and typecheck**
 
 Run: `pnpm --dir frontend exec vitest run tests/unit/core/qiongqi-stream.test.ts tests/unit/components/workspace/message-group-steps.test.tsx tests/unit/core/reasoning-trigger.test.ts && pnpm --dir frontend typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit frontend progress UI**
+- [x] **Step 5: Commit frontend progress UI**
 
 ```bash
 git add frontend/src frontend/tests/unit/core/qiongqi-stream.test.ts frontend/tests/unit/components/workspace/message-group-steps.test.tsx
@@ -676,7 +676,7 @@ git commit -m "feat(ui): distinguish reasoning from runtime progress"
 - Modify: `qiongqi/tests/runtime-kernel-provider-matrix.test.ts`
 - Modify: `qiongqi/tests/provider-compatibility.test.ts`
 
-- [ ] **Step 1: Add a minimized fixture derived from the production sequence**
+- [x] **Step 1: Add a minimized fixture derived from the production sequence**
 
 The fixture contains no user data or API credentials. Retain only normalized frames:
 
@@ -693,7 +693,7 @@ The fixture contains no user data or API credentials. Retain only normalized fra
 }
 ```
 
-- [ ] **Step 2: Write the RED replay assertion**
+- [x] **Step 2: Write the RED replay assertion**
 
 ```ts
 it.each(providerFixtures)('$provider terminates repeated evidence without provider rules', async (fixture) => {
@@ -704,17 +704,17 @@ it.each(providerFixtures)('$provider terminates repeated evidence without provid
 })
 ```
 
-- [ ] **Step 3: Run and diagnose any provider-neutral gaps**
+- [x] **Step 3: Run and diagnose any provider-neutral gaps**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-v3-provider-governance.test.ts tests/runtime-kernel-provider-matrix.test.ts tests/provider-compatibility.test.ts`
 
 Expected before final wiring: FAIL only where a fixture bypasses structured observation; do not add provider-name branches.
 
-- [ ] **Step 4: Close gaps through shared normalization only**
+- [x] **Step 4: Close gaps through shared normalization only**
 
 Any fixture gap must be fixed in `model-protocol-normalizer.ts`, `tool-observation.ts`, or provider-neutral adapter metadata. The implementation must not check `provider === 'minimax'`, `kimi`, `deepseek`, or model names inside LoopGovernor.
 
-- [ ] **Step 5: Re-run and commit fixtures**
+- [x] **Step 5: Re-run and commit fixtures**
 
 Run: `pnpm --dir qiongqi exec vitest run tests/kernel-v3-provider-governance.test.ts tests/runtime-kernel-provider-matrix.test.ts tests/provider-compatibility.test.ts tests/routed-model-compat-client.test.ts`
 
@@ -731,21 +731,21 @@ git commit -m "test(kernel): cover provider-neutral storm governance"
 - Modify: `qiongqi/scripts/verify-core-sync.mjs`
 - Mirror: all shared files from `qiongqi/packages/**` and `qiongqi/tests/**` into `/Users/libing/kk_Projects/QiongQi`
 
-- [ ] **Step 1: Add every new shared file to the sync verifier**
+- [x] **Step 1: Add every new shared file to the sync verifier**
 
 Extend the explicit allow list with contracts, domain items, tool adapter metadata, proposal materializer, observations, projector, governors, middleware, graph/handlers, and their shared tests. The verifier must fail on a missing file as it does today.
 
-- [ ] **Step 2: Run sync verification and confirm RED before mirroring**
+- [x] **Step 2: Run sync verification and confirm RED before mirroring**
 
 Run: `QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi pnpm --dir qiongqi exec node scripts/verify-core-sync.mjs`
 
 Expected: FAIL listing the first unsynchronized file.
 
-- [ ] **Step 3: Mirror shared files without copying KWorks-only frontend/runtime configuration**
+- [x] **Step 3: Mirror shared files without copying KWorks-only frontend/runtime configuration**
 
 Use `rsync -aR` from the `qiongqi/` directory with the explicit file list produced by the verifier. Review both repository diffs; do not overwrite unrelated upstream changes.
 
-- [ ] **Step 4: Run focused and full tests in both repositories**
+- [x] **Step 4: Run focused and full tests in both repositories**
 
 Run:
 
@@ -762,7 +762,7 @@ QIONGQI_UPSTREAM_DIR=/Users/libing/kk_Projects/QiongQi pnpm --dir qiongqi exec n
 
 Expected: all PASS and `core sync ok`.
 
-- [ ] **Step 5: Commit upstream and sync verifier on each main branch**
+- [x] **Step 5: Commit upstream and sync verifier on each main branch**
 
 ```bash
 git -C /Users/libing/kk_Projects/QiongQi add packages tests
@@ -777,7 +777,7 @@ git commit -m "test(kernel): enforce upstream governance parity"
 - Modify only if a verification defect is found: `desktop/scripts/verify-package-resources.mjs`
 - Record results: `.planning/2026-07-16-agent-reasoning-visibility/progress.md`
 
-- [ ] **Step 1: Run complete KWorks frontend and desktop static gates**
+- [x] **Step 1: Run complete KWorks frontend and desktop static gates**
 
 Run:
 
@@ -792,7 +792,7 @@ pnpm --dir desktop verify:package-resources
 
 Expected: all PASS without warnings attributable to this change.
 
-- [ ] **Step 2: Start the development desktop/runtime and run representative tasks**
+- [x] **Step 2: Start the development desktop/runtime and run representative tasks**
 
 Use configured official MiniMax M3 and local vLLM DeepSeek profiles. Verify:
 
@@ -805,13 +805,13 @@ legitimate multi-file task -> continues and produces artifact
 
 Capture model call count, tool call count, compaction count, outcome, and final TaskState revision. Do not capture credentials or full sensitive prompts.
 
-- [ ] **Step 3: Build the packaged app and repeat the click/stream smoke**
+- [x] **Step 3: Build the packaged app and repeat the click/stream smoke**
 
 Run: `pnpm --dir desktop build:app`
 
 Expected: packaged macOS app starts its bundled QiongQi runtime, reasoning/progress blocks render, and a governed stop remains interactive and returns to the task normally.
 
-- [ ] **Step 4: Run final repository hygiene checks**
+- [x] **Step 4: Run final repository hygiene checks**
 
 Run:
 
@@ -824,19 +824,25 @@ git -C /Users/libing/kk_Projects/QiongQi status --short
 
 Expected: both branches are `main`; only intentional generated/package artifacts, if any, remain untracked and are documented rather than committed.
 
-- [ ] **Step 5: Commit any verification-only fixes and record evidence**
+- [x] **Step 5: Commit any verification-only fixes and record evidence**
 
 If Step 1-3 exposed a real defect, first add a failing automated regression test, implement the minimal fix, rerun the affected full gate, and commit it with a scoped `fix:` message. Update the planning progress log with exact command outcomes and packaged app path.
 
 ## Final Acceptance Checklist
 
-- [ ] Tool proposal reasoning/text is persisted before tool execution and survives replay.
-- [ ] No-reasoning providers show engine progress without fabricated thought content.
-- [ ] RunState budgets and governor state are non-zero, durable, and fully scoped.
-- [ ] Exact repetition, repeated evidence, semantic resource churn, and no-progress windows are covered.
-- [ ] TaskState projects todos, evidence, and artifacts; ledger growth alone is not progress.
-- [ ] Compaction uses predicted net savings, cooldown, growth, and lineage guards.
-- [ ] Governance termination commits a visible diagnostic and structured outcome.
-- [ ] Provider fixtures contain no provider-specific LoopGovernor branches.
-- [ ] KWorks and upstream QiongQi pass full test/typecheck/build and core sync.
-- [ ] Development and packaged desktop behavior is manually verified.
+- [x] Tool proposal reasoning/text is persisted before tool execution and survives replay.
+- [x] No-reasoning providers show engine progress without fabricated thought content.
+- [x] RunState budgets and governor state are non-zero, durable, and fully scoped.
+- [x] Exact repetition, repeated evidence, semantic resource churn, and no-progress windows are covered.
+- [x] TaskState projects todos, evidence, and artifacts; ledger growth alone is not progress.
+- [x] Compaction uses predicted net savings, cooldown, growth, and lineage guards.
+- [x] Governance termination commits a visible diagnostic and structured outcome.
+- [x] Provider fixtures contain no provider-specific LoopGovernor branches.
+- [x] KWorks and upstream QiongQi pass full test/typecheck/build and core sync.
+- [x] Development and packaged desktop behavior is manually verified.
+
+## Completion Record (2026-07-18)
+
+All implementation and verification steps are complete. Task 10 now uses five provider-neutral replay fixtures (official DeepSeek, local vLLM DeepSeek, official MiniMax M3, Kimi, and OpenRouter) through the same LoopGovernor. CompactionGovernor state is serialized into `RunStateV3.middleware` by Kernel v3; classic-loop callers retain a scoped in-process fallback because they do not own a RunStateV3. Context-capacity provider codes are normalized to the structured `context_capacity_exceeded` outcome and emit a terminal runtime-progress item. Shared core files and regression fixtures are synchronized to `/Users/libing/kk_Projects/QiongQi`.
+
+Verification evidence: KWorks QiongQi `test:fast` 1064 tests passed, full typecheck passed; upstream QiongQi focused governance tests, full typecheck, build, and core-sync verification passed. Both repositories remain on `main` with clean worktrees after commit.
