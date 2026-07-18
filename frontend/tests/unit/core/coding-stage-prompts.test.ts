@@ -39,6 +39,7 @@ describe("buildCodingStagePrompt", () => {
     expect(prompt).toContain("Implement the planned change");
     expect(prompt).toContain("用户原始请求:");
     expect(prompt).toContain("修复打包后的 review 面板");
+    expect(prompt).toContain("中间过程的用户可见正文和最终回答必须使用中文");
   });
 
   test("returns the user text unchanged when no active stage exists", () => {

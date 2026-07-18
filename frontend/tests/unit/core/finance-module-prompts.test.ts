@@ -56,4 +56,12 @@ describe("finance module prompts", () => {
     expect(prompt).toContain("Full dimension details");
     expect(prompt).toContain("完整 JSON");
   });
+
+  test("requires Chinese for user-visible intermediate and final prose", () => {
+    const market = getFinanceModule("market-analysis");
+    const prompt = buildFinanceModulePrompt(market!, "分析最新市场状态");
+
+    expect(prompt).toContain("中间过程的用户可见正文和最终回答必须使用中文");
+    expect(prompt).toContain("工具名、命令、路径、代码和原始接口返回保持原样");
+  });
 });
