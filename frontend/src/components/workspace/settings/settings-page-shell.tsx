@@ -11,6 +11,7 @@ import {
   type ConfigWriteStatus,
 } from "@/components/workspace/settings/config-settings-page";
 import { WorkModeSettingsPage } from "@/components/workspace/settings/work-mode-settings-page";
+import { FinanceDataSourceSettingsPage } from "@/components/workspace/settings/finance-data-source-settings-page";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -145,6 +146,7 @@ function SettingsSectionContent({
         {activeSection === "account" && <AccountSettingsPage />}
         {activeSection === "appearance" && <AppearanceSettingsPage />}
         {activeSection === "work-modes" && <WorkModeSettingsPage />}
+        {activeSection === "finance-data-sources" && <FinanceDataSourceSettingsPage />}
         {isQiongqiSection(activeSection) && (
           <ConfigSettingsPage
             initialPage={QIONGQI_SECTION_PAGE[activeSection]}

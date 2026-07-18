@@ -3,6 +3,7 @@
 import {
   BoxIcon,
   CpuIcon,
+  DatabaseIcon,
   GlobeIcon,
   NetworkIcon,
   PaletteIcon,
@@ -31,6 +32,7 @@ export type SettingsSection =
   | "qiongqi-web"
   | "qiongqi-skills"
   | "work-modes"
+  | "finance-data-sources"
   | "qiongqi-subagents";
 
 export type QiongqiSettingsSection = Extract<
@@ -60,6 +62,7 @@ const KNOWN_SECTIONS: SettingsSection[] = [
   "qiongqi-web",
   "qiongqi-skills",
   "work-modes",
+  "finance-data-sources",
   "qiongqi-subagents",
 ];
 
@@ -111,6 +114,11 @@ export const SETTINGS_SECTION_COLORS: Record<
     bar: "from-amber-400 to-orange-500",
     bg: "bg-amber-500/10",
   },
+  "finance-data-sources": {
+    iconActive: "text-emerald-400",
+    bar: "from-emerald-400 to-teal-500",
+    bg: "bg-emerald-500/10",
+  },
   "qiongqi-subagents": {
     iconActive: "text-cyan-400",
     bar: "from-cyan-400 to-blue-500",
@@ -153,6 +161,7 @@ function useSettingsSections(): SettingsSectionItem[] {
       { id: "qiongqi-mcp", label: "MCP", icon: NetworkIcon },
       { id: "qiongqi-web", label: "Web 能力", icon: GlobeIcon },
       { id: "work-modes", label: "工作模式", icon: WorkflowIcon },
+      { id: "finance-data-sources", label: "金融数据源", icon: DatabaseIcon },
       { id: "qiongqi-subagents", label: "智能体协作", icon: BoxIcon },
     ];
     return base;

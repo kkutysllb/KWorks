@@ -211,6 +211,7 @@ export function buildFinanceModulePrompt(
     ),
     "",
     "交付要求：",
+    "金融数据源优先级是运行时硬性顺序：先调用当前技能绑定的官方 Tushare/iWencai 接口；只有技能明确返回凭证缺失、权限不足、接口失败、超时或空数据时，才允许 web_search/web_fetch，并在 Web 工具参数中填写 primary_source_attempted=true 与 fallback_reason。禁止在技能调用前主动 Web 搜索。最终结论必须标注实际数据源、数据日期及降级原因；Web 结果不能替代已经成功取得的官方数据。",
     "- 先按当前模块的优先技能包选择数据入口；只有优先技能无法覆盖时，才使用其他金融技能补充。",
     "- 短问快答、单指标查询、条件解释和轻量筛选不强制生成双报告；完整分析、复盘、研究、回测和看板请求必须生成 Markdown 报告与 HTML 数据看板。",
     ...(scenario?.outputNotes ?? []).map((item) => `- ${item}`),
