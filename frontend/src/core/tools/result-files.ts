@@ -18,7 +18,15 @@ const BASH_TOOL_NAMES = new Set(["bash", "execute_bash", "run_bash"]);
 
 /** File extensions we care about for result-file listing. */
 const RESULT_FILE_EXTENSIONS = new Set([
-  ".md", ".html", ".csv", ".json", ".txt", ".xlsx", ".pdf", ".png", ".jpg",
+  ".md",
+  ".html",
+  ".csv",
+  ".json",
+  ".txt",
+  ".xlsx",
+  ".pdf",
+  ".png",
+  ".jpg",
 ]);
 
 /**
@@ -28,12 +36,12 @@ const RESULT_FILE_EXTENSIONS = new Set([
  */
 function filePathFromArgs(args: Record<string, unknown>): string | undefined {
   for (const key of ["path", "file_path", "filepath"]) {
-    const value = args[key]
+    const value = args[key];
     if (typeof value === "string" && value.trim()) {
-      return sanitizeResultFilePath(value.trim())
+      return sanitizeResultFilePath(value.trim());
     }
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -42,61 +50,61 @@ function filePathFromArgs(args: Record<string, unknown>): string | undefined {
  * `python script.py > file`, `tee file`, etc.
  */
 function filePathsFromBashCommand(command: unknown): string[] {
-  if (typeof command !== "string" || !command) return []
-  const paths: string[] = []
+  if (typeof command !== "string" || !command) return [];
+  const paths: string[] = [];
   // Match: > or >> followed by a file path (with optional quotes)
-  const redirectRe = /(?:>{1,2}|tee\s+)(?:\s*)(['"]?)([^\s'";|&<>]+)\1/gi
-  let match: RegExpExecArray | null
+  const redirectRe = /(?:>{1,2}|tee\s+)(?:\s*)(['"]?)([^\s'";|&<>]+)\1/gi;
+  let match: RegExpExecArray | null;
   while ((match = redirectRe.exec(command)) !== null) {
-    const path = match[2]
+    const path = match[2];
     if (path) {
-      const ext = path.slice(path.lastIndexOf(".")).toLowerCase()
+      const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
       if (RESULT_FILE_EXTENSIONS.has(ext)) {
-        paths.push(sanitizeResultFilePath(path))
+        paths.push(sanitizeResultFilePath(path));
       }
     }
   }
-  return paths
+  return paths;
 }
 
 function resultFilesByToolCallId(messages: Message[]): Map<string, string[]> {
-  const byCallId = new Map<string, string[]>()
+  const byCallId = new Map<string, string[]>();
   for (const message of messages) {
-    if (message.type !== "tool" || !message.tool_call_id) continue
-    const files = resultFilesFromToolMessage(message.content)
-    if (files.length > 0) byCallId.set(message.tool_call_id, files)
+    if (message.type !== "tool" || !message.tool_call_id) continue;
+    const files = resultFilesFromToolMessage(message.content);
+    if (files.length > 0) byCallId.set(message.tool_call_id, files);
   }
-  return byCallId
+  return byCallId;
 }
 
 function resultFilesFromToolMessage(content: Message["content"]): string[] {
-  if (typeof content !== "string" || !content.trim()) return []
-  let parsed: unknown
+  if (typeof content !== "string" || !content.trim()) return [];
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(content)
+    parsed = JSON.parse(content);
   } catch {
-    return []
+    return [];
   }
-  if (!parsed || typeof parsed !== "object") return []
-  const resultFiles = (parsed as { result_files?: unknown }).result_files
-  if (!Array.isArray(resultFiles)) return []
+  if (!parsed || typeof parsed !== "object") return [];
+  const resultFiles = (parsed as { result_files?: unknown }).result_files;
+  if (!Array.isArray(resultFiles)) return [];
   return resultFiles
     .map((file) => {
-      if (!file || typeof file !== "object") return undefined
-      const relativePath = (file as { relative_path?: unknown }).relative_path
+      if (!file || typeof file !== "object") return undefined;
+      const relativePath = (file as { relative_path?: unknown }).relative_path;
       if (typeof relativePath === "string" && relativePath.trim()) {
-        return relativePath.trim()
+        return relativePath.trim();
       }
-      const path = (file as { path?: unknown }).path
+      const path = (file as { path?: unknown }).path;
       return typeof path === "string" && path.trim()
         ? sanitizeResultFilePath(path.trim())
-        : undefined
+        : undefined;
     })
-    .filter((path): path is string => Boolean(path))
+    .filter((path): path is string => Boolean(path));
 }
 
 function sanitizeResultFilePath(path: string): string {
-  const normalized = path.replaceAll("\\", "/")
+  const normalized = path.replaceAll("\\", "/");
   if (
     normalized.startsWith("/tmp/") ||
     normalized.startsWith("/private/tmp/") ||
@@ -104,9 +112,9 @@ function sanitizeResultFilePath(path: string): string {
     normalized.startsWith("/var/folders/") ||
     normalized.startsWith("/mnt/")
   ) {
-    return normalized.split("/").filter(Boolean).at(-1) ?? path
+    return normalized.split("/").filter(Boolean).at(-1) ?? path;
   }
-  return path
+  return path;
 }
 
 /**
@@ -122,45 +130,86 @@ function sanitizeResultFilePath(path: string): string {
  * known extensions (.md, .html, .csv, etc.) are also detected.
  */
 export function collectResultFiles(messages: Message[]): string[] {
-  const seen = new Set<string>()
-  const files: string[] = []
-  const materializedFilesByCallId = resultFilesByToolCallId(messages)
+  const seen = new Set<string>();
+  const files: string[] = [];
+  const materializedFilesByCallId = resultFilesByToolCallId(messages);
   for (const message of messages) {
-    if (message.type !== "ai" || !message.tool_calls) continue
+    if (message.type !== "ai" || !message.tool_calls) continue;
     for (const toolCall of message.tool_calls) {
       const materializedFiles = toolCall.id
         ? materializedFilesByCallId.get(toolCall.id)
-        : undefined
+        : undefined;
       if (materializedFiles) {
         for (const path of materializedFiles) {
           if (!seen.has(path)) {
-            seen.add(path)
-            files.push(path)
+            seen.add(path);
+            files.push(path);
           }
         }
-        continue
+        continue;
       }
       // Standard write/edit tools
       if (FILE_PRODUCING_TOOLS.has(toolCall.name)) {
-        const path = filePathFromArgs(toolCall.args ?? {})
+        const path = filePathFromArgs(toolCall.args ?? {});
         if (path && !seen.has(path)) {
-          seen.add(path)
-          files.push(path)
+          seen.add(path);
+          files.push(path);
         }
-        continue
+        continue;
       }
       // Bash tool — detect file redirects in the command string
       if (BASH_TOOL_NAMES.has(toolCall.name)) {
-        const command = (toolCall.args as Record<string, unknown>)?.command
-        const bashPaths = filePathsFromBashCommand(command)
+        const command = (toolCall.args as Record<string, unknown>)?.command;
+        const bashPaths = filePathsFromBashCommand(command);
         for (const path of bashPaths) {
           if (!seen.has(path)) {
-            seen.add(path)
-            files.push(path)
+            seen.add(path);
+            files.push(path);
           }
         }
       }
     }
   }
-  return files
+  return files;
+}
+
+/**
+ * The completion view owns an automatic delivery manifest. Explicit
+ * `present_files` messages already render their own list, so the automatic
+ * manifest must not duplicate them.
+ */
+export function shouldShowDeliveryManifest(
+  messages: Message[],
+  isLoading: boolean,
+): boolean {
+  if (isLoading) return false;
+  const taskMessages = messagesSinceLastUserMessage(messages);
+  if (
+    taskMessages.some(
+      (message) =>
+        message.type === "ai" &&
+        message.tool_calls?.some(
+          (toolCall) => toolCall.name === "present_files",
+        ),
+    )
+  ) {
+    return false;
+  }
+  return collectResultFiles(taskMessages).length > 0;
+}
+
+/** Return files produced after the latest user message in this thread. */
+export function collectLatestTaskResultFiles(messages: Message[]): string[] {
+  return collectResultFiles(messagesSinceLastUserMessage(messages));
+}
+
+function messagesSinceLastUserMessage(messages: Message[]): Message[] {
+  let lastUserMessageIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.type === "human") {
+      lastUserMessageIndex = index;
+      break;
+    }
+  }
+  return messages.slice(lastUserMessageIndex + 1);
 }

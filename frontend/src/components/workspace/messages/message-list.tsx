@@ -23,6 +23,10 @@ import { useUpdateSubtask } from "@/core/tasks/context";
 import type { AgentThreadState } from "@/core/threads";
 import type { ApprovalStore } from "@/core/threads/approval-store";
 import type { BaseStream } from "@/core/threads/qiongqi-types";
+import {
+  collectLatestTaskResultFiles,
+  shouldShowDeliveryManifest,
+} from "@/core/tools/result-files";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
@@ -178,6 +182,13 @@ export function MessageList({
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   const messages = thread.messages.filter((msg) => !isHiddenFromUIMessage(msg));
+  const showDeliveryManifest = shouldShowDeliveryManifest(
+    messages,
+    thread.isLoading,
+  );
+  const deliveryFiles = showDeliveryManifest
+    ? collectLatestTaskResultFiles(messages)
+    : [];
 
   if (thread.isThreadLoading && messages.length === 0) {
     return <MessageListSkeleton />;
@@ -364,6 +375,21 @@ export function MessageList({
             </div>
           );
         })}
+        {showDeliveryManifest && (
+          <section
+            aria-label="任务交付文件"
+            className="border-border/70 bg-background/70 w-full rounded-lg border p-3 shadow-sm"
+            data-testid="delivery-manifest"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold">任务交付文件</h2>
+              <span className="text-muted-foreground text-xs">
+                {deliveryFiles.length} 个文件
+              </span>
+            </div>
+            <ArtifactFileList files={deliveryFiles} threadId={threadId} />
+          </section>
+        )}
         {thread.isLoading && <StreamingIndicator className="my-4" />}
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>

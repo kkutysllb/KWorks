@@ -77,6 +77,21 @@ describe("coding artifacts layout", () => {
     expect(resultStrip).toContain("downloadArtifactUrl");
   });
 
+  test("message list renders an automatic delivery manifest after task completion", () => {
+    const messageList = readFileSync(
+      resolve(repoRoot, "src/components/workspace/messages/message-list.tsx"),
+      "utf8",
+    );
+    const resultFiles = readFileSync(
+      resolve(repoRoot, "src/core/tools/result-files.ts"),
+      "utf8",
+    );
+
+    expect(messageList).toContain('data-testid="delivery-manifest"');
+    expect(messageList).toContain("collectLatestTaskResultFiles");
+    expect(resultFiles).toContain("shouldShowDeliveryManifest");
+  });
+
   test("coding agent panel does not create a nested artifacts provider", () => {
     const agentPanel = readFileSync(
       resolve(repoRoot, "src/components/workspace/coding/agent-panel.tsx"),

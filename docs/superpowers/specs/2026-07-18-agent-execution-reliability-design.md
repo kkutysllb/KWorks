@@ -116,6 +116,22 @@ Add structured diagnostics for:
 
 Diagnostics must not expose credentials or full sensitive prompts.
 
+## 8.1 Final Delivery Manifest
+
+Task completion exposes a deterministic manifest of files produced by the
+latest user task. The manifest is derived from structured tool results
+(`result_files`) and known file mutation calls, not from model prose and not
+from the model remembering to call an optional presentation tool. The
+frontend renders it after the turn reaches a terminal state and reuses the
+existing preview/download artifact actions. Explicit `present_files` messages
+remain supported and suppress the automatic manifest to avoid duplicate UI.
+
+The bash adapter materializes report paths written through shell redirects and
+common Python/Node write APIs from approved temporary roots into the task
+workspace, returning `path`, `relative_path`, and `source_path` metadata. Only
+the latest user task's files are shown in the completion manifest; older task
+artifacts remain available through the artifact panel.
+
 ## 9. Test Strategy
 
 Tests are written before production changes.
@@ -127,6 +143,7 @@ Tests are written before production changes.
 5. LoopGovernor production tests assert model-stage counting and bounded unique inspection churn across all five provider fixtures.
 6. Finance Python tests cover Saturday, Sunday, source failure, source success, daily/weekly dates, and rendered source text.
 7. KWorks and upstream QiongQi run focused tests, full fast suites, typecheck, build, and core sync. Packaged skill resources are verified after synchronization.
+8. A completed task with a bash-generated Markdown report shows a visible delivery-file list with preview/download actions, including reports written by common script APIs.
 
 ## Acceptance Criteria
 
@@ -139,4 +156,5 @@ Tests are written before production changes.
 - Unique but semantically redundant inspection loops checkpoint and terminate within configured bounds.
 - Complete tool output is not labeled truncated by engine-generated progress or summaries.
 - Market-linkage reports use a valid trading weekday and say `每日 18:00 后更新`, not `T+1`.
+- A completed task automatically shows the latest task's result files without requiring a `present_files` tool call.
 - Shared core files are byte-identical in KWorks and upstream QiongQi.

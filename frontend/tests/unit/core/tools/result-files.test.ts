@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { Message } from "@/core/threads/qiongqi-types";
-import { collectResultFiles } from "@/core/tools/result-files";
+import {
+  collectResultFiles,
+  collectLatestTaskResultFiles,
+  shouldShowDeliveryManifest,
+} from "@/core/tools/result-files";
 
 function aiMessage(
   toolCalls: Array<{
@@ -134,5 +138,49 @@ describe("collectResultFiles", () => {
       aiMessage([{ name: "write", args: { content: "no path here" } }]),
     ];
     expect(collectResultFiles(messages)).toEqual([]);
+  });
+
+  it("shows an automatic delivery manifest after completion", () => {
+    const messages: Message[] = [
+      aiMessage([
+        { name: "bash", args: { command: "printf report > /tmp/report.md" } },
+      ]),
+      {
+        id: "tool_report",
+        type: "tool",
+        role: "tool",
+        tool_call_id: "call_0",
+        content: JSON.stringify({
+          result_files: [{ relative_path: "report.md" }],
+        }),
+      } as Message,
+    ];
+
+    expect(shouldShowDeliveryManifest(messages, false)).toBe(true);
+    expect(shouldShowDeliveryManifest(messages, true)).toBe(false);
+  });
+
+  it("does not duplicate an explicit present_files delivery", () => {
+    const messages: Message[] = [
+      aiMessage([
+        { name: "write", args: { path: "/workspace/report.md" } },
+        { name: "present_files", args: { filepaths: ["report.md"] } },
+      ]),
+    ];
+
+    expect(shouldShowDeliveryManifest(messages, false)).toBe(false);
+  });
+
+  it("limits automatic delivery files to the latest user task", () => {
+    const messages: Message[] = [
+      userMessage("first task"),
+      aiMessage([{ name: "write", args: { path: "/workspace/old.md" } }]),
+      userMessage("second task"),
+      aiMessage([{ name: "write", args: { path: "/workspace/new.md" } }]),
+    ];
+
+    expect(collectLatestTaskResultFiles(messages)).toEqual([
+      "/workspace/new.md",
+    ]);
   });
 });
