@@ -124,6 +124,20 @@ def _safe_str(val: Any, default: str = "-") -> str:
     return str(val).strip()
 
 
+import re
+
+def _get_col(row: dict, base: str) -> Any:
+    """从 iwencai 返回行中取值，兼容列名带日期后缀（如 转股溢价率[20260508]）。"""
+    if base in row:
+        return row[base]
+    # 匹配 base[YYYYMMDD] 格式的列
+    prefix = re.escape(base)
+    for k in row:
+        if re.match(rf'^{prefix}\[\d{{8}}\]$', k):
+            return row[k]
+    return None
+
+
 def _find_row(datas: List[dict], bond_name: str) -> Optional[dict]:
     """在 datas 中按名称/代码模糊匹配行。"""
     if not datas:
@@ -163,8 +177,8 @@ QUERIES_COMPARE = lambda bonds: (
 # ─── 评分引擎 ────────────────────────────────────────────────────────
 def _score_basic(row: dict) -> Tuple[float, dict]:
     """基本指标评分 (0-100)，权重占综合 25%。"""
-    premium = _safe_float(row.get("转股溢价率", row.get("转股溢价率[20260508]")))
-    ytm = _safe_float(row.get("到期收益率", row.get("到期收益率[20260508]")))
+    premium = _safe_float(_get_col(row, "转股溢价率"))
+    ytm = _safe_float(_get_col(row, "到期收益率"))
 
     # 转股溢价率评分：越低越好
     if premium < 0:
@@ -197,7 +211,7 @@ def _score_stock(row: dict) -> Tuple[float, dict]:
     """正股联动评分 (0-100)，权重占综合 20%。"""
     pe = _safe_float(row.get("PE", row.get("市盈率")))
     pb = _safe_float(row.get("PB", row.get("市净率")))
-    chg = _safe_float(row.get("涨跌幅", row.get("正股涨跌幅", row.get("正股涨跌幅[20260508]"))))
+    chg = _safe_float(_get_col(row, "正股涨跌幅") if _get_col(row, "正股涨跌幅") is not None else row.get("涨跌幅", 0))
 
     # PE 评分：10-30 合理
     if 10 <= pe <= 30:
@@ -267,7 +281,7 @@ def _score_protection(row: dict) -> Tuple[float, dict]:
 
 def _score_time(row: dict) -> Tuple[float, dict]:
     """时间价值评分 (0-100)，权重占综合 10%。"""
-    years = _safe_float(row.get("剩余期限年数", row.get("剩余期限", row.get("剩余期限[20260508]"))))
+    years = _safe_float(_get_col(row, "剩余期限") or _get_col(row, "剩余期限年数"))
 
     # 剩余期限：1-3 年最优
     if 1.0 <= years <= 3.0:
@@ -289,8 +303,8 @@ def _score_time(row: dict) -> Tuple[float, dict]:
 
 def _score_capital(row: dict) -> Tuple[float, dict]:
     """资金面评分 (0-100)，权重占综合 15%。"""
-    amount = _safe_float(row.get("成交额", row.get("成交额[20260508]")))
-    turnover = _safe_float(row.get("换手率", row.get("换手率[20260508]")))
+    amount = _safe_float(_get_col(row, "成交额"))
+    turnover = _safe_float(_get_col(row, "换手率"))
 
     # 成交额：活跃但不过热
     if amount > 5e8:
@@ -321,7 +335,7 @@ def _score_capital(row: dict) -> Tuple[float, dict]:
 
 def _score_arbitrage(row: dict) -> Tuple[float, dict]:
     """套利信号评分 (0-100)，权重占综合 10%。"""
-    premium = _safe_float(row.get("转股溢价率", row.get("转股溢价率[20260508]")))
+    premium = _safe_float(_get_col(row, "转股溢价率"))
     dl_val = _safe_float(row.get("双低值"))
 
     # 转股套利空间
@@ -486,10 +500,10 @@ def analyze_compare(bonds: List[str], api_key: str, call_type: str = "normal",
             "可转债": bond,
             "证券代码": _safe_str(row.get("证券代码")),
             "收盘价": _safe_str(row.get("收盘价")),
-            "转股溢价率": _safe_float(row.get("转股溢价率", row.get("转股溢价率[20260508]"))),
-            "到期收益率": _safe_float(row.get("到期收益率", row.get("到期收益率[20260508]"))),
-            "纯债价值": _safe_float(row.get("纯债价值", row.get("纯债价值[20260508]"))),
-            "剩余期限": _safe_float(row.get("剩余期限年数", row.get("剩余期限[20260508]"))),
+            "转股溢价率": _safe_float(_get_col(row, "转股溢价率")),
+            "到期收益率": _safe_float(_get_col(row, "到期收益率")),
+            "纯债价值": _safe_float(_get_col(row, "纯债价值")),
+            "剩余期限": _safe_float(_get_col(row, "剩余期限") or _get_col(row, "剩余期限年数")),
             "信用评级": _safe_str(row.get("信用评级")),
             "成交额": _safe_str(row.get("成交额")),
             "涨跌幅": _safe_float(row.get("涨跌幅")),

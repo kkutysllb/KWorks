@@ -155,7 +155,7 @@ class LimitUpLeaderAdapter:
                     'close': round(result.get('close') or 0, 2),  # limit_list_d 自带 close
                     'pe': round(result.get('pe') or 0, 2),
                     'pb': round(result.get('pb') or 0, 2),
-                    'total_mv': round((result.get('total_mv') or 0), 0),  # limit_list_d 自带 total_mv
+                    'total_mv': round((result.get('total_mv') or 0) / 10000, 2),  # 万元 → 亿元
                     'pct_chg': round(result.get('pct_chg') or 0, 2),  # limit_list_d 自带实际涨跌幅
                     'limit_times': limit_times,
                     'open_times': open_times,

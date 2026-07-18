@@ -61,6 +61,8 @@ class DragonTigerAnalyzer(BaseAnalyzer):
             if net_col and code_col:
                 by_stock = inst.groupby(code_col)[net_col].sum().reset_index()
                 by_stock.columns = [code_col, "inst_net"]
+                # Tushare top_inst returns net_buy in 万元; convert to 元 for yi()
+                by_stock["inst_net"] = by_stock["inst_net"] * 1e4
                 by_stock = by_stock.sort_values("inst_net", ascending=False)
                 detail["inst_net_top"] = by_stock.head(DRAGON_TOP_N).to_dict("records")
                 total_inst_net = float(by_stock["inst_net"].sum())

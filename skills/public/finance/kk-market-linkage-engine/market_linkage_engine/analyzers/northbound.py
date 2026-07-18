@@ -79,14 +79,15 @@ class NorthboundAnalyzer(BaseAnalyzer):
 
         detail = {
             "trade_date": latest["trade_date"].strftime("%Y%m%d"),
-            # Tushare moneyflow_hsgt returns values in 万元 (10k yuan);
+            # Tushare moneyflow_hsgt returns values in 百万元 (million yuan);
             # store in 元 so yi() formatter (元→亿) works correctly.
-            "latest_net": latest_net * 1e4,
-            "latest_net_yi": latest_net / 1e4,
-            "latest_sh": float(latest[sh_col]) * 1e4 if sh_col else None,
-            "latest_sz": float(latest[sz_col]) * 1e4 if sz_col else None,
-            "cum_net": cum_net * 1e4,
-            "cum_net_yi": cum_net / 1e4,
+            # 1百万元 = 1,000,000元 → multiply by 1e6.
+            "latest_net": latest_net * 1e6,
+            "latest_net_yi": latest_net / 1e2,
+            "latest_sh": float(latest[sh_col]) * 1e6 if sh_col else None,
+            "latest_sz": float(latest[sz_col]) * 1e6 if sz_col else None,
+            "cum_net": cum_net * 1e6,
+            "cum_net_yi": cum_net / 1e2,
             "net_positive_days": net_positive_days,
             "total_days": len(df),
             "streak": streak,
@@ -103,12 +104,12 @@ class NorthboundAnalyzer(BaseAnalyzer):
                 detail["top10"] = top.to_dict("records")
 
         # 信号评分
-        # latest_net and cum_net local vars are in 万元 (from Tushare moneyflow_hsgt).
-        # NORTH_STRONG_IN/OUT are in 亿. Convert: 1亿 = 10000万.
+        # latest_net and cum_net local vars are in 百万元 (from Tushare moneyflow_hsgt).
+        # NORTH_STRONG_IN/OUT are in 亿. Convert: 1亿 = 10000万 = 100百万元.
         score = 50
         signals = []
-        latest_net_yi = latest_net / 1e4  # 万 → 亿
-        cum_net_yi = cum_net / 1e4        # 万 → 亿
+        latest_net_yi = latest_net / 1e2  # 百万元 → 亿
+        cum_net_yi = cum_net / 1e2        # 百万元 → 亿
         # 单日强度
         if latest_net_yi > NORTH_STRONG_IN:
             score += 18; signals.append(f"🟢 单日大幅净流入 {latest_net_yi:.1f}亿")
@@ -163,7 +164,7 @@ class NorthboundAnalyzer(BaseAnalyzer):
                 df,
                 columns=[c for c in (
                     "ts_code", "name", "close", "change", "amount",
-                    "net_amount", "buy_amount", "sell_amount"
+                    "net_amount", "buy", "sell"
                 ) if c in df.columns],
                 rename={
                     "ts_code": "证券代码",
@@ -172,13 +173,13 @@ class NorthboundAnalyzer(BaseAnalyzer):
                     "change": "涨跌幅",
                     "amount": "成交额",
                     "net_amount": "净额",
-                    "buy_amount": "买入额",
-                    "sell_amount": "卖出额",
+                    "buy": "买入额",
+                    "sell": "卖出额",
                 },
                 formatters={
                     "net_amount": yi,
-                    "buy_amount": yi,
-                    "sell_amount": yi,
+                    "buy": yi,
+                    "sell": yi,
                     "amount": yi,
                 },
             ))

@@ -169,7 +169,8 @@ class ETFAnalyzer:
                     r["trade_date"] = f"{d[:4]}-{d[4:6]}-{d[6:]}"
                 except: pass
             if "fd_share" in r and r["fd_share"] is not None:
-                r["fd_share_yi"] = round(r["fd_share"] / 1e8, 4)
+                # fd_share from Tushare is in 万份; convert to 亿份: divide by 1e4
+                r["fd_share_yi"] = round(r["fd_share"] / 1e4, 4)
         if len(records) >= 2:
             records.reverse()
             for i in range(1, len(records)):
@@ -177,7 +178,7 @@ class ETFAnalyzer:
                 curr = records[i].get("fd_share", 0) or 0
                 if prev and prev != 0:
                     records[i]["share_change_pct"] = round((curr - prev) / prev * 100, 4)
-                    records[i]["share_change_abs"] = round((curr - prev) / 1e8, 4)
+                    records[i]["share_change_abs"] = round((curr - prev) / 1e4, 4)
             records.reverse()
         return {"data": records, "count": len(records)}
 
@@ -197,7 +198,7 @@ class ETFAnalyzer:
         latest = df.sort_values("trade_date", ascending=False).iloc[0]
         share_latest = None
         if df_share is not None and not df_share.empty:
-            share_latest = round(df_share.iloc[0].get("fd_share", 0) / 1e8, 4)
+            share_latest = round(df_share.iloc[0].get("fd_share", 0) / 1e4, 4)
         nav_latest = {}
         scale_est = None
         if nav_df is not None and not nav_df.empty:
@@ -242,7 +243,7 @@ class ETFAnalyzer:
                     ret_60d = round((df_60.iloc[-1]["close"] / df_60.iloc[0]["close"] - 1) * 100, 2)
                 share_latest = None
                 if share_df is not None and not share_df.empty:
-                    share_latest = round(share_df.iloc[0].get("fd_share", 0) / 1e8, 4)
+                    share_latest = round(share_df.iloc[0].get("fd_share", 0) / 1e4, 4)
                 results.append({
                     "ts_code": code,
                     "name": f.get("name", code),

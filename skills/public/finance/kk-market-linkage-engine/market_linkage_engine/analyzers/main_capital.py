@@ -84,6 +84,8 @@ class MainCapitalAnalyzer(BaseAnalyzer):
         # The sector data (moneyflow) includes ALL stocks — use its sum as the
         # full-market total net, not just the top-N stocks fetched above.
         sector_df = sector if len(sector) else (ind_ths if len(ind_ths) else pd.DataFrame())
+        # Tushare moneyflow_dc returns 万元, moneyflow_ind_ths returns 亿元
+        sector_source_is_wan = len(sector) > 0
         if len(sector_df):
             sector_net_col = None
             for cand in ("net_amount", "net_mf_amount"):
@@ -93,11 +95,15 @@ class MainCapitalAnalyzer(BaseAnalyzer):
             name_col = "name" if "name" in sector_df.columns else None
             if sector_net_col:
                 sector_df[sector_net_col] = pd.to_numeric(sector_df[sector_net_col], errors="coerce")
-                # Full-market net = sum of all stock net amounts.
-                # Tushare moneyflow returns net_amount in 万元 (10k yuan).
-                total_net_wan = float(sector_df[sector_net_col].sum())
-                total_net_yi = total_net_wan / 1e4  # 万 → 亿
-                detail["total_net"] = total_net_wan * 1e4  # 万元 → 元
+                raw_sum = float(sector_df[sector_net_col].sum())
+                if sector_source_is_wan:
+                    # moneyflow_dc: 万元 → 元 and 万元 → 亿
+                    total_net_yi = raw_sum / 1e4
+                    detail["total_net"] = raw_sum * 1e4
+                else:
+                    # moneyflow_ind_ths: 亿元 → 元 and already 亿
+                    total_net_yi = raw_sum
+                    detail["total_net"] = raw_sum * 1e8
                 detail["total_net_yi"] = total_net_yi
                 if total_net_yi > 0:
                     flow_label = "流入"
@@ -109,8 +115,12 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                     f"全市场主力资金净{flow_label} "
                     f"{total_net_yi:+.1f}亿，净流入个股 {detail.get('in_count', '?')} vs 净流出 {detail.get('out_count', '?')}"
                 )
-                # Tushare moneyflow_dc returns net_amount in 万元; convert to 元 for yi()
-                sector_df[sector_net_col] = sector_df[sector_net_col] * 1e4
+                # Tushare moneyflow_dc returns net_amount in 万元, ind_ths in 亿元;
+                # convert both to 元 for yi() formatter.
+                if sector_source_is_wan:
+                    sector_df[sector_net_col] = sector_df[sector_net_col] * 1e4  # 万元 → 元
+                else:
+                    sector_df[sector_net_col] = sector_df[sector_net_col] * 1e8  # 亿元 → 元
                 sector_cols = [c for c in (name_col, sector_net_col) if c]
                 top_sec_in = (
                     sector_df[sector_df[sector_net_col] > 0]

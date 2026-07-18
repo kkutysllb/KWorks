@@ -72,7 +72,7 @@ def print_results(result: dict):
             _f(s.get('total_score', s.get('score')), '.1f'),
             _f(s.get('dividend_score'), '.1f'),
             _f(s.get('dv_ratio', s.get('dv_ttm'))),
-            _f(s.get('total_mv', 0) / 10000, '.1f') if isinstance(s.get('total_mv'), (int, float)) else '--',
+            _f(s.get('total_mv', 0), '.1f') if isinstance(s.get('total_mv'), (int, float)) else '--',
             _f(s.get('pct_chg'), '.2f'),
         ]
         print("  " + "  ".join(str(v).ljust(col_w[i]) for i, v in enumerate(row)))
