@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangleIcon,
   BriefcaseBusinessIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -133,7 +134,7 @@ export function HistoryTaskList() {
   const { projects } = useProjects();
   const { workModes } = useWorkModes();
   const routableThreads = withCodingProjectRoutes(threads, projects);
-  const { mutate: deleteThread } = useDeleteThread();
+  const { mutateAsync: deleteThread } = useDeleteThread();
   const { mutate: renameThread } = useRenameThread();
 
   // Rename dialog state
@@ -143,6 +144,13 @@ export function HistoryTaskList() {
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<
     Record<string, boolean>
   >({});
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const deleteTargetTitle =
+    routableThreads.find((t) => t.thread_id === deleteTarget)?.values?.title ??
+    deleteTarget ??
+    "";
 
   const navigateToWorkspacePath = useCallback(
     (path: string) => {
@@ -154,10 +162,21 @@ export function HistoryTaskList() {
 
   const handleDelete = useCallback(
     (threadId: string) => {
-      deleteThread({ threadId });
-      if (threadId === threadIdFromPath) {
+      setDeleteTarget(threadId);
+    },
+    [],
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    const targetId = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      await deleteThread({ threadId: targetId });
+      toast.success(t.historyTasks.deleteSuccess);
+      if (targetId === threadIdFromPath) {
         const threadIndex = routableThreads.findIndex(
-          (t) => t.thread_id === threadId,
+          (t) => t.thread_id === targetId,
         );
         let nextThreadPath = pathOfThread("new");
         if (threadIndex > -1) {
@@ -169,14 +188,17 @@ export function HistoryTaskList() {
         }
         navigateToWorkspacePath(nextThreadPath);
       }
-    },
-    [
-      deleteThread,
-      navigateToWorkspacePath,
-      routableThreads,
-      threadIdFromPath,
-    ],
-  );
+    } catch {
+      // Error toast already shown by useDeleteThread onError callback
+    }
+  }, [
+    deleteTarget,
+    deleteThread,
+    navigateToWorkspacePath,
+    routableThreads,
+    threadIdFromPath,
+    t,
+  ]);
 
   const handleRenameClick = useCallback(
     (threadId: string, currentTitle: string) => {
@@ -278,6 +300,42 @@ export function HistoryTaskList() {
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
+
+      {/* Delete confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="p-0 sm:max-w-md">
+          <div className="h-1.5 w-full rounded-t-lg bg-gradient-to-r from-red-400 to-rose-400" />
+          <DialogHeader className="px-6 pt-4">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-500">
+                <AlertTriangleIcon className="h-4 w-4" />
+              </span>
+              {t.historyTasks.deleteTask}
+            </DialogTitle>
+            <DialogDescription className="pl-10">
+              {t.historyTasks.deleteConfirm.replace(
+                "{name}",
+                deleteTargetTitle,
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="px-6 pb-5">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              className="shadow-sm"
+            >
+              {t.common.delete}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>

@@ -338,6 +338,13 @@ export interface Translations {
     unavailableShort: string;
   };
 
+  // History tasks
+  historyTasks: {
+    deleteTask: string;
+    deleteConfirm: string;
+    deleteSuccess: string;
+  };
+
   // Shortcuts
   shortcuts: {
     searchActions: string;

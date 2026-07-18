@@ -186,6 +186,14 @@ export const enUS: Translations = {
     coding: "Coding",
   },
 
+  // History tasks
+  historyTasks: {
+    deleteTask: "Delete task",
+    deleteConfirm:
+      'Are you sure you want to delete "{name}"? This action cannot be undone.',
+    deleteSuccess: "Task deleted",
+  },
+
   // Toolbar
   toolbar: {
     refresh: "Refresh",

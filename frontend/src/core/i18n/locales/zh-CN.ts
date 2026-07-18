@@ -180,6 +180,13 @@ export const zhCN: Translations = {
     coding: "Coding",
   },
 
+  // History tasks
+  historyTasks: {
+    deleteTask: "删除任务",
+    deleteConfirm: '确定要删除"{name}"吗？此操作无法撤销。',
+    deleteSuccess: "任务已删除",
+  },
+
   // Toolbar
   toolbar: {
     refresh: "刷新",

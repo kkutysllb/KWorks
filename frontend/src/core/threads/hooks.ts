@@ -1172,6 +1172,11 @@ export function useDeleteThread() {
         },
       );
     },
+    onError(error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete task",
+      );
+    },
     onSettled() {
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
     },
