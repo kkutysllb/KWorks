@@ -398,7 +398,7 @@ export function createKernelV3NodeHandlers(
       }
     },
 
-    'commit-tools': async ({ identity, state }) => {
+    'commit-tools': async ({ identity, state, leaseFence }) => {
       const prepared = requireNodeValue<{ calls: ToolCallLike[] }>(state, 'prepare-tools')
       const built = requireNodeValue<{
         toolPolicies?: Record<string, ToolEffectPolicy | undefined>
@@ -418,6 +418,7 @@ export function createKernelV3NodeHandlers(
             runtimeStateSink: (next) => { runtimeState = next }
           },
           policy: built.toolPolicies?.[call.toolName] ?? defaultEffectPolicy(call)
+          , leaseFence
         })
         runtimeState = execution.state
         if (execution.outcome) return { outcome: execution.outcome }

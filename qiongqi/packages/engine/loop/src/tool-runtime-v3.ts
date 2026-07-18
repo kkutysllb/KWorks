@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { ToolEffectPolicySchema, ToolObservationSchema, type RunIdentity, type RunOutcome, type RunStateV3, type ToolEffectPolicy, type ToolObservation } from '@qiongqi/contracts'
-import type { ToolCallLike, ToolHost, ToolHostContext, ToolHostPreparation, ToolHostResult } from '@qiongqi/ports'
+import type { LeaseFence, ToolCallLike, ToolHost, ToolHostContext, ToolHostPreparation, ToolHostResult } from '@qiongqi/ports'
 import { EffectCommitCoordinator } from './effect-commit.js'
 import { NormalizedToolHostResultSchema, normalizeToolCall, normalizeToolHostResult, observeNormalizedTool } from './tool-observation.js'
 
 export type CrashPoint = 'prepare' | 'after_tool_execute' | 'before_commit' | 'after_commit'
 export type ToolRuntimeV3Options = { toolHost: ToolHost; effects: EffectCommitCoordinator; crashPoint?: (point: CrashPoint) => void }
-export type ToolRuntimeV3Input = { identity: RunIdentity; state: RunStateV3; call: ToolCallLike; context: ToolHostContext; policy: ToolEffectPolicy; crashAfterExecute?: boolean }
+export type ToolRuntimeV3Input = { identity: RunIdentity; state: RunStateV3; call: ToolCallLike; context: ToolHostContext; policy: ToolEffectPolicy; crashAfterExecute?: boolean; leaseFence?: LeaseFence }
 export type ToolRuntimeV3Result = { state: RunStateV3; result?: ToolHostResult; observation?: ToolObservation; replayed: boolean; outcome?: RunOutcome }
 
 type StoredToolRuntimeV3Result = {
@@ -95,7 +95,7 @@ export class ToolRuntimeV3 {
     if (effectiveCall.callId !== call.callId) throw new Error('tool host preparation changed callId')
     const prepared = this.options.effects.prepare(input.state, input.identity, { callId: effectiveCall.callId, target: effectiveCall.toolName, arguments: effectiveCall.arguments }, input.policy)
     this.options.crashPoint?.('prepare')
-    await this.options.effects.recordPrepared(input.identity, prepared.state, prepared.intent)
+    await this.options.effects.recordPrepared(input.identity, prepared.state, prepared.intent, input.leaseFence)
     const rawResult = hostPreparation.result
       ?? await this.options.toolHost.execute(effectiveCall, input.context, undefined, hostPreparation)
     const result = normalizeToolHostResult(
@@ -115,7 +115,7 @@ export class ToolRuntimeV3 {
       result,
       ...(observation ? { observation } : {})
     })
-    const committedResult = await this.options.effects.commit(input.identity, prepared.state, prepared.intent, stored)
+    const committedResult = await this.options.effects.commit(input.identity, prepared.state, prepared.intent, stored, input.leaseFence)
     this.options.crashPoint?.('after_commit')
     return {
       state: committedResult.state,

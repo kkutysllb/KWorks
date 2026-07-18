@@ -22,6 +22,17 @@ const graph: ExecutionGraph = {
 }
 
 describe('RuntimeKernel', () => {
+  it('rejects invalid lease TTL values', () => {
+    expect(() => new RuntimeKernel({
+      graph: { version: 'ttl-v1', startNodeId: 'done', predicates: ['next'], nodes: [{ id: 'done', kind: 'model', effect: 'model', terminal: true }], edges: [] },
+      snapshots: new InMemoryRunStateStore(),
+      events: new InMemoryRunEventStore(),
+      leases: new RecordingLeaseStore(),
+      holderId: 'ttl-holder',
+      leaseTtlMs: 0,
+      nodes: { done: () => ({ outcome: { status: 'completed', reason: 'normal_stop', retryable: false } }) }
+    })).toThrow(/leaseTtlMs/)
+  })
   it('runs a graph, checkpoints each node, and returns a structured outcome', async () => {
     validateExecutionGraph(graph)
     const snapshots = new InMemoryRunStateStore()

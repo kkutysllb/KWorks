@@ -7,7 +7,7 @@ import {
   type RunOutcome,
   type RunStateV3
 } from '@qiongqi/contracts'
-import type { RunEventStore, RunLeaseStore, RunSnapshotStore } from '@qiongqi/ports'
+import type { LeaseFence, RunEventStore, RunLeaseStore, RunSnapshotStore } from '@qiongqi/ports'
 import { MiddlewareChain } from './middleware-chain.js'
 import {
   outgoingEdges,
@@ -82,7 +82,8 @@ class RuntimeLeaseGuard {
     private readonly leases: RunLeaseStore,
     private readonly identity: RunIdentity,
     private readonly holderId: string,
-    private readonly ttlMs: number
+    private readonly ttlMs: number,
+    private readonly fence?: LeaseFence
   ) {
     this.renewIntervalMs = Math.max(1, Math.floor(ttlMs / 3))
   }
@@ -99,11 +100,13 @@ class RuntimeLeaseGuard {
     return this.lost
   }
 
+  getFence(): LeaseFence | undefined { return this.fence }
+
   async stop(): Promise<void> {
     this.stopped = true
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
-    if (this.renewInFlight) await this.renewInFlight
+    // A provider may never resolve. Cleanup must remain bounded.
   }
 
   private schedule(): void {
@@ -124,8 +127,16 @@ class RuntimeLeaseGuard {
   private async renew(): Promise<boolean> {
     if (this.stopped || this.lost) return false
     if (this.renewInFlight) return this.renewInFlight
-    const operation = Promise.resolve()
-      .then(() => this.leases.renew(this.identity, this.holderId, this.ttlMs))
+    const timeout = new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), Math.max(1, Math.floor(this.ttlMs / 2)))
+      ;(timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
+    })
+    const operation = Promise.race([
+      Promise.resolve().then(() => this.fence
+        ? this.leases.renew(this.identity, this.holderId, this.fence, this.ttlMs)
+        : this.leases.renew(this.identity, this.holderId, this.ttlMs)),
+      timeout
+    ])
       .then((renewed) => {
         if (!renewed) this.lost = true
         return renewed
@@ -150,6 +161,8 @@ export class RuntimeKernel {
 
   constructor(options: RuntimeKernelOptions) {
     validateExecutionGraph(options.graph)
+    const ttlMs = options.leaseTtlMs ?? 30_000
+    if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0) throw new Error('leaseTtlMs must be a positive safe integer')
     this.options = {
       nowIso: () => new Date().toISOString(),
       leaseTtlMs: 30_000,
@@ -169,11 +182,13 @@ export class RuntimeKernel {
         details: { code: 'lease_unavailable' }
       }
     }
+    const fence = lease.fence
     const leaseGuard = new RuntimeLeaseGuard(
       leases,
       identity,
       holderId,
-      this.options.leaseTtlMs
+      this.options.leaseTtlMs,
+      fence
     )
     leaseGuard.start()
 
@@ -196,7 +211,7 @@ export class RuntimeKernel {
         const outcome = outcomeFromTerminalState(state)
         const migrated = this.migrateTerminalGraphMetadata(state)
         if (migrated !== state || state.cursor.checkpointSeq > checkpointSeq) {
-          await snapshots.save(migrated)
+          await snapshots.save(migrated, fence)
         }
         return outcome
       }
@@ -213,15 +228,15 @@ export class RuntimeKernel {
           )
         }
         state = this.migrateTerminalGraphMetadata(state)
-        await snapshots.save(state)
+        await snapshots.save(state, fence)
         return outcomeFromTerminalState(state)
       }
 
       state = this.migrateGraphState(state)
-      await snapshots.save(state)
+      await snapshots.save(state, fence)
 
       state = { ...state, status: 'running', updatedAt: this.options.nowIso() }
-      await snapshots.save(state)
+      await snapshots.save(state, fence)
 
       const beforeRun = await this.options.middleware.run(
         'beforeRun',
@@ -232,19 +247,19 @@ export class RuntimeKernel {
       const beforeRunOutcome = this.commandOutcome(beforeRunCommands)
       if (beforeRunOutcome) {
         state = this.withOutcome(this.applyCommands(state, beforeRunCommands), beforeRunOutcome)
-        await snapshots.save(state)
+        await snapshots.save(state, fence)
         return beforeRunOutcome
       }
 
       while (true) {
         const node = this.nodeFor(state.cursor.nodeId)
         await this.assertLeaseHealthy(leaseGuard, state)
-        if (checkpointsBefore(node)) await snapshots.save(state)
+        if (checkpointsBefore(node)) await snapshots.save(state, fence)
 
         const started = await this.recordEvent(identity, state, node.id, 'node.started', {
           nodeId: node.id,
           stepIndex: state.cursor.stepIndex
-        })
+        }, fence)
         state = {
           ...state,
           cursor: { ...state.cursor, checkpointSeq: started.seq },
@@ -260,13 +275,13 @@ export class RuntimeKernel {
         const beforeOutcome = this.commandOutcome(beforeCommands)
         if (beforeOutcome) {
           state = this.withOutcome(this.applyCommands(state, beforeCommands), beforeOutcome)
-          await snapshots.save(state)
+          await snapshots.save(state, fence)
           return beforeOutcome
         }
 
         const handler = this.options.nodes[node.id]
         if (!handler) throw new Error(`missing runtime node handler: ${node.id}`)
-        const result = await handler({ identity, state, node, hook: 'beforeNode' })
+        const result = await handler({ identity, state, node, hook: 'beforeNode', leaseFence: fence })
         await this.assertLeaseHealthy(leaseGuard, state)
         const commands = canonicalizeMiddlewareCommands([
           ...beforeCommands,
@@ -296,7 +311,8 @@ export class RuntimeKernel {
           state,
           node.id,
           'node.completed',
-          payload
+          payload,
+          fence
         )
         await this.reachCrashPoint('after_node_completed')
         const committedPayload = parseCompletedNodePayload(completed.payload)
@@ -305,7 +321,7 @@ export class RuntimeKernel {
           node,
           completed: committedPayload
         }, leaseGuard)
-        if (checkpointsAfter(node) || isTerminal(state)) await snapshots.save(state)
+        if (checkpointsAfter(node) || isTerminal(state)) await snapshots.save(state, fence)
         if (isTerminal(state)) {
           // Terminal outcomes are monotonic. Middleware may record diagnostics,
           // but cannot reopen or replace an already committed terminal result.
@@ -319,7 +335,7 @@ export class RuntimeKernel {
       }
     } catch (error) {
       if (error instanceof RuntimeKernelCrash) throw error.original
-      if (error instanceof RuntimeLeaseLost || leaseGuard.isLost()) {
+      if (error instanceof RuntimeLeaseLost || leaseGuard.isLost() || isFenceError(error)) {
         if (error instanceof RuntimeLeaseLost && error.terminalOutcome) {
           return error.terminalOutcome
         }
@@ -341,12 +357,12 @@ export class RuntimeKernel {
         )
       }
       if (state && !isTerminal(state)) {
-        await snapshots.save(this.withOutcome(state, outcome))
+        try { await snapshots.save(this.withOutcome(state, outcome), fence) } catch { /* lease loss makes this write intentionally best effort */ }
       }
       return state && isTerminal(state) ? outcomeFromTerminalState(state) : outcome
     } finally {
       await leaseGuard.stop()
-      await leases.release(identity, holderId)
+      try { await leases.release(identity, holderId, fence) } catch { /* best effort cleanup */ }
     }
   }
 
@@ -625,7 +641,8 @@ export class RuntimeKernel {
       state,
       pending.node.id,
       'node.after_middleware',
-      payload
+      payload,
+      leaseGuard.getFence()
     )
     const committed = parseAfterMiddlewarePayload(recorded.payload)
     assertAfterMiddlewareMatches(pending.completed, committed)
@@ -815,7 +832,8 @@ export class RuntimeKernel {
     state: RunStateV3,
     nodeId: string,
     eventType: string,
-    payload: unknown
+    payload: unknown,
+    fence?: LeaseFence
   ): Promise<RunEventEnvelope> {
     const existing = await this.options.events.listAfter(identity, 0)
     const seq = existing.reduce((max, event) => Math.max(max, event.seq), 0) + 1
@@ -828,7 +846,7 @@ export class RuntimeKernel {
       eventType,
       payload,
       timestamp: this.options.nowIso()
-    })
+    }, fence)
   }
 
   private async reachCrashPoint(point: RuntimeKernelCrashPoint): Promise<void> {
@@ -880,6 +898,10 @@ function leaseUnavailableOutcome(): RunOutcome {
     retryable: true,
     details: { code: 'lease_unavailable' }
   }
+}
+
+function isFenceError(error: unknown): boolean {
+  return error instanceof Error && /lease fence|active lease fence|stale lease/i.test(error.message)
 }
 
 function preparedCallIds(value: unknown): string[] {

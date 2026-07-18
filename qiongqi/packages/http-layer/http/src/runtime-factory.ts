@@ -1122,7 +1122,7 @@ export function createKernelV3TurnRunner(input: {
   toolRuntime: ToolRuntimeV3
 }): KernelV3TurnRunner {
   const { options, core, model, tools } = input
-  const snapshots = new FileRunStateStore(input.runtimeV3Root)
+  const snapshots = new FileRunStateStore(input.runtimeV3Root, { requireFence: true })
   const taskStates = new FileTaskStateStore(input.runtimeV3Root)
 
   const awaitUserInput = async (
@@ -1408,7 +1408,7 @@ async function assembleRuntime(input: {
   })
   const orchestrationMode = orchestrationModeForRuntimeOptions(options)
   const runtimeV3Root = join(options.dataDir, 'runtime-v3')
-  const runtimeV3Events = orchestrationMode === 'kernel_v3' ? new FileRunEventStore(runtimeV3Root) : undefined
+  const runtimeV3Events = orchestrationMode === 'kernel_v3' ? new FileRunEventStore(runtimeV3Root, { requireFence: true }) : undefined
   const toolRuntime = runtimeV3Events
     ? new ToolRuntimeV3({ toolHost: tools.toolHost, effects: new EffectCommitCoordinator({ events: runtimeV3Events, results: new FileEffectResultStore(runtimeV3Root), nowIso: core.nowIso }) })
     : undefined
