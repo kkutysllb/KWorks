@@ -210,16 +210,16 @@ function SkillSettingsList({
                 </div>
               </ItemTitle>
               <ItemDescription className="mt-1 space-y-1">
-                <p className="line-clamp-3">
+                <span className="block line-clamp-3">
                   {skill.description ?? "暂无描述"}
-                </p>
-                <p className="truncate text-xs">
+                </span>
+                <span className="block truncate text-xs">
                   {skill.root ?? "未绑定本地目录"}
-                </p>
+                </span>
                 {skill.validationError && (
-                  <p className="text-destructive text-xs">
+                  <span className="block text-destructive text-xs">
                     {skill.validationError}
-                  </p>
+                  </span>
                 )}
               </ItemDescription>
             </ItemContent>

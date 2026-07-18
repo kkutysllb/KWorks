@@ -113,13 +113,13 @@ export function WorkModeSettingsPage() {
                       </span>
                     </ItemTitle>
                     <ItemDescription className="mt-2 min-w-0 space-y-1">
-                      <p className="truncate text-xs">{mode.id}</p>
-                      <p className="line-clamp-2">
+                      <span className="block truncate text-xs">{mode.id}</span>
+                      <span className="block line-clamp-2">
                         {mode.description ?? "暂无说明"}
-                      </p>
-                      <p className="text-xs">
+                      </span>
+                      <span className="block text-xs">
                         已启用 {enabledSkills} / {totalSkills} 个技能
-                      </p>
+                      </span>
                     </ItemDescription>
                   </ItemContent>
                   {mutable && (
