@@ -370,29 +370,14 @@ export interface Translations {
     name: string;
     nameHint: string;
     displayName: string;
-    provider: string;
-    providerHint: string;
     modelId: string;
     modelIdHint: string;
     apiKey: string;
     apiKeyHint: string;
     baseUrl: string;
     baseUrlHint: string;
-    maxTokens: string;
-    temperature: string;
-    requestTimeout: string;
-    modelDescription: string;
-    modelDescriptionHint: string;
-    supportsThinking: string;
-    supportsVision: string;
-    supportsReasoningEffort: string;
-    reasoningEffortValues: string;
-    reasoningEffortValuesHint: string;
-    thinkingEnabled: string;
-    thinkingDisabled: string;
     emptyTitle: string;
     emptyDescription: string;
-    badJson: string;
   };
 
   // Settings

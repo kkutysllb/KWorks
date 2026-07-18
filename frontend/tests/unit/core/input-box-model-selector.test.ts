@@ -105,7 +105,6 @@ function model(name: string, active: boolean): Model {
   return {
     id: name,
     name,
-    use: "qiongqi",
     model: name,
     display_name: name,
     active,

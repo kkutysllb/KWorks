@@ -1,22 +1,15 @@
 "use client";
 
 import {
-  ChevronDown,
   CpuIcon,
   EyeIcon,
   EyeOffIcon,
   GlobeIcon,
   Settings2Icon,
-  ZapIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -26,9 +19,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/core/i18n/hooks";
 import type { Model, ModelRequest } from "@/core/models/types";
 
@@ -104,24 +94,10 @@ export function ModelDialog({
 
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [useVal, setUseVal] = useState("");
   const [modelId, setModelId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [originalApiKey, setOriginalApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [maxTokens, setMaxTokens] = useState("");
-  const [contextWindowTokens, setContextWindowTokens] = useState("");
-  const [temperature, setTemperature] = useState("");
-  const [requestTimeout, setRequestTimeout] = useState("");
-  const [description, setDescription] = useState("");
-  const [supportsThinking, setSupportsThinking] = useState(false);
-  const [supportsVision, setSupportsVision] = useState(false);
-  const [supportsReasoningEffort, setSupportsReasoningEffort] =
-    useState(false);
-  const [reasoningEffortValues, setReasoningEffortValues] = useState("");
-  const [thinkingEnabled, setThinkingEnabled] = useState("");
-  const [thinkingDisabled, setThinkingDisabled] = useState("");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [errFields, setErrFields] = useState<Set<string>>(new Set());
 
@@ -130,63 +106,18 @@ export function ModelDialog({
       if (model) {
         setName(model.name);
         setDisplayName(model.display_name ?? "");
-        setUseVal(model.use ?? "");
         setModelId(model.model ?? "");
         setApiKey(model.api_key ?? "");
         setOriginalApiKey(model.api_key ?? "");
         setBaseUrl(model.base_url ?? "");
-        setMaxTokens(model.max_tokens != null ? String(model.max_tokens) : "");
-        setContextWindowTokens(
-          model.context_window_tokens != null
-            ? String(model.context_window_tokens)
-            : "",
-        );
-        setTemperature(
-          model.temperature != null ? String(model.temperature) : "",
-        );
-        setRequestTimeout(
-          model.request_timeout != null ? String(model.request_timeout) : "",
-        );
-        setDescription(model.description ?? "");
-        setSupportsThinking(!!model.supports_thinking);
-        setSupportsVision(!!model.supports_vision);
-        setSupportsReasoningEffort(!!model.supports_reasoning_effort);
-        setReasoningEffortValues(
-          Array.isArray(model.reasoning_effort_values)
-            ? model.reasoning_effort_values.join(", ")
-            : "",
-        );
-        setThinkingEnabled(
-          model.when_thinking_enabled
-            ? JSON.stringify(model.when_thinking_enabled, null, 2)
-            : "",
-        );
-        setThinkingDisabled(
-          model.when_thinking_disabled
-            ? JSON.stringify(model.when_thinking_disabled, null, 2)
-            : "",
-        );
       } else {
         setName("");
         setDisplayName("");
-        setUseVal("");
         setModelId("");
         setApiKey("");
         setOriginalApiKey("");
         setBaseUrl("");
-        setMaxTokens("");
-        setContextWindowTokens("");
-        setTemperature("");
-        setRequestTimeout("");
-        setDescription("");
-        setSupportsThinking(false);
-        setSupportsVision(false);
-        setSupportsReasoningEffort(false);
-        setReasoningEffortValues("");
-        setThinkingEnabled("");
-        setThinkingDisabled("");
       }
-      setAdvancedOpen(false);
       setShowApiKey(false);
       setError(null);
       setErrFields(new Set());
@@ -196,29 +127,9 @@ export function ModelDialog({
   const handleSave = async () => {
     const missing = new Set<string>();
     if (!name.trim()) missing.add("name");
-    if (!useVal.trim()) missing.add("use");
     if (!modelId.trim()) missing.add("modelId");
     setErrFields(missing);
     if (missing.size > 0) return;
-
-    let thinkingEnabledParsed: Record<string, unknown> | null = null;
-    let thinkingDisabledParsed: Record<string, unknown> | null = null;
-    if (thinkingEnabled.trim()) {
-      try {
-        thinkingEnabledParsed = JSON.parse(thinkingEnabled);
-      } catch {
-        setError(t.models.badJson + " (" + t.models.thinkingEnabled + ")");
-        return;
-      }
-    }
-    if (thinkingDisabled.trim()) {
-      try {
-        thinkingDisabledParsed = JSON.parse(thinkingDisabled);
-      } catch {
-        setError(t.models.badJson + " (" + t.models.thinkingDisabled + ")");
-        return;
-      }
-    }
 
     setSaving(true);
     setError(null);
@@ -226,7 +137,6 @@ export function ModelDialog({
       await onSave({
         name: name.trim(),
         display_name: displayName.trim() || null,
-        use: useVal.trim(),
         model: modelId.trim(),
         api_key: toApiKeyRequestValue({
           apiKey,
@@ -234,24 +144,6 @@ export function ModelDialog({
           showApiKey,
         }),
         base_url: baseUrl.trim() || null,
-        max_tokens: maxTokens ? Number(maxTokens) : null,
-        context_window_tokens: contextWindowTokens
-          ? Number(contextWindowTokens)
-          : null,
-        temperature: temperature ? Number(temperature) : null,
-        request_timeout: requestTimeout ? Number(requestTimeout) : null,
-        description: description.trim() || null,
-        supports_thinking: supportsThinking,
-        supports_vision: supportsVision,
-        supports_reasoning_effort: supportsReasoningEffort,
-        reasoning_effort_values: reasoningEffortValues.trim()
-          ? reasoningEffortValues
-              .split(",")
-              .map((v) => v.trim())
-              .filter(Boolean)
-          : null,
-        when_thinking_enabled: thinkingEnabledParsed,
-        when_thinking_disabled: thinkingDisabledParsed,
       });
       onOpenChange(false);
     } catch (e) {
@@ -321,20 +213,6 @@ export function ModelDialog({
               </div>
 
               <div className="grid gap-2">
-                <label htmlFor="md-use" className={labelCls}>
-                  {t.models.provider} <span className="text-emerald-500 font-bold">*</span>
-                </label>
-                <Input
-                  id="md-use"
-                  value={useVal}
-                  onChange={(e) => setUseVal(e.target.value)}
-                  placeholder="langchain_openai:ChatOpenAI"
-                  className={fieldCls("use")}
-                />
-                <p className={hintCls}>{t.models.providerHint}</p>
-              </div>
-
-              <div className="grid gap-2">
                 <label htmlFor="md-model" className={labelCls}>
                   {t.models.modelId} <span className="text-emerald-500 font-bold">*</span>
                 </label>
@@ -342,15 +220,13 @@ export function ModelDialog({
                   id="md-model"
                   value={modelId}
                   onChange={(e) => setModelId(e.target.value)}
-                  placeholder="gpt-4"
+                  placeholder="gpt-4o"
                   className={fieldCls("modelId")}
                 />
                 <p className={hintCls}>{t.models.modelIdHint}</p>
               </div>
             </div>
           </div>
-
-          <Separator />
 
           {/* ── 连接配置 ── */}
           <div className="space-y-3">
@@ -418,183 +294,11 @@ export function ModelDialog({
               </div>
             </div>
           </div>
-
-          <Separator />
-
-          {/* ── 参数配置 ── */}
-          <div className="space-y-3">
-            <p className={sectionTitleCls}>
-              <Settings2Icon className="mr-1.5 inline h-3.5 w-3.5" />
-              参数配置
-            </p>
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="grid gap-2">
-                  <label htmlFor="md-maxtokens" className={labelCls}>
-                    {t.models.maxTokens}
-                  </label>
-                  <Input
-                    id="md-maxtokens"
-                    type="number"
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(e.target.value)}
-                    placeholder="4096"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="md-context-window" className={labelCls}>
-                    上下文窗口
-                  </label>
-                  <Input
-                    id="md-context-window"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={contextWindowTokens}
-                    onChange={(e) => setContextWindowTokens(e.target.value)}
-                    placeholder="128000"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="md-temperature" className={labelCls}>
-                    {t.models.temperature}
-                  </label>
-                  <Input
-                    id="md-temperature"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="2"
-                    value={temperature}
-                    onChange={(e) => setTemperature(e.target.value)}
-                    placeholder="0.7"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <label htmlFor="md-timeout" className={labelCls}>
-                  {t.models.requestTimeout}
-                </label>
-                <Input
-                  id="md-timeout"
-                  type="number"
-                  step="0.1"
-                  value={requestTimeout}
-                  onChange={(e) => setRequestTimeout(e.target.value)}
-                  placeholder="600"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label htmlFor="md-desc" className={labelCls}>
-                  {t.models.modelDescription}
-                </label>
-                <Textarea
-                  id="md-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t.models.modelDescriptionHint}
-                  rows={2}
-                />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* ── 高级功能 ── */}
-          <div className="space-y-3">
-            <p className={sectionTitleCls}>
-              <ZapIcon className="mr-1.5 inline h-3.5 w-3.5" />
-              高级功能
-            </p>
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">{t.models.supportsThinking}</span>
-                <Switch
-                  checked={supportsThinking}
-                  onCheckedChange={setSupportsThinking}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">{t.models.supportsVision}</span>
-                <Switch
-                  checked={supportsVision}
-                  onCheckedChange={setSupportsVision}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">
-                  {t.models.supportsReasoningEffort}
-                </span>
-                <Switch
-                  checked={supportsReasoningEffort}
-                  onCheckedChange={setSupportsReasoningEffort}
-                />
-              </div>
-              {supportsReasoningEffort && (
-                <div className="grid gap-2">
-                  <label htmlFor="md-effort-values" className={labelCls}>
-                    {t.models.reasoningEffortValues}
-                  </label>
-                  <Input
-                    id="md-effort-values"
-                    value={reasoningEffortValues}
-                    onChange={(e) => setReasoningEffortValues(e.target.value)}
-                    placeholder="minimal, low, medium, high"
-                  />
-                  <p className={hintCls}>{t.models.reasoningEffortValuesHint}</p>
-                </div>
-              )}
-            </div>
-
-            <Collapsible
-              open={advancedOpen}
-              onOpenChange={setAdvancedOpen}
-              className="border rounded-lg p-3"
-            >
-              <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium">
-                <span>
-                  {advancedOpen ? t.common.close : t.common.more}
-                </span>
-                <ChevronDown className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 space-y-3">
-                <div className="grid gap-2">
-                  <label className={labelCls}>
-                    {t.models.thinkingEnabled}
-                  </label>
-                  <Textarea
-                    value={thinkingEnabled}
-                    onChange={(e) => setThinkingEnabled(e.target.value)}
-                    placeholder='{"thinking": {"type": "enabled"}}'
-                    rows={3}
-                    className="font-mono text-xs"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label className={labelCls}>
-                    {t.models.thinkingDisabled}
-                  </label>
-                  <Textarea
-                    value={thinkingDisabled}
-                    onChange={(e) => setThinkingDisabled(e.target.value)}
-                    placeholder='{"thinking": {"type": "disabled"}}'
-                    rows={3}
-                    className="font-mono text-xs"
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
         </div>
 
         {error && (
           <p className="mx-6 text-destructive text-sm rounded-md bg-destructive/5 px-3 py-2">{error}</p>
         )}
-
-        <Separator />
 
         <DialogFooter className="px-6 pb-5">
           <Button

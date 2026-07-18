@@ -43,7 +43,7 @@ describe("ModelDialog API key input behavior", () => {
     ).toBe("sk-new-secret");
   });
 
-  test("keeps context window tokens on the normal model profile request path", () => {
+  test("keeps essential model connection fields in the dialog and types", () => {
     const dialog = readFileSync(
       resolve(repoRoot, "src/components/workspace/models/model-dialog.tsx"),
       "utf8",
@@ -53,8 +53,9 @@ describe("ModelDialog API key input behavior", () => {
       "utf8",
     );
 
-    expect(dialog).toContain("contextWindowTokens");
-    expect(dialog).toContain("context_window_tokens");
-    expect(types).toContain("context_window_tokens?: number | null");
+    expect(dialog).toContain("base_url");
+    expect(dialog).toContain("api_key");
+    expect(dialog).toContain("modelId");
+    expect(types).toContain("base_url?: string | null");
   });
 });

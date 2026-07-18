@@ -167,11 +167,6 @@ export function ModelConfigSection() {
                   <span className="min-w-0 truncate text-sm font-medium">
                     {model.display_name || model.name}
                   </span>
-                  {model.supports_thinking && (
-                    <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                      思考
-                    </span>
-                  )}
                   {model.supports_vision && (
                     <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
                       视觉
@@ -180,8 +175,6 @@ export function ModelConfigSection() {
                 </div>
                 <p className="text-muted-foreground truncate font-mono text-xs">
                   {model.model}
-                  <span className="mx-1">·</span>
-                  {model.use}
                 </p>
               </div>
               <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
