@@ -1,5 +1,5 @@
 import { mkdir, readdir, stat } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -726,13 +726,19 @@ export async function createToolMatrix(
     ...webProviders.providers,
     ...buildMemoryToolProviders(memoryStore)
   ]
+  const pythonPathEnv = computePythonPathForSkillRoots([...builtinSkillRoots, ...runtimeMountedSkillRoots])
   const enrichFinanceContext = async (context: ToolHostContext): Promise<ToolHostContext> => {
-    if (!context.ownerUserId) return context
+    if (!context.ownerUserId) {
+      return pythonPathEnv
+        ? { ...context, environment: { ...(context.environment ?? {}), PYTHONPATH: pythonPathEnv } }
+        : context
+    }
     const resolved = await loadFinanceDataSource(core.kworksUserDataStore, context.ownerUserId)
     return {
       ...context,
       environment: {
         ...(context.environment ?? {}),
+        ...(pythonPathEnv ? { PYTHONPATH: pythonPathEnv } : {}),
         ...resolved.environment
       }
     }
@@ -1909,6 +1915,35 @@ export async function resolveBuiltinSkillRoots(
   const qiongqiCodingRoot = await resolveQiongqiCodingSkillRoot()
   if (qiongqiCodingRoot) roots.push(qiongqiCodingRoot)
   return [...new Set(roots)]
+}
+
+/**
+ * Given a list of skill root directories (e.g. `skills/public/finance/`),
+ * find every immediate subdirectory that contains a `src/` folder and build
+ * a PYTHONPATH string so that shared Python packages (like `kk_common`)
+ * are importable by other skill scripts.
+ *
+ * Example: `skills/public/finance/kk-common/src/` → added to PYTHONPATH.
+ */
+function computePythonPathForSkillRoots(skillRoots: readonly string[]): string {
+  const paths: string[] = []
+  const seen = new Set<string>()
+  for (const root of skillRoots) {
+    try {
+      for (const entry of readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const srcDir = join(root, entry.name, 'src')
+        if (existsSync(srcDir) && !seen.has(srcDir)) {
+          seen.add(srcDir)
+          paths.push(srcDir)
+        }
+      }
+    } catch { /* root may not exist or be unreadable */ }
+  }
+  if (paths.length === 0) return ''
+  const existing = process.env.PYTHONPATH?.trim()
+  const all = existing ? [...paths, ...existing.split(':').filter(Boolean)] : paths
+  return all.join(':')
 }
 
 async function resolveQiongqiCodingSkillRoot(): Promise<string | undefined> {
