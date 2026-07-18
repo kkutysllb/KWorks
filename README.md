@@ -9,7 +9,7 @@
 
 # KWorks
 
-> **A local-first, full-stack AI workspace** — an open, composable super-agent platform that fuses a Next.js web UI, a domain-neutral multi-agent runtime (QiongQi), and an Electron desktop shell into a single, self-contained product.
+> **A local-first desktop AI workspace** — an open, composable super-agent platform that fuses an Electron shell, a Next.js renderer, and the domain-neutral QiongQi multi-agent runtime into a single, self-contained desktop product.
 
 KWorks is engineered around a single thesis: **the model is the skeleton; the skills are the flesh.** The runtime stays domain-neutral so that the same engine can be a coding copilot today, a research analyst tomorrow, or a creative studio the day after — simply by swapping the skills loaded into it.
 
@@ -18,7 +18,7 @@ KWorks is engineered around a single thesis: **the model is the skeleton; the sk
 ## ✨ Highlights
 
 - **Local-first by design** — the full stack runs on `127.0.0.1`; no data leaves your machine unless you explicitly configure a remote model provider.
-- **Three-layer composable architecture** — `qiongqi/` (engine), `frontend/` (web UI), `desktop/` (Electron shell) are independently buildable and deployable.
+- **Electron-only product surface** — all development and runtime entrypoints go through `desktop/`; `frontend/` is the renderer source and static-export build target, not a standalone web app.
 - **Cache-first agent engine** — QiongQi maximizes per-token ROI through immutable prompt prefixes, TTL/LRU caching, tool-catalog fingerprinting, and context compaction.
 - **Pluggable capability matrix** — Skills, MCP servers, Web tools, Memory, and Subagent Delegation are all hot-pluggable providers behind a unified `CapabilityRegistry`.
 - **Declarative loop engineering** — `LoopRunner` interprets `LoopPlan` phases (`build-prompt → run-model → decide → evaluate → dispatch-tools`) with bounded retry and rich audit events.
@@ -67,7 +67,7 @@ KWorks is engineered around a single thesis: **the model is the skeleton; the sk
                    └───────────────────────┘
 ```
 
-The repository itself is **not** a pnpm workspace at the root — each of `qiongqi/`, `frontend/`, and `desktop/` is an independent package with its own `pnpm-lock.yaml`. This keeps the release boundaries explicit: the web build can be deployed without Electron, and the runtime can serve non-browser clients (CLI, A2A peers) without the frontend.
+The repository itself is **not** a pnpm workspace at the root — each of `qiongqi/`, `frontend/`, and `desktop/` is an independent package with its own `pnpm-lock.yaml`. The supported product entrypoint is Electron: `desktop/` starts the renderer dev server in development and bundles the renderer static export for packaged releases.
 
 > **Note on `third_party/`** — older branches may contain `third_party/qiongqi`. This is a migration leftover; the canonical source lives at the repository root under `qiongqi/`. Do not use `third_party/` paths for new code.
 
@@ -78,13 +78,13 @@ The repository itself is **not** a pnpm workspace at the root — each of `qiong
 ```text
 KWorks/
 ├── qiongqi/            # QiongQi multi-agent runtime (18 internal packages)
-├── frontend/           # Next.js 16 + React 19 web UI
+├── frontend/           # Next.js 16 + React 19 Electron renderer source
 ├── desktop/            # Electron desktop shell
-├── skills/             # Shared agent skills (consumed by both web and desktop)
+├── skills/             # Shared agent skills bundled into the desktop app
 │   └── public/         # 25+ public skills (coding, research, design, media...)
 ├── scripts/
-│   └── serve.mjs       # Root-level stack orchestrator (start/stop/status)
-├── start.sh            # Thin bash entry delegating to scripts/serve.mjs
+│   └── serve.mjs       # Disabled legacy web-stack launcher
+├── start.sh            # Convenience wrapper around desktop dev/build commands
 ├── logs/               # Runtime logs (gateway.log, frontend.log)
 ├── .pids/              # Process ID files for managed services
 ├── assets/             # Project cover artwork
@@ -100,7 +100,7 @@ KWorks/
 
 ### Prerequisites
 
-- **Node.js 22+** (required by the frontend; the runtime supports Node 20+)
+- **Node.js 22+** (required by the Electron renderer toolchain; the runtime supports Node 20+)
 - **pnpm 10+**
 - A working C++ toolchain if you plan to use the `hybrid` SQLite storage (Xcode CLT on macOS, `build-essential` on Linux, Visual Studio Build Tools on Windows)
 
@@ -109,51 +109,26 @@ KWorks/
 ```bash
 cd qiongqi   && pnpm install
 cd ../frontend && pnpm install
-cd ../desktop   && pnpm install   # only needed for desktop packaging
+cd ../desktop   && pnpm install
 ```
 
-### 2. Build the QiongQi runtime
+### 2. Launch the desktop app in development
 
-The runtime is the backend for both the web UI and the desktop shell, so it must be built first:
+Run KWorks through Electron. The desktop dev launcher compiles main/preload TypeScript, prepares the QiongQi runtime, starts the local gateway, starts the Next renderer dev server, and opens the Electron window.
 
 ```bash
-cd qiongqi
-pnpm run build
-node scripts/flatten-dist.mjs     # flatten the nested dist/ layout
-cd ..
+cd desktop
+pnpm run dev
 ```
 
-### 3. Launch the full local stack
+### 3. Package the desktop app
 
 ```bash
-./start.sh start
+cd desktop
+pnpm run build:app
 ```
 
-`start.sh` delegates to [`scripts/serve.mjs`](./scripts/serve.mjs), which:
-
-1. Writes a generated `config.json` into the runtime data directory
-2. Starts the QiongQi gateway (preset `coding`, storage `file` by default)
-3. Waits for `/health` to return `ok`
-4. Starts the Next.js frontend in dev mode (or `prod` if you pass `./start.sh start prod`)
-
-Default service addresses:
-
-| Service  | Default address          | Description                              |
-| -------- | ------------------------ | ---------------------------------------- |
-| Frontend | `http://127.0.0.1:9192`  | Next.js web UI                           |
-| Gateway  | `http://127.0.0.1:9193`  | QiongQi HTTP/SSE API + A2A endpoints     |
-
-> Override ports via the `FRONTEND_PORT` and `GATEWAY_PORT` environment variables in `.env`.
-
-### 4. Common service commands
-
-```bash
-./start.sh status     # show running gateway / frontend PIDs
-./start.sh logs       # tail -f gateway.log and frontend.log
-./start.sh restart    # stop + start
-./start.sh stop       # stop both services
-./start.sh start prod # start frontend in production mode
-```
+`frontend/` scripts such as `pnpm dev`, `pnpm start`, and `pnpm preview` are intentionally disabled. The Next dev server is started only by `desktop/scripts/dev.mjs`, where the Electron preload bridge is available.
 
 ---
 
@@ -161,29 +136,21 @@ Default service addresses:
 
 ### Environment variables (`.env`)
 
-The root `.env` file is loaded by `start.sh` via Node's native `--env-file` flag. The key variables are:
+The desktop launcher reads configuration from the environment and user data store. The key variables are:
 
 | Variable             | Purpose                                                       | Default                       |
 | -------------------- | ------------------------------------------------------------- | ----------------------------- |
-| `GATEWAY_PORT`       | Port for the QiongQi HTTP/SSE server                          | `9193`                        |
-| `FRONTEND_PORT`      | Port for the Next.js frontend                                 | `9192`                        |
+| `GATEWAY_PORT`       | Port for the desktop QiongQi HTTP/SSE server                   | `19987`                       |
 | `QIONGQI_API_KEY`    | API key for the upstream LLM provider                         | *(required for real models)*  |
 | `QIONGQI_BASE_URL`   | Base URL of an OpenAI-compatible provider                     | `https://api.deepseek.com`    |
 | `QIONGQI_MODEL`      | Default model id to bootstrap                                 | *(optional)*                  |
-| `QIONGQI_DATA_DIR`   | Root data directory for threads, sessions, and artifacts      | `~/.kworks-workspace-web/...` |
+| `QIONGQI_DATA_DIR`   | Root data directory for threads, sessions, and artifacts      | `~/.kworks-workspace/...`     |
 | `QIONGQI_STORAGE_BACKEND` | `file` (JSONL) or `hybrid` (SQLite + JSONL)             | `file`                        |
-| `KWORKS_WORKSPACE_DIR` | Override the workspace root (defaults to `~/.kworks-workspace-web` for the web stack and `~/.kworks-workspace` for the desktop shell) | *(optional)* |
+| `KWORKS_WORKSPACE_DIR` | Override the desktop workspace root                         | *(optional)* |
 
 > **Backward compatibility**: `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, and `DEEPSEEK_MODEL` are still accepted as aliases when the `QIONGQI_*` equivalents are absent. The runtime is provider-neutral; DeepSeek is only the historical default.
 
-### Data isolation between web and desktop
-
-The web stack and the desktop shell use **completely separate data directories** so that browser sessions and native app sessions never share state:
-
-- **Web** → `~/.kworks-workspace-web/`
-- **Desktop** → `~/.kworks-workspace/`
-
-Each directory holds its own SQLite databases, user records, thread stores, and session logs.
+The desktop workspace lives under `~/.kworks-workspace/` by default. It holds SQLite databases, user records, thread stores, session logs, bundled skills, and runtime artifacts.
 
 ### Runtime configuration file
 
@@ -242,13 +209,13 @@ Run these before pushing changes. Each workspace has its own toolchain:
 
 ```bash
 # Frontend
-cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
+cd frontend && pnpm lint && pnpm typecheck && pnpm test
 
 # QiongQi runtime
 cd qiongqi && pnpm run typecheck && pnpm test:fast
 
 # Desktop
-cd desktop && pnpm run lint && node --test tests/*.test.mjs
+cd desktop && pnpm run lint && node --test tests/*.test.mjs && pnpm run build:app
 ```
 
 For the full QiongQi verification suite (including native SQLite binding and evented A2A):

@@ -52,7 +52,6 @@ import {
   buildWorkModeSkillViews,
   BUILTIN_SKILL_VIEW_ID,
 } from "@/core/skills/work-modes";
-import { env } from "@/env";
 
 import { WorkModeDialog } from "../skills/work-mode-dialog";
 
@@ -229,8 +228,7 @@ function SkillSettingsList({
                 checked={skill.enabled}
                 disabled={
                   isReadonlyView ||
-                  (skill.locked ?? false) ||
-                  env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
+                  (skill.locked ?? false)
                 }
                 onCheckedChange={(checked) => toggleModeSkill(skill, checked)}
               />

@@ -75,8 +75,10 @@ class ShiborAnalyzer(BaseAnalyzer):
         if "1Y" in detail["terms"] and "ON" in detail["terms"]:
             spread = detail["terms"]["1Y"]["value"] - detail["terms"]["ON"]["value"]
             detail["term_spread_1y_on"] = spread
-            if spread < 0.2:
-                signals.append("⚠️ 期限利差倒挂/极度平坦，市场预期经济承压")
+            if spread < 0:
+                signals.append("⚠️ 期限利差倒挂，短端利率高于长端")
+            elif spread < 0.05:
+                signals.append("⚠️ 期限利差极度平坦，曲线接近倒挂")
 
         # LPR
         try:

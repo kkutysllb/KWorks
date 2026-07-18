@@ -108,13 +108,16 @@ class LinkageFetcher:
     #  1. 主力资金（个股 + 板块）
     # ==================================================================
     def fetch_main_capital_stocks(self, trade_date: str, top_n: int = 200) -> pd.DataFrame:
-        """个股主力资金流向 moneyflow（按 trade_date）。"""
+        """个股主力资金流向 moneyflow（按 trade_date）。
+
+        这里返回完整排序后的结果，不在取数层截断，避免上层无法同时
+        正确计算净流入/净流出两侧与整体统计。
+        """
         df = self.ts.moneyflow(trade_date=trade_date)
         if len(df) == 0:
             return pd.DataFrame()
         sort_col = "net_amount" if "net_amount" in df.columns else df.columns[-1]
-        df = df.sort_values(sort_col, ascending=False).head(top_n)
-        return df.reset_index(drop=True)
+        return df.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
     def fetch_main_capital_sector(self, trade_date: str) -> pd.DataFrame:
         """板块主力资金流向 moneyflow_dc（行业板块）。"""

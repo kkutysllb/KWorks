@@ -37,7 +37,6 @@ KWorks is built on a sophisticated agent-based architecture powered by the [qion
 
 ```
 tests/
-├── e2e/                    # E2E tests (Playwright, Chromium, mocked backend)
 └── unit/                   # Unit tests (mirrors src/ layout, powered by Vitest)
 src/
 ├── app/                    # Next.js App Router pages
@@ -99,7 +98,7 @@ When adding new agent features:
 1. Follow the established project structure
 2. Add comprehensive TypeScript types
 3. Implement proper error handling
-4. Write unit tests under `tests/unit/` (run with `pnpm test`) and E2E tests under `tests/e2e/` (run with `pnpm test:e2e`)
+4. Write unit tests under `tests/unit/` (run with `pnpm test`); renderer integration coverage belongs in the Electron desktop package
 5. Update this documentation
 6. Follow the code style guide (ESLint + Prettier)
 

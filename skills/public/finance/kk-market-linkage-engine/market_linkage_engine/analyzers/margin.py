@@ -122,7 +122,30 @@ class MarginAnalyzer(BaseAnalyzer):
         if d.get("top_stocks"):
             lines.append("\n**融资余额 TOP 20 个股：**")
             df = pd.DataFrame(d["top_stocks"]).head(20)
-            lines.append(md_table(df))
+            lines.append(md_table(
+                df,
+                columns=[c for c in (
+                    "trade_date", "ts_code", "name", "rzye", "rqye",
+                    "rzmre", "rzche", "rzrqye"
+                ) if c in df.columns],
+                rename={
+                    "trade_date": "交易日",
+                    "ts_code": "证券代码",
+                    "name": "名称",
+                    "rzye": "融资余额",
+                    "rqye": "融券余额",
+                    "rzmre": "融资买入额",
+                    "rzche": "融资偿还额",
+                    "rzrqye": "两融余额",
+                },
+                formatters={
+                    "rzye": yi,
+                    "rqye": yi,
+                    "rzmre": yi,
+                    "rzche": yi,
+                    "rzrqye": yi,
+                },
+            ))
         if result["signals"]:
             lines.append("\n**信号：**")
             for s in result["signals"]:

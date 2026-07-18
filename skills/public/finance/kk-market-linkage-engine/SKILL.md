@@ -5,7 +5,8 @@ description: |
   主力资金流向、北向资金流向、两融趋势、股指期货基差、7 大期权 ETF 波动率、
   9 大宽基 ETF 份额变化、Shibor 利率走势、龙虎榜分析。
   数据源：Tushare Pro API + 同花顺问财 OpenAPI。
-  输出：日度/周度联动报告 + 综合情绪评分 + 一句话市场总结。
+输出：日度/周度联动报告 + 综合情绪评分 + 一句话市场总结。
+Markdown 表格必须使用用户可读的字段名展示，不直接暴露 `ts_code`、`net_amount` 这类原始接口字段。
 license: MIT
 category: finance
 version: 1.0.0

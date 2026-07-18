@@ -87,15 +87,15 @@ describe("getBackendBaseURL", () => {
     setDesktopBridge(false);
   });
 
-  test("returns empty string in web mode without env var", () => {
+  test("rejects regular browser mode because KWorks is Electron-only", () => {
     setDesktopBridge(false);
-    expect(getBackendBaseURL()).toBe("");
+    expect(() => getBackendBaseURL()).toThrow("Electron desktop bridge");
   });
 
-  test("returns empty string in desktop dev mode (port 18659)", () => {
+  test("returns direct gateway URL in desktop dev mode (port 18659)", () => {
     setDesktopBridge(true);
     stubLocationPort("18659");
-    expect(getBackendBaseURL()).toBe("");
+    expect(getBackendBaseURL()).toBe("http://127.0.0.1:19987");
   });
 
   test("returns direct gateway URL in desktop production mode (non-18659 port)", () => {
@@ -119,17 +119,16 @@ describe("getRuntimeApiBaseURL", () => {
     setDesktopBridge(false);
   });
 
-  test("returns origin-based URL in web mode", () => {
+  test("rejects regular browser mode because KWorks is Electron-only", () => {
     setDesktopBridge(false);
-    const url = getRuntimeApiBaseURL();
-    expect(url).toBe(`${window.location.origin}/api`);
+    expect(() => getRuntimeApiBaseURL()).toThrow("Electron desktop bridge");
   });
 
-  test("returns rewrite proxy URL in desktop dev mode (port 18659)", () => {
+  test("returns direct gateway URL in desktop dev mode (port 18659)", () => {
     setDesktopBridge(true);
     stubLocationPort("18659", "http://localhost:18659");
     const url = getRuntimeApiBaseURL();
-    expect(url).toBe("http://localhost:18659/api");
+    expect(url).toBe("http://127.0.0.1:19987/api");
   });
 
   test("returns direct gateway URL in desktop production mode", () => {

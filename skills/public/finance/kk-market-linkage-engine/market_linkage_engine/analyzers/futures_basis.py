@@ -45,17 +45,17 @@ class FuturesBasisAnalyzer(BaseAnalyzer):
             detail["contracts"][variety] = contract_info
             if contract_info:
                 basis_rate = contract_info.get("basis_rate", 0)
-                if basis_rate < BASIS_STRONG_LONG:
+                if basis_rate > BASIS_STRONG_LONG:
                     bull_count += 1
                     signals.append(
                         f"🟢 {variety}({INDEX_NAMES.get(idx_code, idx_code)}) "
                         f"升水 {pct_str(basis_rate)}，多头情绪"
                     )
-                elif basis_rate > BASIS_STRONG_SHORT:
+                elif basis_rate < BASIS_STRONG_SHORT:
                     bear_count += 1
                     signals.append(
                         f"🔴 {variety}({INDEX_NAMES.get(idx_code, idx_code)}) "
-                        f"贴水 {pct_str(basis_rate)}，空头情绪"
+                        f"贴水 {pct_str(abs(basis_rate))}，空头情绪"
                     )
 
         # 综合评分
@@ -141,8 +141,8 @@ class FuturesBasisAnalyzer(BaseAnalyzer):
             "basis": basis,
             "basis_rate": basis_rate,
             "net_long_holding": net_long,
-            "signal": "升水偏多" if basis_rate < BASIS_STRONG_LONG
-                      else ("贴水偏空" if basis_rate > BASIS_STRONG_SHORT else "基差中性"),
+            "signal": "升水偏多" if basis_rate > BASIS_STRONG_LONG
+                      else ("贴水偏空" if basis_rate < BASIS_STRONG_SHORT else "基差中性"),
         }
 
     def to_markdown(self, result: Dict[str, Any]) -> str:

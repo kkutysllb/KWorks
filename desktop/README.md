@@ -9,7 +9,7 @@ The Electron shell that wraps the KWorks frontend and bundles the QiongQi runtim
 ## Highlights
 
 - **Single double-clickable app** — bundles runtime + skills + frontend, no external dependencies at runtime.
-- **Isolated data directory** — uses `~/.kworks-workspace/`, fully separated from the web stack's `~/.kworks-workspace-web/`.
+- **Isolated data directory** — uses `~/.kworks-workspace/` for all desktop state.
 - **Bundled backend lifecycle** — spawns and supervises the QiongQi gateway as a child process, polls `/health`, and shuts it down cleanly on exit.
 - **Custom `app://` scheme** — serves the static frontend export with `secure: true`, `corsEnabled: true`, `supportFetchAPI: true`, so browser-grade APIs work inside Electron.
 - **System tray + global shortcut** — `CmdOrCtrl+Shift+O` toggles the window; closing the window hides to tray instead of quitting.
@@ -39,7 +39,7 @@ desktop/
 │   ├── main.ts                  # Electron main process entry (window, tray, menu, shortcut)
 │   ├── backend.ts               # QiongQi gateway child-process lifecycle
 │   ├── qiongqi-launch-config.ts # Resolve model / baseUrl / apiKey / storage from env or user config
-│   ├── frontend-protocol.ts     # Resolve the frontend URL (dev server vs. app:// static export)
+│   ├── frontend-protocol.ts     # Resolve app:// static-export request paths
 │   ├── ipc.ts                   # IPC channel registration (main ↔ renderer)
 │   ├── preload.ts               # Context-isolated preload (compiled to dist/preload.cjs)
 │   ├── paths.ts                 # Path resolution for bundled runtime, skills, logs, data dirs
@@ -49,7 +49,7 @@ desktop/
 │   ├── logger.ts                # Shared logger + renderer log relay
 │   └── url-policy.ts            # Allowed-origin / external-URL policy
 ├── scripts/
-│   ├── dev.mjs                  # Dev launcher (builds TS, starts Electron + Vite dev)
+│   ├── dev.mjs                  # Dev launcher (builds TS, starts gateway + Next dev + Electron)
 │   ├── generate-icons.sh        # Generate platform icons from a source PNG
 │   ├── fix-node-pty-permissions.mjs  # postinstall: fix native binary perms
 │   └── verify-package-resources.mjs  # Pre-pack assertion that resources exist
@@ -85,10 +85,9 @@ pnpm run dev
 `scripts/dev.mjs` will:
 
 1. Compile `src/*.ts` → `dist/` (and `preload.ts` → `dist/preload.cjs`)
-2. Start the Electron main process, which in turn:
-   - Resolves the frontend (defaults to the repo-root `frontend/` dev server on port 9192 when `DEV_SERVER_URL` is reachable, otherwise falls back to the static export)
-   - Launches the QiongQi gateway from the repo-root `qiongqi/` runtime
-3. Open the KWorks window pointed at the frontend
+2. Start the QiongQi gateway from the repo-root `qiongqi/` runtime
+3. Start the repo-root `frontend/` Next dev server on `127.0.0.1:18659`
+4. Start Electron with the preload bridge enabled and open the KWorks window
 
 ### Packaging a release
 
@@ -129,13 +128,12 @@ pnpm run lint                # tsc --noEmit for main + preload
 | Variable                       | Purpose                                                                                  |
 | ------------------------------ | ---------------------------------------------------------------------------------------- |
 | `KWORKS_SKIP_BACKEND_AUTOLAUNCH` | Set to `1` to skip auto-launching the bundled gateway (useful for debugging the shell). |
-| `DEV_SERVER_URL`               | Override the dev frontend URL (defaults to `http://127.0.0.1:9192`).                     |
 | `KWORKS_WORKSPACE_DIR`         | Override the workspace root (defaults to `~/.kworks-workspace`).                         |
 | `QIONGQI_API_KEY` / `QIONGQI_BASE_URL` / `QIONGQI_MODEL` | Forwarded to the bundled gateway when launching.                          |
 
 ### Default ports
 
-The desktop gateway listens on **`127.0.0.1:19987`** by default — deliberately distinct from the web stack's `9193` so the two can run side by side on the same machine without port conflicts.
+The desktop gateway listens on **`127.0.0.1:19987`** by default. The Electron dev renderer listens on **`127.0.0.1:18659`** and is started only by `scripts/dev.mjs`.
 
 ### Data directory
 
@@ -204,9 +202,9 @@ The 18 test suites cover backend lifecycle, single-instance behavior, multi-wind
 
 ### Dev vs. packaged resolution
 
-`frontend-protocol.ts` decides where the renderer loads from:
+The main process decides where the renderer loads from:
 
-- **Dev** — if `DEV_SERVER_URL` (or the default `http://127.0.0.1:9192`) responds, load it for hot reload.
+- **Dev** — `scripts/dev.mjs` starts Next on `http://127.0.0.1:18659`, then Electron loads that URL for hot reload.
 - **Packaged** — register the `app://` scheme and load `app://-/index.html` from the bundled `frontend-out/`.
 
 Similarly, `backend.ts` resolves the runtime:

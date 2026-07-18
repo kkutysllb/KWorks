@@ -601,16 +601,12 @@ async function waitForGatewayReady(port) {
 }
 
 // ── 2. Next.js dev server ────────────────────────────────────────────────
-// IMPORTANT: dev mode does NOT set DESKTOP_BUILD. That env var switches Next.js
-// to `output: "export"` (static), which is incompatible with the SSR auth guard
-// in app/workspace/layout.tsx (`export const dynamic = "force-dynamic"`).
-// Static export is only used by `desktop-build.mjs` (which patches that layout).
+// IMPORTANT: dev mode does NOT set DESKTOP_BUILD. Static export is only used
+// by `desktop-build.mjs` for packaged Electron builds.
 //
-// In dev we run the normal SSR dev server with rewrites proxying /api/* to the
-// desktop gateway on 19987. Desktop detection (`isDesktop()`) still works
-// because it checks `window.kworksDesktop` (injected by the preload), not the
-// DESKTOP_BUILD env var. Cookie-based auth flows through the Next.js proxy,
-// matching fetcher.ts's `port === "18659"` credentials branch.
+// In Electron-only mode the Next dev server is only the renderer hot-reload
+// host. Browser APIs call the desktop gateway directly via getBackendBaseURL(),
+// with CORS allowed by DESKTOP_DEV_ORIGINS below.
 let frontendReadyPromise = null;
 
 function startFrontend() {
@@ -626,13 +622,6 @@ function startFrontend() {
       cwd: FRONTEND_DIR,
       env: {
         ...process.env,
-        // Route Next.js rewrites (/api/*) to the desktop gateway, NOT the web
-        // gateway. next.config.js reads this env var (default 9193).
-        KWorks_INTERNAL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
-        // Force same-origin rewrites even when the shell has web/desktop build
-        // public URL env vars loaded.
-        NEXT_PUBLIC_BACKEND_BASE_URL: "",
-        NEXT_PUBLIC_RUNTIME_API_BASE_URL: "",
         GATEWAY_PORT,
       },
       onStdout: (chunk) => {

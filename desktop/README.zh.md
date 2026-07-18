@@ -9,7 +9,7 @@
 ## 核心特性
 
 - **单一可双击应用** —— 内嵌运行时 + 技能 + 前端，运行期无外部依赖。
-- **独立数据目录** —— 使用 `~/.kworks-workspace/`，与网页端的 `~/.kworks-workspace-web/` 完全隔离。
+- **独立数据目录** —— 所有桌面端状态都位于 `~/.kworks-workspace/`。
 - **内嵌后端生命周期管理** —— 以子进程方式启动并监管 QiongQi 网关，轮询 `/health`，退出时优雅关闭。
 - **自定义 `app://` 协议** —— 以 `secure: true`、`corsEnabled: true`、`supportFetchAPI: true` 提供前端静态产物，使浏览器级 API 在 Electron 内可用。
 - **系统托盘 + 全局快捷键** —— `CmdOrCtrl+Shift+O` 切换窗口；关闭窗口时隐藏到托盘而非退出。
@@ -39,7 +39,7 @@ desktop/
 │   ├── main.ts                  # Electron 主进程入口（窗口、托盘、菜单、快捷键）
 │   ├── backend.ts               # QiongQi 网关子进程生命周期
 │   ├── qiongqi-launch-config.ts # 从环境变量或用户配置解析 model / baseUrl / apiKey / storage
-│   ├── frontend-protocol.ts     # 解析前端 URL（dev server 还是 app:// 静态产物）
+│   ├── frontend-protocol.ts     # 解析 app:// 静态导出请求路径
 │   ├── ipc.ts                   # IPC 通道注册（主 ↔ 渲染）
 │   ├── preload.ts               # 上下文隔离的 preload（编译为 dist/preload.cjs）
 │   ├── paths.ts                 # 内嵌运行时、技能、日志、数据目录的路径解析
@@ -49,7 +49,7 @@ desktop/
 │   ├── logger.ts                # 共享 logger + 渲染进程日志转发
 │   └── url-policy.ts            # 允许的来源 / 外部 URL 策略
 ├── scripts/
-│   ├── dev.mjs                  # 开发启动器（编译 TS、启动 Electron + Vite dev）
+│   ├── dev.mjs                  # 开发启动器（编译 TS、启动 gateway + Next dev + Electron）
 │   ├── generate-icons.sh        # 从源 PNG 生成各平台图标
 │   ├── fix-node-pty-permissions.mjs  # postinstall：修复原生二进制权限
 │   └── verify-package-resources.mjs  # 打包前断言资源存在
@@ -85,10 +85,9 @@ pnpm run dev
 `scripts/dev.mjs` 会：
 
 1. 将 `src/*.ts` 编译到 `dist/`（`preload.ts` 编译为 `dist/preload.cjs`）
-2. 启动 Electron 主进程，主进程会：
-   - 解析前端（当 `DEV_SERVER_URL` 可达时默认指向仓库根 `frontend/` dev server 的 9192 端口，否则回退到静态产物）
-   - 从仓库根 `qiongqi/` 运行时启动 QiongQi 网关
-3. 打开指向前端的 KWorks 窗口
+2. 从仓库根 `qiongqi/` 运行时启动 QiongQi 网关
+3. 在 `127.0.0.1:18659` 启动仓库根 `frontend/` Next dev server
+4. 启动带 preload bridge 的 Electron，并打开 KWorks 窗口
 
 ### 打包发布
 
@@ -129,13 +128,12 @@ pnpm run lint                # 对主进程 + preload 执行 tsc --noEmit
 | 变量名                         | 用途                                                                       |
 | ------------------------------ | -------------------------------------------------------------------------- |
 | `KWORKS_SKIP_BACKEND_AUTOLAUNCH` | 设为 `1` 可跳过内嵌网关的自动启动（调试壳时有用）。                        |
-| `DEV_SERVER_URL`               | 覆盖开发前端 URL（默认 `http://127.0.0.1:9192`）。                         |
 | `KWORKS_WORKSPACE_DIR`         | 覆盖工作区根目录（默认 `~/.kworks-workspace`）。                           |
 | `QIONGQI_API_KEY` / `QIONGQI_BASE_URL` / `QIONGQI_MODEL` | 启动时转发给内嵌网关。                                       |
 
 ### 默认端口
 
-桌面端网关默认监听 **`127.0.0.1:19987`** —— 刻意与网页端的 `9193` 区分，使两者能在同一台机器上并行运行而不冲突。
+桌面端网关默认监听 **`127.0.0.1:19987`**。Electron 开发渲染器监听 **`127.0.0.1:18659`**，并且只由 `scripts/dev.mjs` 启动。
 
 ### 数据目录
 
@@ -204,9 +202,9 @@ node --test tests/*.test.mjs
 
 ### 开发与打包的解析差异
 
-`frontend-protocol.ts` 决定渲染进程从何处加载：
+主进程决定渲染进程从何处加载：
 
-- **开发** —— 若 `DEV_SERVER_URL`（或默认的 `http://127.0.0.1:9192`）可达，则加载它以获得热更新。
+- **开发** —— `scripts/dev.mjs` 在 `http://127.0.0.1:18659` 启动 Next，然后 Electron 加载该 URL 以获得热更新。
 - **打包** —— 注册 `app://` 协议，从内嵌的 `frontend-out/` 加载 `app://-/index.html`。
 
 类似地，`backend.ts` 解析运行时：

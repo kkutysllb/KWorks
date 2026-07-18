@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@/env", () => ({
@@ -18,6 +19,8 @@ import { activateModel } from "@/core/models/api";
 describe("models API", () => {
   beforeEach(() => {
     fetchMock.mockReset();
+    (window as unknown as { kworksDesktop?: { gatewayPort: number } }).kworksDesktop =
+      { gatewayPort: 19987 };
   });
 
   test("activates a QiongQi model profile as the runtime core", async () => {

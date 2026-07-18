@@ -23,17 +23,14 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
-import { useI18n } from "@/core/i18n/hooks";
 import { replaceWorkspaceRouteInPlace } from "@/core/navigation/workspace-route";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
-  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [todoPanelOccupiesSpace, setTodoPanelOccupiesSpace] = useState(false);
@@ -265,10 +262,7 @@ export default function ChatPage() {
                           : "ready"
                     }
                     context={chatContext}
-                    disabled={
-                      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
-                      isUploading
-                    }
+                    disabled={isUploading}
                     onContextChange={(context) =>
                       setSettings("context", context)
                     }
@@ -289,11 +283,6 @@ export default function ChatPage() {
                       "bg-background/5 h-32 w-full -translate-y-4 rounded-2xl",
                     )}
                   />
-                )}
-                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
-                  <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                    {t.common.notAvailableInDemoMode}
-                  </div>
                 )}
               </div>
             </div>

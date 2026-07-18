@@ -1,10 +1,6 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-KWorks Frontend is a Next.js 16 web interface for an AI agent system. It communicates with the qiongqi runtime engine to provide thread-based AI conversations with streaming responses, artifacts, and a skills/tools system.
+KWorks Frontend is the Next.js 16 renderer source for the Electron desktop app. It is not a standalone web application; all runtime and integration verification must be launched through `../desktop`.
 
 **Stack**: Next.js 16, React 19, TypeScript 5.8, Tailwind CSS 4, pnpm 10.26.2
 
@@ -12,19 +8,19 @@ KWorks Frontend is a Next.js 16 web interface for an AI agent system. It communi
 
 | Command          | Purpose                                           |
 | ---------------- | ------------------------------------------------- |
-| `pnpm dev`       | Dev server with Turbopack (http://localhost:9192) |
-| `pnpm build`     | Production build                                  |
+| `pnpm dev`       | Disabled; use `pnpm -C ../desktop dev`            |
+| `pnpm build`     | Disabled; use `pnpm -C ../desktop build:app`      |
 | `pnpm check`     | Lint + type check (run before committing)         |
 | `pnpm lint`      | ESLint only                                       |
 | `pnpm lint:fix`  | ESLint with auto-fix                              |
 | `pnpm test`      | Run unit tests with Vitest                        |
-| `pnpm test:e2e`  | Run E2E tests with Playwright (Chromium)          |
+| `pnpm test:e2e`  | Disabled; renderer E2E must launch from Electron  |
 | `pnpm typecheck` | TypeScript type check (`tsc --noEmit`)            |
-| `pnpm start`     | Start production server                           |
+| `pnpm start`     | Disabled; use Electron                            |
 
 Unit tests live under `tests/unit/` and mirror the `src/` layout (e.g., `tests/unit/core/threads/qiongqi-stream.test.ts` tests `src/core/threads/qiongqi-stream.ts`). Powered by Vitest; import source modules via the `@/` path alias.
 
-E2E tests live under `tests/e2e/` and use Playwright with Chromium. They mock all backend APIs via `page.route()` network interception and test real page interactions (navigation, chat input, streaming responses). Config: `playwright.config.ts`.
+The old standalone Chromium E2E config has been removed. Add renderer integration coverage through the Electron desktop package.
 
 ## Architecture
 
@@ -84,11 +80,4 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 
 ## Environment
 
-Backend API URLs are optional; an nginx proxy is used by default:
-
-```
-NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:9193
-NEXT_PUBLIC_RUNTIME_API_BASE_URL=http://localhost:9193/api
-```
-
-Requires Node.js 22+ and pnpm 10.26.2+.
+Backend API URLs are resolved from the Electron preload bridge at runtime. Requires Node.js 22+ and pnpm 10.26.2+.

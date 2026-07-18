@@ -39,7 +39,7 @@ class MainCapitalAnalyzer(BaseAnalyzer):
             return res
 
         # 1) 个股主力资金
-        stocks = self.fetcher.fetch_main_capital_stocks(trade_date, top_n=top_n)
+        stocks = self.fetcher.fetch_main_capital_stocks(trade_date)
         # 2) 板块（大单）资金
         sector = self.fetcher.fetch_main_capital_sector(trade_date)
         # 3) 同花顺行业资金（备用）
@@ -57,12 +57,20 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                         net_col = cand
                         break
             if net_col:
+                stocks[net_col] = pd.to_numeric(stocks[net_col], errors="coerce")
                 in_count = int((stocks[net_col] > 0).sum())
                 out_count = int((stocks[net_col] < 0).sum())
-                top_in = stocks.nlargest(top_n, net_col)[["ts_code", "name", net_col]] \
-                    if "name" in stocks.columns else stocks.nlargest(top_n, net_col)[["ts_code", net_col]]
-                top_out = stocks.nsmallest(top_n, net_col)[["ts_code", "name", net_col]] \
-                    if "name" in stocks.columns else stocks.nsmallest(top_n, net_col)[["ts_code", net_col]]
+                stock_cols = [c for c in ("ts_code", "name", net_col) if c in stocks.columns]
+                top_in = (
+                    stocks[stocks[net_col] > 0]
+                    .sort_values(net_col, ascending=False)
+                    .head(top_n)[stock_cols]
+                )
+                top_out = (
+                    stocks[stocks[net_col] < 0]
+                    .sort_values(net_col, ascending=True)
+                    .head(top_n)[stock_cols]
+                )
                 detail.update({
                     "in_count": in_count,
                     "out_count": out_count,
@@ -82,26 +90,36 @@ class MainCapitalAnalyzer(BaseAnalyzer):
                     break
             name_col = "name" if "name" in sector_df.columns else None
             if sector_net_col:
+                sector_df[sector_net_col] = pd.to_numeric(sector_df[sector_net_col], errors="coerce")
                 # Full-market net = sum of all stock net amounts.
                 # Tushare moneyflow returns net_amount in 万元 (10k yuan).
                 total_net_wan = float(sector_df[sector_net_col].sum())
                 total_net_yi = total_net_wan / 1e4  # 万 → 亿
                 detail["total_net"] = total_net_wan
                 detail["total_net_yi"] = total_net_yi
+                if total_net_yi > 0:
+                    flow_label = "流入"
+                elif total_net_yi < 0:
+                    flow_label = "流出"
+                else:
+                    flow_label = "平衡"
                 res["signals"].append(
-                    f"全市场主力资金净{('流入' if total_net_yi > 0 else '流出')} "
+                    f"全市场主力资金净{flow_label} "
                     f"{total_net_yi:+.1f}亿，净流入个股 {detail.get('in_count', '?')} vs 净流出 {detail.get('out_count', '?')}"
                 )
-                top_sec_in = sector_df.nlargest(MAIN_CAPITAL_TOP_SECTORS, sector_net_col)
-                top_sec_out = sector_df.nsmallest(MAIN_CAPITAL_TOP_SECTORS, sector_net_col)
-                detail["top_sectors_in"] = (
-                    top_sec_in[[name_col, sector_net_col]].to_dict("records")
-                    if name_col else top_sec_in[[sector_net_col]].to_dict("records")
+                sector_cols = [c for c in (name_col, sector_net_col) if c]
+                top_sec_in = (
+                    sector_df[sector_df[sector_net_col] > 0]
+                    .sort_values(sector_net_col, ascending=False)
+                    .head(MAIN_CAPITAL_TOP_SECTORS)[sector_cols]
                 )
-                detail["top_sectors_out"] = (
-                    top_sec_out[[name_col, sector_net_col]].to_dict("records")
-                    if name_col else top_sec_out[[sector_net_col]].to_dict("records")
+                top_sec_out = (
+                    sector_df[sector_df[sector_net_col] < 0]
+                    .sort_values(sector_net_col, ascending=True)
+                    .head(MAIN_CAPITAL_TOP_SECTORS)[sector_cols]
                 )
+                detail["top_sectors_in"] = top_sec_in.to_dict("records")
+                detail["top_sectors_out"] = top_sec_out.to_dict("records")
 
         # ----- 评分 -----
         # total_net is in 万元 from Tushare moneyflow.
@@ -126,8 +144,14 @@ class MainCapitalAnalyzer(BaseAnalyzer):
             res["signals"].append("⚪ 主力资金净额接近平衡")
 
         res["score"] = score
+        if total_net > 0:
+            flow_label = "流入"
+        elif total_net < 0:
+            flow_label = "流出"
+        else:
+            flow_label = "平衡"
         res["summary"] = (
-            f"主力资金净{('流入' if total_net > 0 else '流出')} {yi(total_net)}，"
+            f"主力资金净{flow_label} {yi(total_net)}，"
             f"信号 {signal_cn(total_net)}（评分 {score}）"
         )
         res["detail"] = detail
@@ -147,19 +171,39 @@ class MainCapitalAnalyzer(BaseAnalyzer):
         if d.get("top_sectors_in"):
             lines.append("\n**流入板块 TOP：**")
             df = pd.DataFrame(d["top_sectors_in"]).head(MAIN_CAPITAL_TOP_SECTORS)
-            lines.append(md_table(df, formatters={df.columns[-1]: yi}))
+            value_col = next((c for c in ("net_amount", "net_mf_amount") if c in df.columns), None)
+            lines.append(md_table(
+                df,
+                formatters={value_col: yi} if value_col else None,
+                rename={"name": "板块", "net_amount": "净额", "net_mf_amount": "净额"},
+            ))
         if d.get("top_sectors_out"):
             lines.append("\n**流出板块 TOP：**")
             df = pd.DataFrame(d["top_sectors_out"]).head(MAIN_CAPITAL_TOP_SECTORS)
-            lines.append(md_table(df, formatters={df.columns[-1]: yi}))
+            value_col = next((c for c in ("net_amount", "net_mf_amount") if c in df.columns), None)
+            lines.append(md_table(
+                df,
+                formatters={value_col: yi} if value_col else None,
+                rename={"name": "板块", "net_amount": "净额", "net_mf_amount": "净额"},
+            ))
         if d.get("top_in"):
             lines.append(f"\n**主力净流入个股 TOP {MAIN_CAPITAL_TOP_STOCKS}：**")
             df = pd.DataFrame(d["top_in"]).head(MAIN_CAPITAL_TOP_STOCKS)
-            lines.append(md_table(df, formatters={df.columns[-1]: yi}))
+            value_col = next((c for c in ("net_amount", "net_mf_amount", "active_net_amount") if c in df.columns), None)
+            lines.append(md_table(
+                df,
+                formatters={value_col: yi} if value_col else None,
+                rename={"ts_code": "证券代码", "name": "名称", "net_amount": "净额", "net_mf_amount": "净额"},
+            ))
         if d.get("top_out"):
             lines.append(f"\n**主力净流出个股 TOP {MAIN_CAPITAL_TOP_STOCKS}：**")
             df = pd.DataFrame(d["top_out"]).head(MAIN_CAPITAL_TOP_STOCKS)
-            lines.append(md_table(df, formatters={df.columns[-1]: yi}))
+            value_col = next((c for c in ("net_amount", "net_mf_amount", "active_net_amount") if c in df.columns), None)
+            lines.append(md_table(
+                df,
+                formatters={value_col: yi} if value_col else None,
+                rename={"ts_code": "证券代码", "name": "名称", "net_amount": "净额", "net_mf_amount": "净额"},
+            ))
         if result["signals"]:
             lines.append("\n**信号：**")
             for s in result["signals"]:

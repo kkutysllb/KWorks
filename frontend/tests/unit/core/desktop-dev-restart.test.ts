@@ -39,17 +39,15 @@ describe("desktop dev restart flow", () => {
     expect(source).not.toContain("backend-status");
   });
 
-  test("Next dev proxies gateway health checks, compat API, and native qiongqi API", () => {
+  test("Next dev is only the Electron renderer host and does not proxy gateway APIs", () => {
     const source = read("next.config.js");
 
     expect(source).toContain("allowedDevOrigins");
     expect(source).toContain("127.0.0.1");
-    expect(source).toContain('source: "/health"');
-    expect(source).toContain('destination: `${gatewayURL}/health`');
-    expect(source).toContain('source: "/api/:path*"');
-    expect(source).toContain('destination: `${gatewayURL}/api/:path*`');
-    expect(source).toContain('source: "/v1/:path*"');
-    expect(source).toContain('destination: `${gatewayURL}/v1/:path*`');
+    expect(source).not.toContain("rewrites()");
+    expect(source).not.toContain('source: "/health"');
+    expect(source).not.toContain('source: "/api/:path*"');
+    expect(source).not.toContain('source: "/v1/:path*"');
   });
 
   test("desktop startup splash has been removed from desktop providers", () => {

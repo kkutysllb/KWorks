@@ -1,6 +1,6 @@
 import { FilesIcon, PanelRightCloseIcon, XIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/resizable";
 import { useWorkspacePathname } from "@/core/navigation/workspace-route";
 import { collectResultFiles } from "@/core/tools/result-files";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import {
@@ -43,16 +42,12 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const layoutRef = useRef<GroupImperativeHandle>(null);
 
   const {
-    artifacts,
     open: artifactsOpen,
     setOpen: setArtifactsOpen,
     setArtifacts,
-    select: selectArtifact,
     deselect,
     selectedArtifact,
   } = useArtifacts();
-
-  const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
 
   // Track the previous loading state so we can refresh artifacts right after a
   // turn finishes (loading: true → false), not only on thread switch / mount.
@@ -74,31 +69,18 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     const resultFiles = collectResultFiles(thread.messages);
     setArtifacts(resultFiles);
 
-    if (
-      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
-      autoSelectFirstArtifact &&
-      thread?.values?.artifacts?.length > 0
-    ) {
-      setAutoSelectFirstArtifact(false);
-      selectArtifact(thread.values.artifacts[0]!);
-    }
   }, [
     threadId,
     thread.messages,
     thread.isLoading,
     thread.values.artifacts,
-    autoSelectFirstArtifact,
     deselect,
-    selectArtifact,
     setArtifacts,
   ]);
 
   const artifactPanelOpen = useMemo(() => {
-    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true") {
-      return artifactsOpen && artifacts?.length > 0;
-    }
     return artifactsOpen;
-  }, [artifactsOpen, artifacts]);
+  }, [artifactsOpen]);
 
   const resizableIdBase = useMemo(() => {
     return pathname.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");

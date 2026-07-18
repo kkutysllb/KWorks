@@ -60,9 +60,11 @@ test("desktop dev launcher does not ask Electron BackendManager to spawn another
   assert.match(devLauncherSource, /KWORKS_SKIP_BACKEND_AUTOLAUNCH: "1"/);
 });
 
-test("desktop dev launcher forces Next rewrites instead of public backend URLs", () => {
-  assert.match(devLauncherSource, /NEXT_PUBLIC_BACKEND_BASE_URL: ""/);
-  assert.match(devLauncherSource, /NEXT_PUBLIC_RUNTIME_API_BASE_URL: ""/);
+test("desktop dev launcher lets the Electron renderer call the gateway directly", () => {
+  assert.match(devLauncherSource, /GATEWAY_PORT/);
+  assert.doesNotMatch(devLauncherSource, /NEXT_PUBLIC_BACKEND_BASE_URL: ""/);
+  assert.doesNotMatch(devLauncherSource, /NEXT_PUBLIC_RUNTIME_API_BASE_URL: ""/);
+  assert.doesNotMatch(devLauncherSource, /KWorks_INTERNAL_GATEWAY_BASE_URL/);
 });
 
 test("desktop dev frontend binds to localhost instead of all interfaces", () => {

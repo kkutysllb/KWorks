@@ -159,7 +159,29 @@ class NorthboundAnalyzer(BaseAnalyzer):
         if d.get("top10"):
             lines.append("\n**北向十大成交活跃股：**")
             df = pd.DataFrame(d["top10"]).head(10)
-            lines.append(md_table(df))
+            lines.append(md_table(
+                df,
+                columns=[c for c in (
+                    "ts_code", "name", "close", "change", "amount",
+                    "net_amount", "buy_amount", "sell_amount"
+                ) if c in df.columns],
+                rename={
+                    "ts_code": "证券代码",
+                    "name": "名称",
+                    "close": "最新价",
+                    "change": "涨跌幅",
+                    "amount": "成交额",
+                    "net_amount": "净额",
+                    "buy_amount": "买入额",
+                    "sell_amount": "卖出额",
+                },
+                formatters={
+                    "net_amount": yi,
+                    "buy_amount": yi,
+                    "sell_amount": yi,
+                    "amount": yi,
+                },
+            ))
         if result["signals"]:
             lines.append("\n**信号：**")
             for s in result["signals"]:

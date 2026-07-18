@@ -69,7 +69,6 @@ import {
 } from "@/core/threads/qiongqi-client";
 import type { AgentThread } from "@/core/threads/types";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
-import { env } from "@/env";
 import { isIMEComposing } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 
@@ -256,9 +255,7 @@ export function HistoryTaskList() {
       <SidebarGroup>
         <SidebarGroupLabel className="flex items-center gap-1.5">
           <HistoryIcon className="size-3.5" />
-          {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true"
-            ? t.sidebar.historyTasks
-            : t.sidebar.demoTasks}
+          {t.sidebar.historyTasks}
         </SidebarGroupLabel>
         <SidebarGroupContent className="group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0">
           <SidebarMenu>
@@ -407,66 +404,62 @@ function HistoryTaskGroupSection({
                     </span>
                   </span>
                 </button>
-                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <span className="inline-flex">
-                        <SidebarMenuAction
-                          showOnHover
-                          className="bg-background/50 hover:bg-background"
-                        >
-                          <MoreHorizontal />
-                          <span className="sr-only">{t.common.more}</span>
-                        </SidebarMenuAction>
-                      </span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      className="w-48 rounded-lg"
-                      side={"right"}
-                      align={"start"}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <span className="inline-flex">
+                      <SidebarMenuAction
+                        showOnHover
+                        className="bg-background/50 hover:bg-background"
+                      >
+                        <MoreHorizontal />
+                        <span className="sr-only">{t.common.more}</span>
+                      </SidebarMenuAction>
+                    </span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-48 rounded-lg"
+                    side={"right"}
+                    align={"start"}
+                  >
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        onRename(thread.thread_id, titleOfThread(thread))
+                      }
                     >
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          onRename(thread.thread_id, titleOfThread(thread))
-                        }
-                      >
-                        <Pencil className="text-blue-500" />
-                        <span>{t.common.rename}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => onShare(thread)}>
-                        <Share2 className="text-emerald-500" />
-                        <span>{t.common.share}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <Download className="text-violet-500" />
-                          <span>{t.common.export}</span>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent>
-                          <DropdownMenuItem
-                            onSelect={() => onExport(thread, "markdown")}
-                          >
-                            <FileText className="text-cyan-500" />
-                            <span>{t.common.exportAsMarkdown}</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => onExport(thread, "json")}
-                          >
-                            <FileJson className="text-amber-500" />
-                            <span>{t.common.exportAsJSON}</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={() => onDelete(thread.thread_id)}
-                      >
-                        <Trash2 className="text-rose-500" />
-                        <span>{t.common.delete}</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                      <Pencil className="text-blue-500" />
+                      <span>{t.common.rename}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onShare(thread)}>
+                      <Share2 className="text-emerald-500" />
+                      <span>{t.common.share}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Download className="text-violet-500" />
+                        <span>{t.common.export}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem
+                          onSelect={() => onExport(thread, "markdown")}
+                        >
+                          <FileText className="text-cyan-500" />
+                          <span>{t.common.exportAsMarkdown}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => onExport(thread, "json")}
+                        >
+                          <FileJson className="text-amber-500" />
+                          <span>{t.common.exportAsJSON}</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => onDelete(thread.thread_id)}>
+                      <Trash2 className="text-rose-500" />
+                      <span>{t.common.delete}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SidebarMenuItem>
             );
           })}

@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@/env", () => ({
@@ -30,6 +31,8 @@ function okJson(data: unknown) {
 describe("token usage API", () => {
   beforeEach(() => {
     fetchMock.mockReset();
+    (window as unknown as { kworksDesktop?: { gatewayPort: number } }).kworksDesktop =
+      { gatewayPort: 19987 };
   });
 
   test("reads QiongQi model usage instead of legacy timeseries endpoints", async () => {

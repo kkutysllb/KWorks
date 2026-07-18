@@ -53,9 +53,18 @@ def score_bar(score: int, total: int = 100) -> str:
     return "🔥" * filled + "·" * (10 - filled) + f" {score}/{total}"
 
 
-def md_table(df: pd.DataFrame, columns: Optional[Iterable] = None,
-             formatters: Optional[dict] = None, index: bool = False) -> str:
-    """DataFrame → Markdown 表格（支持列选择 + 列格式化）。"""
+def md_table(
+    df: pd.DataFrame,
+    columns: Optional[Iterable] = None,
+    formatters: Optional[dict] = None,
+    rename: Optional[dict] = None,
+    index: bool = False,
+) -> str:
+    """DataFrame → Markdown 表格。
+
+    支持列选择、列格式化、列名重命名。格式化在重命名前执行，
+    这样调用方可以继续按原始字段名传入 formatters。
+    """
     if df is None or len(df) == 0:
         return "_无数据_\n"
     if columns is not None:
@@ -65,6 +74,8 @@ def md_table(df: pd.DataFrame, columns: Optional[Iterable] = None,
         for col, fn in formatters.items():
             if col in df.columns:
                 df[col] = df[col].apply(fn)
+    if rename:
+        df = df.rename(columns=rename)
     return df.to_markdown(index=index)
 
 

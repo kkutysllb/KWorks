@@ -51,7 +51,6 @@ import {
   buildWorkModeSkillViews,
   BUILTIN_SKILL_VIEW_ID,
 } from "@/core/skills/work-modes";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { WorkModeDialog } from "./work-mode-dialog";
@@ -410,8 +409,7 @@ function SkillCard({
           disabled={
             (readonly ?? false) ||
             (skill.locked ?? false) ||
-            !skill.enabled ||
-            env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
+            !skill.enabled
           }
           onClick={() => onSkillEnabledChange(skill, false)}
           className="text-destructive hover:text-destructive h-8 px-2 text-xs"
@@ -423,8 +421,7 @@ function SkillCard({
           checked={skill.enabled}
           disabled={
             (readonly ?? false) ||
-            (skill.locked ?? false) ||
-            env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
+            (skill.locked ?? false)
           }
           onCheckedChange={(checked) => onSkillEnabledChange(skill, checked)}
           className={cn(

@@ -26,33 +26,6 @@ const APP_DIR = join(ROOT, "src", "app");
 const BACKUP_DIR = join(ROOT, ".desktop-build-backup");
 const DESKTOP_DEV_SERVER_PORT = process.env.KWORKS_DEV_SERVER_PORT ?? "18659";
 
-// ── Resolve gateway port from the shared repo-root .env ───────────────────
-// The Electron static export talks to the embedded gateway owned by the
-// desktop shell. Falling back to 19987 preserves the default desktop port
-// when .env is absent.
-function resolveGatewayPort() {
-  const envFile = resolve(ROOT, "..", ".env");
-  if (existsSync(envFile)) {
-    for (const line of readFileSync(envFile, "utf8").split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq < 0) continue;
-      const key = trimmed.slice(0, eq).trim();
-      if (key !== "GATEWAY_PORT") continue;
-      const val = trimmed
-        .slice(eq + 1)
-        .trim()
-        .replace(/^["']|["']$/g, "");
-      const port = Number.parseInt(val, 10);
-      if (Number.isFinite(port) && port > 0) return String(port);
-    }
-  }
-  return "19987";
-}
-const GATEWAY_PORT = resolveGatewayPort();
-console.log(`[desktop-build] using GATEWAY_PORT=${GATEWAY_PORT} (from shared .env or fallback)`);
-
 function findListenerPids(port) {
   try {
     if (process.platform === "win32") {
@@ -506,11 +479,6 @@ function main() {
           NODE_ENV: "production",
           DESKTOP_BUILD: "true",
           SKIP_ENV_VALIDATION: "1",
-          // Point the frontend at the gateway port resolved from the shared
-          // .env so the desktop shell and the web build share the same backend.
-          NEXT_PUBLIC_BACKEND_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
-          NEXT_PUBLIC_RUNTIME_API_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}/api`,
-          GATEWAY_PORT,
         },
       });
     } catch (buildErr) {
@@ -527,9 +495,6 @@ function main() {
             NODE_ENV: "production",
             DESKTOP_BUILD: "true",
             SKIP_ENV_VALIDATION: "1",
-            NEXT_PUBLIC_BACKEND_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
-            NEXT_PUBLIC_RUNTIME_API_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}/api`,
-            GATEWAY_PORT,
           },
         });
       } catch (e2) {

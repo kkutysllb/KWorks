@@ -106,11 +106,27 @@ class DragonTigerAnalyzer(BaseAnalyzer):
         if d.get("stocks"):
             lines.append(f"\n**上榜个股（共 {d.get('list_count',0)} 只，展示 TOP {DRAGON_TOP_N}）：**")
             df = pd.DataFrame(d["stocks"]).head(DRAGON_TOP_N)
-            lines.append(md_table(df))
+            lines.append(md_table(
+                df,
+                columns=[c for c in ("ts_code", "name", "reason") if c in df.columns],
+                rename={
+                    "ts_code": "证券代码",
+                    "name": "名称",
+                    "reason": "上榜原因",
+                },
+            ))
         if d.get("inst_net_top"):
             lines.append(f"\n**机构净买入 TOP {DRAGON_TOP_N}：**")
             df = pd.DataFrame(d["inst_net_top"]).head(DRAGON_TOP_N)
-            lines.append(md_table(df, formatters={df.columns[-1]: yi}))
+            lines.append(md_table(
+                df,
+                columns=[c for c in ("ts_code", "inst_net") if c in df.columns],
+                rename={
+                    "ts_code": "证券代码",
+                    "inst_net": "机构净买入",
+                },
+                formatters={"inst_net": yi},
+            ))
         if result["signals"]:
             lines.append("\n**信号：**")
             for s in result["signals"]:

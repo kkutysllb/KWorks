@@ -93,6 +93,11 @@ interface DetectedSource {
 // the renderer's `initGatewayPort()` refreshes it asynchronously once the
 // main process responds.
 const DEFAULT_GATEWAY_PORT = 19987;
+const gatewayPortFromEnv = Number.parseInt(process.env.GATEWAY_PORT ?? "", 10);
+const RUNTIME_GATEWAY_PORT =
+  Number.isFinite(gatewayPortFromEnv) && gatewayPortFromEnv > 0
+    ? gatewayPortFromEnv
+    : DEFAULT_GATEWAY_PORT;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -176,7 +181,7 @@ window.addEventListener("unhandledrejection", (event: unknown) => {
 });
 
 contextBridge.exposeInMainWorld("kworksDesktop", {
-  gatewayPort: DEFAULT_GATEWAY_PORT,
+  gatewayPort: RUNTIME_GATEWAY_PORT,
 
   // ── Backend lifecycle ──────────────────────────────────────────────
   getGatewayConfig: (): Promise<GatewayConfig> =>
