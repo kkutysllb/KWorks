@@ -149,4 +149,26 @@ describe("convertToSteps reads tool status and bash output", () => {
     expect(step.status).toBe("running");
     expect(step.outputText).toBe("VITE ready");
   });
+
+  test("keeps runtime progress separate from provider reasoning", () => {
+    const progress: Message = {
+      id: "progress-1",
+      type: "ai",
+      content: "",
+      additional_kwargs: {
+        qiongqi_item: {
+          kind: "runtime_progress",
+          id: "progress-1",
+          phase: "executing",
+          summary: "正在整理证据",
+          modelSteps: 2,
+          toolCalls: 3,
+          evidenceCount: 4,
+          artifactCount: 1,
+        },
+      },
+    } as Message;
+    const steps = convertToSteps([progress]);
+    expect(steps).toMatchObject([{ type: "progress", summary: "正在整理证据", toolCalls: 3 }]);
+  });
 });

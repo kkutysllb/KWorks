@@ -5,6 +5,7 @@ import { RunStateV3Schema, type RunIdentity, type RunStateV3 } from '@qiongqi/co
 import type { LeaseFence, RunLeaseStore, RunSnapshotStore } from '@qiongqi/ports'
 import { atomicWriteFile } from './atomic-write.js'
 import { runtimeScopeDigest } from './runtime-store-utils.js'
+import { withFileLock } from './file-lock.js'
 
 type Lease = { holderId: string; expiresAt: string; epoch: number; token: string }
 
@@ -103,18 +104,7 @@ export class FileRunStateStore implements RunSnapshotStore, RunLeaseStore {
     try { return JSON.parse(await readFile(path, 'utf8')) as Lease } catch { return undefined }
   }
   private async withLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
-    const lockPath = `${path}.lock`
-    await mkdir(join(path, '..'), { recursive: true })
-    while (true) {
-      try {
-        await mkdir(lockPath)
-        break
-      } catch (error) {
-        if ((error as { code?: string }).code !== 'EEXIST') throw error
-        await new Promise((resolve) => setTimeout(resolve, 1))
-      }
-    }
-    try { return await operation() } finally { await rm(lockPath, { recursive: true, force: true }) }
+    return withFileLock(path, operation)
   }
 }
 

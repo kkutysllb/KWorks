@@ -388,6 +388,15 @@ export function turnItemToMessage(item: TurnItem): Message {
       additional_kwargs: { ...additional_kwargs, reasoning_content: item.text },
     };
   }
+  if (item.kind === "runtime_progress") {
+    return {
+      id,
+      type: "ai",
+      role: "assistant",
+      content: "",
+      additional_kwargs: { ...additional_kwargs, qiongqi_runtime_progress: item },
+    };
+  }
   if (item.kind === "assistant_text" || item.kind === "review") {
     const text = item.kind === "review" ? (item.reviewText ?? "") : item.text;
     return {

@@ -1,8 +1,9 @@
-import { appendFile, mkdir, readFile, rm } from 'node:fs/promises'
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { RunEventEnvelopeSchema, type RunEventEnvelope, type RunIdentity } from '@qiongqi/contracts'
 import type { LeaseFence, RunEventStore } from '@qiongqi/ports'
 import { runtimeScopeDigest } from './runtime-store-utils.js'
+import { withFileLock } from './file-lock.js'
 
 export type FileRunEventStoreOptions = { requireFence?: boolean }
 
@@ -30,7 +31,7 @@ export class FileRunEventStore implements RunEventStore {
   }
 
   private async assertFence(event: RunEventEnvelope, fence?: LeaseFence): Promise<void> {
-    if (!fence && !this.options.requireFence) return
+    if (!this.options.requireFence) return
     if (!fence) throw new Error('runtime event write requires an active lease fence')
     try {
       const raw = await readFile(join(this.rootDir, 'leases', `${runtimeScopeDigest(event)}.json`), 'utf8')
@@ -44,15 +45,7 @@ export class FileRunEventStore implements RunEventStore {
 
   private async withLock<T>(identity: RunIdentity, operation: () => Promise<T>): Promise<T> {
     const leasePath = join(this.rootDir, 'leases', `${runtimeScopeDigest(identity)}.json`)
-    const lockPath = `${leasePath}.lock`
-    await mkdir(join(this.rootDir, 'leases'), { recursive: true })
-    while (true) {
-      try { await mkdir(lockPath); break } catch (error) {
-        if ((error as { code?: string }).code !== 'EEXIST') throw error
-        await new Promise((resolve) => setTimeout(resolve, 1))
-      }
-    }
-    try { return await operation() } finally { await rm(lockPath, { recursive: true, force: true }) }
+    return withFileLock(leasePath, operation)
   }
 
   async listAfter(identity: RunIdentity, seq: number): Promise<RunEventEnvelope[]> {

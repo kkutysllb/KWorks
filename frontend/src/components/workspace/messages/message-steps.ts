@@ -39,6 +39,16 @@ interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
   reasoning: string | null;
 }
 
+interface CoTProgressStep extends GenericCoTStep<"progress"> {
+  summary: string;
+  phase: "preparing" | "executing" | "checkpoint" | "summarizing" | "terminated";
+  modelSteps: number;
+  toolCalls: number;
+  evidenceCount: number;
+  artifactCount: number;
+  reason?: string;
+}
+
 interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
   name: string;
   args: Record<string, unknown>;
@@ -56,7 +66,7 @@ interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
   };
 }
 
-export type CoTStep = CoTReasoningStep | CoTToolCallStep;
+export type CoTStep = CoTReasoningStep | CoTProgressStep | CoTToolCallStep;
 export type { CoTToolCallStep, CoTReasoningStep, GenericCoTStep };
 
 export function convertToSteps(
@@ -67,6 +77,36 @@ export function convertToSteps(
   for (const message of messages) {
     if (message.type !== "ai") {
       continue;
+    }
+    const rawProgress = message.additional_kwargs?.qiongqi_runtime_progress;
+    const rawItem = message.additional_kwargs?.qiongqi_item as
+      | { kind?: unknown }
+      | undefined;
+    const progress = (rawProgress ??
+      (rawItem?.kind === "runtime_progress" ? message.additional_kwargs?.qiongqi_item : undefined)) as
+      | {
+          summary?: unknown;
+          phase?: CoTProgressStep["phase"];
+          modelSteps?: unknown;
+          toolCalls?: unknown;
+          evidenceCount?: unknown;
+          artifactCount?: unknown;
+          reason?: unknown;
+        }
+      | undefined;
+    if (progress && typeof progress.summary === "string" && progress.summary.trim()) {
+      steps.push({
+        id: message.id,
+        messageId: message.id,
+        type: "progress",
+        summary: progress.summary,
+        phase: progress.phase ?? "executing",
+        modelSteps: Number(progress.modelSteps) || 0,
+        toolCalls: Number(progress.toolCalls) || 0,
+        evidenceCount: Number(progress.evidenceCount) || 0,
+        artifactCount: Number(progress.artifactCount) || 0,
+        ...(typeof progress.reason === "string" ? { reason: progress.reason } : {}),
+      });
     }
     const reasoning = extractReasoningContentFromMessage(message);
     if (reasoning) {

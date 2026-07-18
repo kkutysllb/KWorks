@@ -91,6 +91,10 @@ export function MessageGroup({
     () => steps.filter((step) => step.type === "reasoning"),
     [steps],
   );
+  const progressSteps = useMemo(
+    () => steps.filter((step) => step.type === "progress"),
+    [steps],
+  );
   const lastToolCallStep = toolCallSteps[toolCallSteps.length - 1];
   const aboveLastToolCallSteps = lastToolCallStep
     ? toolCallSteps.slice(0, -1)
@@ -102,6 +106,10 @@ export function MessageGroup({
         .filter(Boolean)
         .join("\n\n"),
     [reasoningSteps],
+  );
+  const progressText = useMemo(
+    () => progressSteps.map((step) => step.summary).filter(Boolean).join("\n\n"),
+    [progressSteps],
   );
 
   // Tool-call steps are collapsed by default and controlled only by the user.
@@ -167,6 +175,18 @@ export function MessageGroup({
           <Reasoning isStreaming={isLoading} defaultOpen={false} className="mb-0">
             <ReasoningTrigger />
             <ReasoningContent>{reasoningText}</ReasoningContent>
+          </Reasoning>
+        </div>
+      )}
+      {progressText && (
+        <div className="px-4 py-2">
+          <Reasoning isStreaming={isLoading} defaultOpen={false} className="mb-0">
+            <ReasoningTrigger>
+              <ListTodoIcon className="size-4" />
+              <span>{t.common.progress}</span>
+              <ChevronDownIcon className="size-4" />
+            </ReasoningTrigger>
+            <ReasoningContent>{progressText}</ReasoningContent>
           </Reasoning>
         </div>
       )}

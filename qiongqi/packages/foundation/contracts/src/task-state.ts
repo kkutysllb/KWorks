@@ -61,6 +61,13 @@ export const TaskStateV1Schema = z.object({
   activeSkillIds: z.array(NonEmptyString),
   artifacts: z.array(TaskArtifactRefSchema),
   toolLedger: z.array(TaskToolLedgerEntrySchema),
+  progress: z.object({
+    strongDigest: NonEmptyString.optional(),
+    weakDigest: NonEmptyString.optional(),
+    evidenceCount: z.number().int().nonnegative(),
+    artifactCount: z.number().int().nonnegative(),
+    lastObservationDigests: z.array(NonEmptyString).max(64)
+  }).strict().optional(),
   compaction: z.object({
     itemId: NonEmptyString,
     taskRevision: z.number().int().positive(),

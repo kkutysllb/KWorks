@@ -36,6 +36,9 @@ describe('kernel v3 production topology', () => {
       'materialize-proposal',
       'prepare-tools',
       'commit-tools',
+      'project-progress',
+      'govern-progress',
+      'progress-checkpoint',
       'recover-context',
       'wait-user',
       'fail'

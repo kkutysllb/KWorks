@@ -32,6 +32,7 @@ export const enUS: Translations = {
     loadMore: "Load more",
     download: "Download",
     thinking: "Thinking",
+    progress: "Progress",
     artifacts: "Artifacts",
     public: "Public",
     custom: "Custom",

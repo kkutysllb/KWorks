@@ -32,6 +32,7 @@ export const zhCN: Translations = {
     loadMore: "加载更多",
     download: "下载",
     thinking: "思考",
+    progress: "进度",
     artifacts: "文件",
     public: "公共",
     custom: "自定义",

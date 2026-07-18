@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runtimeScopeDigest } from '@qiongqi/adapter-storage'
 import { FileRunStateStore, InMemoryRunStateStore } from '@qiongqi/adapter-storage'
 import type { RunIdentity, RunStateV3 } from '@qiongqi/contracts'
 
@@ -87,6 +88,17 @@ describe('FileRunStateStore recovery behavior', () => {
       store.acquire(identity, 'holder-b', 60_000)
     ])
     expect(results.filter((result) => result.acquired)).toHaveLength(1)
+    await rm(rootDir, { recursive: true, force: true })
+  })
+
+  it('reclaims a lock directory left by a dead acquisition process', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'qiongqi-run-state-stale-lock-'))
+    const store = new FileRunStateStore(rootDir)
+    const lockPath = join(rootDir, 'leases', `${runtimeScopeDigest(identity)}.json.lock`)
+    await mkdir(lockPath, { recursive: true })
+    await writeFile(join(lockPath, 'owner.json'), JSON.stringify({ pid: 999999, createdAtMs: Date.now(), key: 'test' }))
+    await expect(store.acquire(identity, 'holder-a', 60_000)).resolves.toMatchObject({ acquired: true })
+    await store.release(identity, 'holder-a')
     await rm(rootDir, { recursive: true, force: true })
   })
 })

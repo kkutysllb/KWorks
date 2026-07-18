@@ -1312,7 +1312,8 @@ export function createKernelV3TurnRunner(input: {
       }
     },
     ids: core.ids,
-    nowIso: core.nowIso
+    nowIso: core.nowIso,
+    emitRuntimeProgress: true
   })
 
   return new KernelV3TurnRunner({
@@ -1332,6 +1333,29 @@ export function createKernelV3TurnRunner(input: {
     },
     nodes,
     finishTurn: async (threadId, turnId, status, outcome) => {
+      const progressId = `item_kernel_progress_run_${threadId}_${turnId}`
+      await core.turnService.applyItemOnce(threadId, {
+        id: progressId,
+        threadId,
+        turnId,
+        role: 'system',
+        status: 'completed',
+        createdAt: core.nowIso(),
+        kind: 'runtime_progress',
+        phase: 'terminated',
+        summary: outcome.status === 'completed' ? 'Task completed.' : `Task stopped: ${outcome.reason}.`,
+        modelSteps: 0,
+        toolCalls: 0,
+        evidenceCount: 0,
+        artifactCount: 0,
+        reason: outcome.reason
+      })
+      await core.turnService.updateItemOnce(threadId, progressId, {
+        status: 'completed',
+        phase: 'terminated',
+        summary: outcome.status === 'completed' ? 'Task completed.' : `Task stopped: ${outcome.reason}.`,
+        reason: outcome.reason
+      } as never)
       await core.turnService.finishTurn({
         threadId,
         turnId,

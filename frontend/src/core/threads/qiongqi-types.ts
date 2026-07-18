@@ -311,6 +311,17 @@ export type ReviewTurnItem = TurnItemBase & {
   output?: Record<string, unknown>;
 };
 
+export type RuntimeProgressTurnItem = TurnItemBase & {
+  kind: "runtime_progress";
+  phase: "preparing" | "executing" | "checkpoint" | "summarizing" | "terminated";
+  summary: string;
+  modelSteps: number;
+  toolCalls: number;
+  evidenceCount?: number;
+  artifactCount?: number;
+  reason?: string;
+};
+
 export type ErrorTurnItem = TurnItemBase & {
   kind: "error";
   message: string;
@@ -329,6 +340,7 @@ export type TurnItem =
   | UserInputTurnItem
   | CompactionTurnItem
   | ReviewTurnItem
+  | RuntimeProgressTurnItem
   | ErrorTurnItem;
 
 export type TurnItemKind = TurnItem["kind"];

@@ -137,7 +137,7 @@ describe('Kernel v3 production node handlers', () => {
     })
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
+      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools', 'project-progress', 'govern-progress',
       'build-context', 'invoke-model', 'normalize-proposal', 'account-model', 'evaluate',
       'commit-assistant'
     ])
@@ -175,7 +175,7 @@ describe('Kernel v3 production node handlers', () => {
     ])
     expect(await nodeSequence(harness.events)).toEqual([
       'prepare-turn', 'restore-task', 'build-context', 'invoke-model',
-      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools',
+      'normalize-proposal', 'account-model', 'evaluate', 'materialize-proposal', 'prepare-tools', 'commit-tools', 'project-progress', 'govern-progress',
       'build-context', 'invoke-model', 'normalize-proposal', 'account-model', 'evaluate',
       'commit-assistant'
     ])

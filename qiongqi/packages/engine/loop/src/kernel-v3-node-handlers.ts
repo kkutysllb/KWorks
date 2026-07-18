@@ -3,6 +3,7 @@ import type {
   RunOutcome,
   TaskStateV1,
   TaskToolLedgerEntry,
+  ToolObservation,
   ToolEffectPolicy,
   TurnItem
 } from '@qiongqi/contracts'
@@ -26,6 +27,7 @@ import { materializableProposalContent } from './proposal-materializer.js'
 import { renderRecoveryContinuationEntry, transitionContextRecovery } from './context-recovery.js'
 import { migrateLegacyTaskState } from './legacy-task-state-migrator.js'
 import { digestValue } from './effect-commit.js'
+import { projectTaskState } from './task-progress-projector.js'
 
 export type KernelV3NodeDependencies = {
   threadStore: ThreadStore
@@ -49,6 +51,7 @@ export type KernelV3NodeDependencies = {
   ) => Promise<ToolHostContext> | ToolHostContext
   ids: Pick<IdGenerator, 'next'>
   nowIso: () => string
+  emitRuntimeProgress?: boolean
 }
 
 type StoredRequest = Omit<Parameters<ModelProposalRunner['run']>[0], 'abortSignal'>
@@ -90,6 +93,10 @@ export function createKernelV3NodeHandlers(
       if (!thread || !turn) {
         return { outcome: failedOutcome('turn or thread not found') }
       }
+      await emitProgress(deps, identity, {
+        phase: 'preparing', summary: 'Preparing the task state and execution context.', modelSteps: 0, toolCalls: 0,
+        evidenceCount: 0, artifactCount: 0
+      })
       const owner = thread.ownerUserId ?? 'local-default-owner'
       if (
         owner !== identity.ownerUserId
@@ -347,6 +354,10 @@ export function createKernelV3NodeHandlers(
     'commit-assistant': async ({ identity, state }) => {
       const proposal = ModelProposalSchema.parse(requireNodeValue(state, 'normalize-proposal'))
       await materializeProposal(identity, proposal)
+      await emitProgress(deps, identity, {
+        phase: 'terminated', summary: 'Task response completed.', modelSteps: state.budgets.stepsUsed, toolCalls: state.budgets.toolCallsUsed,
+        reason: 'normal_stop'
+      })
       return {
         value: { proposalId: proposal.proposalId },
         outcome: { status: 'completed', reason: 'normal_stop', retryable: false }
@@ -405,6 +416,7 @@ export function createKernelV3NodeHandlers(
       }>(state, 'build-context')
       let runtimeState = state
       const ledger: TaskToolLedgerEntry[] = []
+      const observations: ToolObservation[] = []
       const toolContext = await deps.createToolContext(identity, state)
       for (const call of prepared.calls) {
         const execution = await deps.toolRuntime.execute({
@@ -423,6 +435,7 @@ export function createKernelV3NodeHandlers(
         runtimeState = execution.state
         if (execution.outcome) return { outcome: execution.outcome }
         if (!execution.result) return { outcome: failedOutcome(`tool result missing: ${call.callId}`) }
+        if (execution.observation) observations.push(execution.observation)
         await deps.turns.updateItem(identity.threadId, `item_tool_${identity.turnId}_${call.callId}`, {
           status: execution.result.item.kind === 'tool_result' && execution.result.item.isError
             ? 'failed'
@@ -450,7 +463,7 @@ export function createKernelV3NodeHandlers(
       await deps.taskStates.commit(revision)
       return {
         condition: 'tools_committed',
-        value: { callIds: ledger.map((entry) => entry.callId), taskRevision: nextTask.revision },
+        value: { callIds: ledger.map((entry) => entry.callId), taskRevision: nextTask.revision, observations },
         commands: [
           { type: 'set-task-revision', revision: nextTask.revision },
           { type: 'set-node-data', nodeId: 'restore-task', value: nextTask },
@@ -460,6 +473,71 @@ export function createKernelV3NodeHandlers(
             committedEffects: runtimeState.committedEffects
           }
         ]
+      }
+    },
+
+    'project-progress': async ({ identity, state }) => {
+      const task = requireNodeValue<TaskStateV1>(state, 'restore-task')
+      const commit = requireNodeValue<{ observations?: ToolObservation[] }>(state, 'commit-tools')
+      const thread = await deps.threadStore.get(identity.threadId)
+      const projection = projectTaskState(task, {
+        todos: thread?.todos?.items?.map((todo) => ({ id: todo.id, content: todo.content, status: todo.status })),
+        observations: commit.observations ?? [],
+        nowIso: deps.nowIso
+      })
+      await emitProgress(deps, identity, {
+        phase: 'executing',
+        summary: projection.digest.level === 'none' ? 'Executing the next task action.' : 'New evidence or task progress recorded.',
+        modelSteps: state.budgets.stepsUsed,
+        toolCalls: state.budgets.toolCallsUsed,
+        evidenceCount: projection.state.progress?.evidenceCount ?? 0,
+        artifactCount: projection.state.artifacts.length
+      })
+      if (projection.digest.level !== 'none') {
+        const prepared = await deps.taskStates.prepare(projection.state, task.revision)
+        try {
+          await deps.taskStates.commit(prepared)
+        } catch (error) {
+          await deps.taskStates.abort(prepared).catch(() => undefined)
+          throw error
+        }
+      }
+      return {
+        condition: 'next',
+        value: projection.state,
+        facts: {
+          observations: commit.observations ?? [],
+          progressLevel: projection.digest.level,
+          progressDigest: projection.digest.value,
+          evidenceCount: projection.state.progress?.evidenceCount ?? 0,
+          artifactCount: projection.state.artifacts.length
+        },
+        commands: projection.digest.level === 'none'
+          ? []
+          : [
+              { type: 'set-task-revision' as const, revision: projection.state.revision },
+              { type: 'set-node-data' as const, nodeId: 'restore-task', value: projection.state }
+            ]
+      }
+    },
+
+    'govern-progress': () => ({ condition: 'progress_checked', value: { checked: true } }),
+
+    'progress-checkpoint': async ({ identity, state }) => {
+      await emitProgress(deps, identity, {
+        phase: 'checkpoint',
+        summary: 'A progress checkpoint was reached; the next model step must summarize existing evidence or finish.',
+        modelSteps: state.budgets.stepsUsed,
+        toolCalls: state.budgets.toolCallsUsed,
+        reason: 'no_progress_window'
+      })
+      return {
+        condition: 'checkpointed',
+        value: {
+          taskRevision: requireNodeValue<TaskStateV1>(state, 'restore-task').revision,
+          message: 'Checkpointed after a no-progress window; summarize existing evidence before taking another action.'
+        },
+        facts: { checkpointCompleted: true }
       }
     },
 
@@ -539,4 +617,47 @@ function updateTaskLedger(
     toolLedger: [...byCall.values()],
     updatedAt
   }
+}
+
+async function emitProgress(
+  deps: KernelV3NodeDependencies,
+  identity: Parameters<RuntimeNodeHandler>[0]['identity'],
+  input: {
+    phase: 'preparing' | 'executing' | 'checkpoint' | 'summarizing' | 'terminated'
+    summary: string
+    modelSteps: number
+    toolCalls: number
+    evidenceCount?: number
+    artifactCount?: number
+    reason?: string
+  }
+): Promise<void> {
+  if (!deps.emitRuntimeProgress) return
+  const id = `item_kernel_progress_${identity.runId}`
+  await deps.turns.applyItemOnce(identity.threadId, {
+    id,
+    turnId: identity.turnId,
+    threadId: identity.threadId,
+    role: 'system',
+    status: 'running',
+    kind: 'runtime_progress',
+    createdAt: deps.nowIso(),
+    phase: input.phase,
+    summary: input.summary,
+    modelSteps: input.modelSteps,
+    toolCalls: input.toolCalls,
+    evidenceCount: input.evidenceCount ?? 0,
+    artifactCount: input.artifactCount ?? 0,
+    ...(input.reason ? { reason: input.reason } : {})
+  })
+  await deps.turns.updateItemOnce(identity.threadId, id, {
+    status: input.phase === 'terminated' ? 'completed' : 'running',
+    phase: input.phase,
+    summary: input.summary,
+    modelSteps: input.modelSteps,
+    toolCalls: input.toolCalls,
+    evidenceCount: input.evidenceCount ?? 0,
+    artifactCount: input.artifactCount ?? 0,
+    ...(input.reason ? { reason: input.reason } : {})
+  } as never)
 }
