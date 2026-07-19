@@ -78,6 +78,12 @@ describe('domain.turn', () => {
     prompt: 'hi'
   })
 
+  it('creates independent resolved and explicit skill state', () => {
+    expect(baseTurn.activeSkillIds).toEqual([])
+    expect(baseTurn.explicitSkillIds).toEqual([])
+    expect(baseTurn.explicitSkillIds).not.toBe(baseTurn.activeSkillIds)
+  })
+
   it('appends items without duplicates', () => {
     const item = makeUserItem({ id: 'i1', turnId: 'turn_1', threadId: 'thr_1', text: 'hi' })
     const next = appendTurnItem(appendTurnItem(baseTurn, item), item)

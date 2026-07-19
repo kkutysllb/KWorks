@@ -105,6 +105,50 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(res.activeSkillIds).not.toContain('tdd')
   })
 
+  it('injects forced skills without a prompt match and deduplicates them', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    const res = host.resolveTurn({
+      prompt: 'ordinary request',
+      workspace: '',
+      effectiveSkillIds: ['tdd'],
+      forcedSkillIds: ['tdd', 'tdd']
+    })
+
+    expect(res.activeSkillIds).toEqual(['tdd'])
+    expect(res.instructions.join('\n')).toContain('Write tests first.')
+    expect(res.activations).toContainEqual(expect.objectContaining({
+      skillId: 'tdd',
+      reason: 'explicit-activation'
+    }))
+  })
+
+  it('validates activatable skills against loading, enablement, and work mode', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    expect(host.resolveActivatableSkill('tdd', {
+      workspace: '',
+      effectiveSkillIds: ['tdd']
+    })).toMatchObject({ ok: true, skill: { id: 'tdd' } })
+    expect(host.resolveActivatableSkill('missing', {
+      workspace: '',
+      effectiveSkillIds: ['missing']
+    })).toEqual({ ok: false, code: 'unknown_skill' })
+    expect(host.resolveActivatableSkill('tdd', {
+      workspace: '',
+      effectiveSkillIds: ['legacy']
+    })).toEqual({ ok: false, code: 'skill_out_of_mode' })
+
+    const disabled = await SkillPluginHost.create(
+      cfg({ roots: [root] }),
+      { enabledSkills: { tdd: false } }
+    )
+    expect(disabled.resolveActivatableSkill('tdd', {
+      workspace: '',
+      effectiveSkillIds: ['tdd']
+    })).toEqual({ ok: false, code: 'skill_disabled' })
+  })
+
   it('reads enabledSkills from a dynamic provider for hot user-scoped changes', async () => {
     let enabledSkills: Record<string, boolean> = { tdd: false }
     const host = await SkillPluginHost.create(

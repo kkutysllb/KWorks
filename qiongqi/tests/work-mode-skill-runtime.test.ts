@@ -118,6 +118,35 @@ describe('work mode skill runtime filtering', () => {
     expect((await h.turns.getTurn(h.threadId, h.turnId))?.activeSkillIds).toEqual([])
   })
 
+  it('injects an explicitly activated skill on the next prompt build', async () => {
+    const skillPluginHost = await SkillPluginHost.create(config().skills)
+    let seenRequest: ModelRequest | undefined
+    const model: ModelClient = {
+      provider: 'fake',
+      model: 'fake',
+      async *stream(request) {
+        seenRequest = request
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const h = makeHarness(model, {
+      skillPluginHost,
+      tools: buildDefaultLocalTools()
+    })
+    await bootstrapThread(h, {
+      workspace: root,
+      request: { prompt: 'ordinary request', workModeId: 'coding' }
+    })
+    await h.turns.updateTurnMetadata(h.threadId, h.turnId, {
+      explicitSkillIds: ['coding-skill']
+    })
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    expect(seenRequest?.contextInstructions?.join('\n')).toContain('Coding instructions')
+    expect((await h.turns.getTurn(h.threadId, h.turnId))?.activeSkillIds).toEqual(['coding-skill'])
+  })
+
   it('does not force create_plan for work mode and skill catalog questions in plan execution mode', async () => {
     const skillPluginHost = await SkillPluginHost.create(config().skills)
     let seenRequest: ModelRequest | undefined

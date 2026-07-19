@@ -23,7 +23,7 @@ import {
 import { CapabilityRegistry } from '@qiongqi/adapter-tools'
 import { buildGoalLocalTools } from '@qiongqi/adapter-tools'
 import { buildTodoLocalTools } from '@qiongqi/adapter-tools'
-import { LocalToolHost, buildDefaultLocalTools } from '@qiongqi/adapter-tools'
+import { LocalToolHost, buildDefaultLocalTools, createActivateSkillTool } from '@qiongqi/adapter-tools'
 import { buildMcpToolProviders } from '@qiongqi/adapter-tools'
 import { buildMemoryToolProviders } from '@qiongqi/adapter-tools'
 import { buildDelegationToolProviders } from '@qiongqi/adapter-tools'
@@ -796,6 +796,21 @@ export async function createToolMatrix(
       enabled: true,
       available: true,
       tools: buildTodoLocalTools(core.threadService)
+    },
+    {
+      id: 'skill-control',
+      kind: 'built-in' as const,
+      enabled: true,
+      available: true,
+      tools: [createActivateSkillTool({
+        resolveSkill: (skillId, context) => skillPluginHost.resolveActivatableSkill(skillId, context),
+        activateTurnSkill: async ({ threadId, turnId, skillId }) => {
+          const turn = await core.turnService.getTurn(threadId, turnId)
+          if (!turn) throw new Error('turn not found for skill activation')
+          const explicitSkillIds = [...new Set([...(turn.explicitSkillIds ?? []), skillId])].sort()
+          await core.turnService.updateTurnMetadata(threadId, turnId, { explicitSkillIds })
+        }
+      })]
     },
     ...buildDelegationToolProviders(delegationRuntime),
     ...(() => {
