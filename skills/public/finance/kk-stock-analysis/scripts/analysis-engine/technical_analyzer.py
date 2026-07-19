@@ -469,17 +469,17 @@ class TechnicalAnalyzer:
                        and str(df_basic['pb'].iloc[-1]) not in ('nan', 'None') else 0),
             }
 
-        # 资金流向
+        # 资金流向（moneyflow 接口：vol 单位=手，amount 单位=万元）
         if not df_mf.empty:
             mf = df_mf.tail(5)
             result['moneyflow'] = {
-                'net_mf_vol_5d': round(float(mf['net_mf_vol'].sum()), 2),
-                'net_mf_amount_5d': round(float(mf['net_mf_amount'].sum()), 2),
+                'net_mf_vol_5d': round(float(mf['net_mf_vol'].sum()), 2),  # 手
+                'net_mf_amount_5d_wan': round(float(mf['net_mf_amount'].sum()), 2),  # 万元
                 'direction': '净流入' if mf['net_mf_vol'].sum() > 0 else '净流出',
                 'large_order_net': round(float(
                     (mf['buy_elg_vol'] - mf['sell_elg_vol']).sum() +
                     (mf['buy_lg_vol'] - mf['sell_lg_vol']).sum()
-                ), 2),
+                ), 2),  # 手
             }
 
         return result

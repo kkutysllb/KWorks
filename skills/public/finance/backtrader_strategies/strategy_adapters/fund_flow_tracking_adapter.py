@@ -311,7 +311,7 @@ class FundFlowTrackingAdapter:
                         'score': base_score,
                         'close': close,
                         'pct_chg': pct_chg,
-                        'total_mv': total_mv,
+                        'total_mv': round(total_mv / 10000, 2) if total_mv else None,  # 万元 → 亿元
                         'margin_buy_trend': round(margin_buy_trend, 2) if margin_buy_trend is not None else None,
                         'margin_balance_growth': round(margin_balance_growth, 2) if margin_balance_growth is not None else None,
                         'composite_trend': round(composite, 2),

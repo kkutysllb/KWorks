@@ -74,7 +74,7 @@ def print_results(result: dict):
             f"{s.get('pb', '--'):.2f}" if isinstance(s.get('pb'), (int, float)) else '--',
             f"{s.get('roe', '--'):.1f}" if isinstance(s.get('roe'), (int, float)) else '--',
             f"{s.get('total_score', s.get('score', '--')):.1f}" if isinstance(s.get('total_score', s.get('score')), (int, float)) else '--',
-            f"{s.get('total_mv', '--')/10000:.1f}" if isinstance(s.get('total_mv'), (int, float)) else '--',
+            f"{s.get('total_mv', '--'):.1f}" if isinstance(s.get('total_mv'), (int, float)) else '--',  # 已是亿元
             f"{s.get('pct_chg', '--'):.2f}" if isinstance(s.get('pct_chg'), (int, float)) else '--',
         ]
         print("  " + "  ".join(str(v).ljust(col_w[i]) for i, v in enumerate(row)))

@@ -383,7 +383,7 @@ class ValueInvestmentAdapter:
                 'pe_ttm': round(row.get('pe_ttm', 0) or 0, 2) if pd.notna(row.get('pe_ttm')) else 0,
                 'close': row.get('close', 0) or 0,
                 'pct_chg': round(row.get('pct_chg', 0) or 0, 2),
-                'total_mv': round(row.get('total_mv', 0) or 0, 2),
+                'total_mv': round((row.get('total_mv', 0) or 0) / 10000, 2),  # 万元 → 亿元
                 
                 # 财务指标
                 'roe': round(row.get('avg_roe', 0) or 0, 2),

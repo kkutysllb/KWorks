@@ -395,7 +395,7 @@ class GrowthStockAdapter:
                 'close': round(result.get('close', 0) or 0, 2),
                 'pe': round(result.get('pe', 0) or 0, 2),
                 'pb': round(result.get('pb', 0) or 0, 2),
-                'total_mv': round(result.get('total_mv', 0) or 0, 0),
+                'total_mv': round((result.get('total_mv', 0) or 0) / 10000, 2),  # 万元 → 亿元
                 'pct_chg': round(result.get('pct_chg', 0) or 0, 2),
                 
                 # 成长性指标

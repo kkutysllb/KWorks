@@ -163,7 +163,7 @@ class LimitUpLeaderAdapter:
                     'limit_times': limit_times,
                     'open_times': open_times,
                     'turnover_rate': round(result.get('turnover_rate') or 0, 2),
-                    'amount': round((result.get('amount') or 0) / 100000000, 2),  # 亿元
+                    'amount': round((result.get('amount') or 0) / 100000, 2),  # 千元 → 亿元
                     'is_leader': bool(result.get('is_leader', False)),
                     'score': round(result.get('score', 0) or 0, 2),
                     'reason': self._generate_reason(limit_times, open_times)

@@ -212,8 +212,8 @@ class ETFAnalyzer:
             "trade_date": str(latest["trade_date"]),
             "latest_price": latest["close"],
             "pct_chg": latest["pct_chg"],
-            "amount_yi": round(latest["amount"] / 1e8, 4),
-            "avg_daily_amount_30d_yi": round(avg_amount / 1e8, 4),
+            "amount_yi": round(latest["amount"] / 1e5, 4),  # 千元 → 亿元
+            "avg_daily_amount_30d_yi": round(avg_amount / 1e5, 4),  # 千元 → 亿元
             "latest_share_yi": share_latest,
             "estimated_scale_yi": scale_est,
             "unit_nav": nav_latest.get("unit_nav") if nav_latest else None,
@@ -251,7 +251,7 @@ class ETFAnalyzer:
                     "track_benchmark": f.get("benchmark", ""),
                     "price": d.get("close"),
                     "pct_chg": d.get("pct_chg"),
-                    "amount_yi": round(d.get("amount", 0) / 1e8, 4),
+                    "amount_yi": round(d.get("amount", 0) / 1e5, 4),  # 千元 → 亿元
                     "vol": d.get("vol"),
                     "pre_close": d.get("pre_close"),
                     "unit_nav": nav_latest.get("unit_nav"),
@@ -287,7 +287,7 @@ class ETFAnalyzer:
                 if daily is None or daily.empty: continue
                 d = daily.iloc[0]
                 pct_chg = d["pct_chg"]
-                amount_yi = d["amount"] / 1e8 if d["amount"] else 0
+                amount_yi = d["amount"] / 1e5 if d["amount"] else 0  # 千元 → 亿元
                 scale_est = amount_yi * 10
                 if min_pct_chg is not None and pct_chg < min_pct_chg: continue
                 if max_pct_chg is not None and pct_chg > max_pct_chg: continue
@@ -331,7 +331,7 @@ class ETFAnalyzer:
                         "track_benchmark": str(e.get("benchmark",""))[:60],
                         "price": d.get("close"),
                         "pct_chg": d.get("pct_chg"),
-                        "amount_yi": round(d.get("amount",0)/1e8,4) if d.get("amount") else None,
+                        "amount_yi": round(d.get("amount",0)/1e5,4) if d.get("amount") else None,  # 千元 → 亿元
                         "management": e.get("management",""),
                     })
                 except: pass
@@ -402,7 +402,7 @@ class ETFAnalyzer:
                         "ts_code": etf["ts_code"], "name": etf["name"],
                         "track_benchmark": str(etf.get("benchmark",""))[:50],
                         "price": d.get("close"), "pct_chg": d.get("pct_chg"),
-                        "amount_yi": round(d.get("amount",0)/1e8,4) if d.get("amount") else None,
+                        "amount_yi": round(d.get("amount",0)/1e5,4) if d.get("amount") else None,  # 千元 → 亿元
                         "m_fee": etf.get("m_fee",""),
                     })
                 except: pass

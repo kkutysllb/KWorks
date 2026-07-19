@@ -518,7 +518,7 @@ async def run_selection(
                 item[fname] = round(float(val), 6) if pd.notna(val) else None
             item["close"] = round(float(row.get("close", 0)), 2) if pd.notna(row.get("close")) else None
             item["pct_chg"] = round(float(row.get("pct_chg", 0)), 2) if pd.notna(row.get("pct_chg")) else None
-            item["total_mv"] = round(float(row.get("total_mv", 0)), 2) if pd.notna(row.get("total_mv")) else None
+            item["total_mv"] = round(float(row.get("total_mv", 0)) / 10000, 2) if pd.notna(row.get("total_mv")) else None  # 万元 → 亿元
             stocks_out.append(item)
 
         result["total_count"] = len(scored_df)
