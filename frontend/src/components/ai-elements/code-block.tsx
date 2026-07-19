@@ -1,7 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -9,10 +7,12 @@ import {
   type HTMLAttributes,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import { type BundledLanguage, codeToHtml, type ShikiTransformer } from "shiki";
+
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -84,21 +84,29 @@ export const CodeBlock = ({
 }: CodeBlockProps) => {
   const [html, setHtml] = useState<string>("");
   const [darkHtml, setDarkHtml] = useState<string>("");
-  const mounted = useRef(false);
 
   useEffect(() => {
-    highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
-      if (!mounted.current) {
+    let cancelled = false;
+    setHtml("");
+    setDarkHtml("");
+
+    void highlightCode(code, language, showLineNumbers)
+      .then(([light, dark]) => {
+        if (cancelled) return;
         setHtml(light);
         setDarkHtml(dark);
-        mounted.current = true;
-      }
-    });
+      })
+      .catch(() => {
+        // The plain-text fallback remains visible when a grammar or theme
+        // chunk cannot be loaded by the desktop protocol.
+      });
 
     return () => {
-      mounted.current = false;
+      cancelled = true;
     };
   }, [code, language, showLineNumbers]);
+
+  const isHighlighted = html.length > 0 && darkHtml.length > 0;
 
   return (
     <CodeBlockContext.Provider value={{ code }}>
@@ -110,26 +118,41 @@ export const CodeBlock = ({
         {...props}
       >
         <div className="relative size-full">
-          <div
-            className={cn(
-              "[&>pre]:bg-background! [&>pre]:text-foreground! size-full overflow-auto dark:hidden [&_code]:font-mono [&_code]:text-sm [&>pre]:m-0 [&>pre]:text-sm",
-              wrapLines
-                ? "[&>pre]:break-words [&>pre]:whitespace-pre-wrap"
-                : "[&>pre]:whitespace-pre",
-            )}
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-          <div
-            className={cn(
-              "[&>pre]:bg-background! [&>pre]:text-foreground! hidden size-full overflow-auto dark:block [&_code]:font-mono [&_code]:text-sm [&>pre]:m-0 [&>pre]:text-sm",
-              wrapLines
-                ? "[&>pre]:break-words [&>pre]:whitespace-pre-wrap"
-                : "[&>pre]:whitespace-pre",
-            )}
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: darkHtml }}
-          />
+          {isHighlighted ? (
+            <>
+              <div
+                className={cn(
+                  "[&>pre]:bg-background! [&>pre]:text-foreground! size-full overflow-auto dark:hidden [&_code]:font-mono [&_code]:text-sm [&>pre]:m-0 [&>pre]:text-sm",
+                  wrapLines
+                    ? "[&>pre]:break-words [&>pre]:whitespace-pre-wrap"
+                    : "[&>pre]:whitespace-pre",
+                )}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+              <div
+                className={cn(
+                  "[&>pre]:bg-background! [&>pre]:text-foreground! hidden size-full overflow-auto dark:block [&_code]:font-mono [&_code]:text-sm [&>pre]:m-0 [&>pre]:text-sm",
+                  wrapLines
+                    ? "[&>pre]:break-words [&>pre]:whitespace-pre-wrap"
+                    : "[&>pre]:whitespace-pre",
+                )}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
+                dangerouslySetInnerHTML={{ __html: darkHtml }}
+              />
+            </>
+          ) : (
+            <pre
+              className={cn(
+                "bg-background text-foreground size-full overflow-auto p-0 font-mono text-sm",
+                wrapLines
+                  ? "break-words whitespace-pre-wrap"
+                  : "whitespace-pre",
+              )}
+            >
+              <code>{code}</code>
+            </pre>
+          )}
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">
               {children}
