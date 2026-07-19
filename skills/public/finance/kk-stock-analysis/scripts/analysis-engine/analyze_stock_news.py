@@ -33,8 +33,11 @@ if _project_root not in sys.path:
 
 def _get_tushare_api():
     import tushare as ts
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(_project_root, '.env'))
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(_project_root, '.env'))
+    except ImportError:
+        pass  # env vars injected by skill runtime
     token = os.getenv('TUSHARE_TOKEN')
     if not token:
         raise ValueError("未找到 TUSHARE_TOKEN，请在 .env 中配置")
@@ -137,8 +140,11 @@ def _format_article(article: dict) -> dict:
 def analyze_stock_news(stock_input: str, days: int = 7) -> dict:
     """通过问财 news-search API 获取公司新闻和行业新闻"""
     # 加载环境变量
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(_project_root, '.env'))
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(_project_root, '.env'))
+    except ImportError:
+        pass  # env vars injected by skill runtime
 
     ts_api = _get_tushare_api()
     ts_code = _resolve_stock_code(ts_api, stock_input)

@@ -661,8 +661,11 @@ def main():
     print(f"\n正在查询股票信息: {stock_input!r} ...")
     try:
         import re as _re
-        from dotenv import load_dotenv
-        load_dotenv()
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass  # env vars injected by skill runtime
         token = os.getenv('TUSHARE_TOKEN')
         if not token:
             raise ValueError('未找到 TUSHARE_TOKEN')

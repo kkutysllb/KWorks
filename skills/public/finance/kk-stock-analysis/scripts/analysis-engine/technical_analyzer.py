@@ -155,13 +155,15 @@ class TechnicalDataFetcher:
 
     def __init__(self, tushare_token: Optional[str] = None):
         import tushare as ts
-        from dotenv import load_dotenv
-
-        env_path = os.path.join(_project_root, 'kk_stock_backend', '.env')
-        if os.path.exists(env_path):
-            load_dotenv(env_path)
-        else:
-            load_dotenv()
+        try:
+            from dotenv import load_dotenv
+            env_path = os.path.join(_project_root, 'kk_stock_backend', '.env')
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+            else:
+                load_dotenv()
+        except ImportError:
+            pass  # env vars injected by skill runtime
 
         token = tushare_token or os.getenv('TUSHARE_TOKEN')
         if not token:
@@ -1158,8 +1160,11 @@ def analyze_stock_technical(
     """
     import re as _re
     import os as _os
-    from dotenv import load_dotenv
-    load_dotenv()
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # env vars injected by skill runtime
     _token = _os.getenv('TUSHARE_TOKEN')
     if not _token:
         raise ValueError('未找到 TUSHARE_TOKEN，请在 .env 中配置')

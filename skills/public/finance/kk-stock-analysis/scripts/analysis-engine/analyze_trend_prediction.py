@@ -26,7 +26,7 @@ import argparse
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _SKILL_ROOT = os.path.dirname(os.path.dirname(_SCRIPT_DIR))
 _PROJECT_ROOT = os.path.dirname(_SKILL_ROOT)
-_MAIN_SCRIPT = os.path.join(_PROJECT_ROOT, "scripts", "run_trend_prediction.py")
+_MAIN_SCRIPT = os.path.join(_SKILL_ROOT, "scripts", "run_trend_prediction.py")
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
     if not os.path.exists(_MAIN_SCRIPT):
         print(json.dumps({
             "error": f"趋势预测主脚本不存在: {_MAIN_SCRIPT}",
-            "hint": "请确保 kk-stock-analysis 位于 kk_QuantFlows 项目目录内"
+            "hint": "请确保 kk-stock-analysis/scripts/ 目录下存在 run_trend_prediction.py"
         }, ensure_ascii=False))
         sys.exit(1)
 

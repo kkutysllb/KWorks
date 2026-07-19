@@ -45,16 +45,14 @@ except ImportError:
 # 路径常量 — 已安装技能 CLI
 # ============================================================
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_PROJECT_ROOT)))
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)  # kk-stock-analysis/scripts
+_SKILL_ROOT = os.path.dirname(_PROJECT_ROOT)   # kk-stock-analysis
+_FINANCE_ROOT = os.path.dirname(_SKILL_ROOT)   # finance
 
-# 已安装技能 CLI 路径
-_MANAGEMENT_CLI = os.path.join(
-    _REPO_ROOT, "server", "skills", "hithink-management-query", "scripts", "cli.py"
-)
-_EVENT_CLI = os.path.join(
-    _REPO_ROOT, "server", "skills", "hithink-event-query", "scripts", "cli.py"
-)
+# 问财技能 CLI 路径（优先使用本技能内嵌 CLI，回退到同级技能包）
+_MANAGEMENT_CLI = os.path.join(_PROJECT_ROOT, "management-query-cli.py")
+_EVENT_CLI = os.path.join(_FINANCE_ROOT, "kk-event-query", "scripts", "cli.py")
 
 
 def _run_cli(cli_path: str, query: str, limit: str = "10") -> dict:

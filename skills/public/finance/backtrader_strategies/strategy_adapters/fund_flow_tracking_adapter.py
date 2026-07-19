@@ -43,8 +43,11 @@ class FundFlowTrackingAdapter:
         # 初始化 Tushare API
         if not _TUSHARE_AVAILABLE:
             raise RuntimeError("tushare 未安装，请执行 pip install tushare")
-        from dotenv import load_dotenv
-        load_dotenv()
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass  # env vars injected by skill runtime
         token = os.environ.get('TUSHARE_TOKEN', '')
         if not token:
             raise ValueError('TUSHARE_TOKEN 环境变量未设置')

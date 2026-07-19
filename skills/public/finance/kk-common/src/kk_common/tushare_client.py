@@ -18,10 +18,12 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import tushare as ts
-from dotenv import load_dotenv
-
-# 加载环境变量
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    # 加载环境变量
+    load_dotenv()
+except ImportError:
+    pass  # env vars injected by skill runtime
 
 # 配置日志
 logger = logging.getLogger('TushareClient')

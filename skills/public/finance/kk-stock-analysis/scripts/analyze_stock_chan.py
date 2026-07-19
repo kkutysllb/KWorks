@@ -48,8 +48,11 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 # ── Tushare API ──────────────────────────────────────────────────────────────
-from dotenv import load_dotenv
-load_dotenv(os.path.join(_project_root, '.env'))
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(_project_root, '.env'))
+except ImportError:
+    pass  # env vars injected by skill runtime
 import tushare as ts
 import pandas as pd
 

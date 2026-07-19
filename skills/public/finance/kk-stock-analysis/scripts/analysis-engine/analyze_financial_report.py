@@ -753,8 +753,11 @@ def main():
     from analysis.financial_analyzer import FinancialAnalyzer
 
     # 初始化 Tushare API
-    from dotenv import load_dotenv
-    load_dotenv()
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # env vars injected by skill runtime
     token = os.getenv('TUSHARE_TOKEN')
     if not token:
         print("\n[错误] 未找到 TUSHARE_TOKEN，请在 .env 中配置")

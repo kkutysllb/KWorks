@@ -30,8 +30,11 @@ if _project_root not in sys.path:
 
 def _get_tushare_api():
     import tushare as ts
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(_project_root, '.env'))
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(_project_root, '.env'))
+    except ImportError:
+        pass  # env vars injected by skill runtime
     token = os.getenv('TUSHARE_TOKEN')
     if not token:
         raise ValueError("未找到 TUSHARE_TOKEN，请在 .env 中配置")
