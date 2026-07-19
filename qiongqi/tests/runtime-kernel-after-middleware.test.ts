@@ -107,6 +107,98 @@ async function afterEvents(events: InMemoryRunEventStore) {
 }
 
 describe('RuntimeKernel durable afterNode middleware', () => {
+  it('honors an afterNode jump instead of following the default edge', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const routedGraph: ExecutionGraph = {
+      version: 'after-middleware-jump-v1',
+      startNodeId: 'work',
+      predicates: ['next'],
+      nodes: [
+        { id: 'work', kind: 'work', effect: 'state', checkpoint: 'both' },
+        { id: 'detour', kind: 'detour', effect: 'state', checkpoint: 'both' },
+        { id: 'complete', kind: 'complete', effect: 'state', terminal: true, checkpoint: 'both' }
+      ],
+      edges: [
+        { from: 'work', to: 'complete', when: 'next' },
+        { from: 'detour', to: 'complete', when: 'next' }
+      ]
+    }
+    const runtime = new RuntimeKernel({
+      graph: routedGraph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'after-jump',
+      middleware: new MiddlewareChain([{
+        id: 'jump-governance',
+        version: 1,
+        hooks: ['afterNode'],
+        handle: async (context, next) => context.node?.id === 'work'
+          ? { commands: [{ type: 'jump', nodeId: 'detour', condition: 'next', reason: 'test detour' }] }
+          : next(context)
+      }]),
+      nodes: {
+        work: () => ({ condition: 'next' }),
+        detour: () => ({ condition: 'next' }),
+        complete: () => ({ outcome: { status: 'completed', reason: 'normal_stop', retryable: false } as const })
+      }
+    })
+
+    await expect(runtime.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual(['work', 'detour', 'complete'])
+  })
+
+  it('honors an afterNode retry by re-entering the prompt node when present', async () => {
+    const snapshots = new InMemoryRunStateStore()
+    const events = new InMemoryRunEventStore()
+    const calls: string[] = []
+    const retryGraph: ExecutionGraph = {
+      version: 'after-middleware-retry-v1',
+      startNodeId: 'account-model',
+      predicates: ['next'],
+      nodes: [
+        { id: 'account-model', kind: 'account-model', effect: 'state', checkpoint: 'both' },
+        { id: 'build-context', kind: 'build-context', effect: 'state', checkpoint: 'both' },
+        { id: 'complete', kind: 'complete', effect: 'state', terminal: true, checkpoint: 'both' }
+      ],
+      edges: [
+        { from: 'account-model', to: 'complete', when: 'next' },
+        { from: 'build-context', to: 'complete', when: 'next' }
+      ]
+    }
+    const runtime = new RuntimeKernel({
+      graph: retryGraph,
+      snapshots,
+      events,
+      leases: snapshots,
+      holderId: 'after-retry',
+      middleware: new MiddlewareChain([{
+        id: 'retry-governance',
+        version: 1,
+        hooks: ['afterNode'],
+        handle: async (context, next) => {
+          if (context.node?.id !== 'account-model') return next(context)
+          calls.push('retry')
+          return { commands: [{ type: 'retry', reason: 'test retry' }] }
+        }
+      }]),
+      nodes: {
+        'account-model': () => ({ condition: 'next' }),
+        'build-context': () => ({ condition: 'next' }),
+        complete: () => ({ outcome: { status: 'completed', reason: 'normal_stop', retryable: false } as const })
+      }
+    })
+
+    await expect(runtime.run(identity)).resolves.toMatchObject({ status: 'completed' })
+    expect((await events.listAfter(identity, 0))
+      .filter((event) => event.eventType === 'node.started')
+      .map((event) => event.stepId)).toEqual(['account-model', 'build-context', 'complete'])
+    expect(calls).toEqual(['retry'])
+  })
+
   it('reruns afterNode after a crash immediately following node.completed', async () => {
     const snapshots = new InMemoryRunStateStore()
     const events = new InMemoryRunEventStore()
