@@ -34,10 +34,10 @@ describe('Qiongqi serve CLI text', () => {
       mode: 'serve',
       host: '127.0.0.1',
       port: 19987,
-      defaultModel: 'deepseek-v4-pro',
       approvalPolicy: 'auto'
     })
     expect(startupInfo).not.toHaveProperty('model')
+    expect(startupInfo).not.toHaveProperty('defaultModel')
     expect(startupInfo).not.toHaveProperty('sandboxMode')
   })
 })
