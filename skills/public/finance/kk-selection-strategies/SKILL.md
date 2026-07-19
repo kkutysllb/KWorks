@@ -78,21 +78,23 @@ A 股多策略选股运行框架，提供 10 种经典选股策略的独立 CLI 
 
 ## 通用用法
 
+所有脚本位于本技能包根目录下，执行时需以技能包根目录为工作目录（运行时已自动设置）。
+
 ```bash
 # 运行成长股策略（默认返回20只）
-python run_growth_stock.py
+python3 run_growth_stock.py --json
 
 # 指定返回数量
-python run_growth_stock.py --limit 10
+python3 run_growth_stock.py --limit 10 --json
 
 # 限定市值范围
-python run_growth_stock.py --market-cap large
+python3 run_growth_stock.py --market-cap large --json
 
 # 限定股票池
-python run_growth_stock.py --stock-pool gem
+python3 run_growth_stock.py --stock-pool gem --json
 
 # 结果保存到CSV
-python run_growth_stock.py --output results.csv
+python3 run_growth_stock.py --output results.csv
 ```
 
 ## 通用参数
@@ -106,4 +108,4 @@ python run_growth_stock.py --output results.csv
 
 ## 数据源
 
-各策略依赖 `backtrader_strategies/strategy_adapters/` 模块下的适配器从 Tushare Pro API 获取数据。需配置 `TUSHARE_TOKEN` 环境变量。
+各策略依赖同级目录 `backtrader_strategies/strategy_adapters/` 模块下的适配器从 Tushare Pro API 获取数据。需配置 `TUSHARE_TOKEN` 环境变量（由运行时自动注入）。

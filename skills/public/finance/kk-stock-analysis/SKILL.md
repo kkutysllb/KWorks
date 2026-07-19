@@ -167,7 +167,9 @@ tags:
 | `analyze_trend_prediction.py` | 机器学习趋势预测（LightGBM/XGBoost/CatBoost集成） | `--stock 600519.SH --json` |
 | `analyze_social_media.py` | 社交媒体情绪分析（多平台舆情+情绪评分+恐惧贪婪指数+反转检测） | `--stock 600519.SH --days 7 --json` |
 
-### 智能选股策略（`scripts/selection-strategies/`）
+### 智能选股策略（独立技能包 `kk-selection-strategies`）
+
+选股策略脚本位于同级技能包 `kk-selection-strategies/` 根目录下（非本技能包内），运行时需从该技能包根路径执行。本技能包内仅保留 `scripts/run_chan_stock_selector.py`（缠论背驰选股）。
 
 | 脚本文件 | 策略 | 说明 |
 |---------|------|------|
@@ -179,14 +181,14 @@ tags:
 | `run_oversold_rebound.py` | 超跌反弹 | RSI/KDJ极度超卖后均值回归 |
 | `run_limit_up_leader.py` | 涨停龙头 | 连板强势股的趋势延续 |
 | `run_fund_flow_tracking.py` | 资金追踪 | 跟随主力大单净流入方向 |
-| `run_chan_stock_selector.py` | 缠论背驰选股 | MACD背驰信号全市场扫描 |
+| `run_chan_stock_selector.py` | 缠论背驰选股 | MACD背驰信号全市场扫描（本包 `scripts/` 下） |
 | `run_multi_factor.py` | 多因子横截面 | 7大因子截面Z-score标准化+等权/加权评分+TopN组合 |
 
-### ML 训练脚本（`scripts/ml-prediction/`）
+### ML 训练脚本（`scripts/`）
 
 | 脚本文件 | 功能 | 参数 |
 |---------|------|------|
-| `run_model_train.py` | 趋势预测模型训练（LightGBM/XGBoost/CatBoost） | `--json` |
+| `run_trend_model_train.py` | 趋势预测模型训练（LightGBM/XGBoost/CatBoost） | `--json` |
 
 ### CLI 工具（`scripts/`）
 
@@ -213,9 +215,7 @@ python3 scripts/analysis-engine/analyze_stock_chips.py --stock 600519.SH --json
 # 估值分析（含PE-Band+估值陷阱检测）
 python3 scripts/analysis-engine/analyze_stock_valuation.py --stock 600519.SH --json
 
-| `run_fund_flow_tracking.py` | 资金追踪 | 跟随主力大单净流入方向 |
-| `run_chan_stock_selector.py` | 缠论背驰选股 | MACD背驰信号全市场扫描 |
-| `run_multi_factor.py` | 多因子横截面 | 7大因子截面Z-score标准化+等权/加权评分+TopN组合 |
+# 多估值模型分析（DCF+DDM+PE-Band+PB-ROE+EV/EBITDA+交叉验证）
 python3 scripts/analysis-engine/analyze_valuation_models.py --stock 600519.SH --years 5 --json
 
 # 机构调研分析
@@ -262,21 +262,22 @@ python3 scripts/business-query-cli.py --query "贵州茅台主营业务构成"
 # 股东管理数据
 python3 scripts/management-query-cli.py --query "贵州茅台股本结构"
 
-# =================== 智能选股 ===================
+# =================== 智能选股（kk-selection-strategies 技能包） ===================
+# 注意：以下脚本位于 kk-selection-strategies 技能包根目录，非本技能包
 
 # 价值投资策略
-python3 scripts/selection-strategies/run_value_investment.py --json
+python3 run_value_investment.py --json
 
 # 高股息策略
-python3 scripts/selection-strategies/run_high_dividend.py --json
+python3 run_high_dividend.py --json
 
-# 缠论背驰选股（全市场/指定股票池）
-python3 scripts/selection-strategies/run_chan_stock_selector.py --json
-python3 scripts/selection-strategies/run_chan_stock_selector.py --pool hs300 --signal buy --json
+# 缠论背驰选股（本技能包内）
+python3 scripts/run_chan_stock_selector.py --json
+python3 scripts/run_chan_stock_selector.py --pool hs300 --signal buy --json
 
 # 多因子横截面选股（7因子Z-score+TopN等权组合）
-python3 scripts/selection-strategies/run_multi_factor.py --json
-python3 scripts/selection-strategies/run_multi_factor.py --top-n 20 --momentum-window 10 --json
+python3 run_multi_factor.py --json
+python3 run_multi_factor.py --top-n 20 --momentum-window 10 --json
 
 # =================== 模型训练 ===================
 
@@ -285,8 +286,8 @@ python3 scripts/analysis-engine/analyze_valuation_models.py --stock 600519.SH --
 python3 scripts/analysis-engine/analyze_valuation_models.py --stock 600519.SH --years 5 --json
 
 # 趋势预测模型训练
-python3 scripts/ml-prediction/run_model_train.py --json
-python3 scripts/ml-prediction/run_model_train.py --stocks 000001.SZ,600519.SH --json
+python3 scripts/run_trend_model_train.py --json
+python3 scripts/run_trend_model_train.py --stocks 000001.SZ,600519.SH --json
 ```
 
 ## 十五维分析执行流程

@@ -59,7 +59,7 @@ tags:
 
 ## 核心原则：双报告强制输出
 
-**当用户请求任何分析任务时，必须同时生成两份报告，缺一不可：**
+**当用户请求完整分析、复盘、研究、回测或数据看板任务时，必须同时生成两份报告，缺一不可：**
 
 1. **Markdown 结构化报告**（`.md` 文件）— 详细文字分析
 2. **HTML 数据看板**（`.html` 文件）— 金融风格可视化看板，内嵌在线图表
@@ -76,7 +76,7 @@ tags:
 
 #### 1. 执行摘要
 - 一句话总结核心结论
-- 明确给出操作建议（买入/卖出/持有/观望）
+- 综合评估方向（偏多/偏空/中性/观望）
 - 风险等级评估（高/中/低）
 
 #### 2. 数据概览
@@ -115,7 +115,7 @@ tags:
 
 **核心结论**: {一句话总结}
 
-**操作建议**: {买入/卖出/持有/观望}
+**综合评估**: {偏多/偏空/中性/观望}
 
 ---
 
@@ -172,10 +172,11 @@ tags:
 | 双轴对比 | `generate_dual_axes_chart` | 双轴图（如价格+成交量） |
 
 #### Step 2 — 构造参数并调用生成脚本
-读取对应的 `chart-visualization/references/generate_{type}.md` 了解参数格式，然后调用：
+读取对应的 `chart-visualization/references/generate_{type}.md` 了解参数格式，然后在 chart-visualization 技能包根目录下调用：
 
 ```bash
-node chart-visualization/scripts/generate.js '{"tool":"generate_line_chart","args":{"data":[{"time":"2025-01","value":100},{"time":"2025-02","value":120}],"title":"营收趋势","axisXTitle":"月份","axisYTitle":"金额(亿)"}}'
+# 在 chart-visualization 技能包根目录下执行（运行时已自动设置工作目录）
+node scripts/generate.js '{"tool":"generate_line_chart","args":{"data":[{"time":"2025-01","value":100},{"time":"2025-02","value":120}],"title":"营收趋势","axisXTitle":"月份","axisYTitle":"金额(亿)"}}'
 ```
 
 脚本会输出一个**在线图片 URL**（如 `https://...png`）。
@@ -282,7 +283,7 @@ node chart-visualization/scripts/generate.js '{"tool":"generate_line_chart","arg
 1. **禁止自行编写图表生成脚本** — 不要写 Python matplotlib、JavaScript D3/ECharts/Chart.js、Canvas 绘图等任何自行可视化代码
 2. **禁止使用 `:::chart` 块语法** — 这是旧平台语法，KWorks 不支持
 3. **禁止使用 mermaid 代码块** — 只用 `chart-visualization` 技能
-4. **禁止省略 HTML 看板** — 即使分析简单，也必须生成 HTML 看板
+4. **禁止省略 HTML 看板** — 完整分析任务必须生成 HTML 看板（轻量单指标查询除外，见工作模式短问快答规则）
 5. **禁止编造图表数据** — 所有图表数据必须来自技能获取的真实数据
 6. **图表只能通过 `chart-visualization/scripts/generate.js` 生成**
 
@@ -297,7 +298,7 @@ node chart-visualization/scripts/generate.js '{"tool":"generate_line_chart","arg
 1. **MD 报告**: `{用户工作目录}/{分析对象}_分析报告.md`
 2. **HTML 看板**: `{用户工作目录}/{分析对象}_数据看板.html`
 
-使用 `write_file` 工具保存文件。
+使用 `write` 工具保存文件。
 
 ### 展示给用户
 

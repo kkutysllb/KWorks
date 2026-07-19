@@ -95,14 +95,14 @@ python3 scripts/market-query-cli.py --query "贵州茅台实时行情"
 # 经营数据穿透
 python3 scripts/business-query-cli.py --query "贵州茅台主营业务构成"
 
-# 价值投资选股
-python3 scripts/selection-strategies/run_value_investment.py --json
+# 价值投资选股（kk-selection-strategies 技能包）
+python3 run_value_investment.py --json
 
-# 缠论背驰选股
-python3 scripts/selection-strategies/run_chan_stock_selector.py --pool hs300 --signal buy --json
+# 缠论背驰选股（本技能包内）
+python3 scripts/run_chan_stock_selector.py --pool hs300 --signal buy --json
 
 # 模型训练
-python3 scripts/ml-prediction/run_model_train.py --json
+python3 scripts/run_trend_model_train.py --json
 ```
 
 ## 目录结构
@@ -132,20 +132,9 @@ kk-stock-analysis/
 │   │   ├── analyze_financial_deep.py       # 财报深度解读
 │   │   ├── analyze_valuation_models.py     # 多估值模型分析（DCF+DDM+PE-Band+PB-ROE+EV/EBITDA）
 │   │   ├── analyze_stock_shareholder.py     # 股本股东信息+事件统计
-│   ├── selection-strategies/         # 10个智能选股策略
-│   │   ├── run_value_investment.py
-│   │   ├── run_high_dividend.py
-│   │   ├── run_growth_stock.py
-│   │   ├── run_momentum_breakthrough.py
-│   │   ├── run_technical_breakthrough.py
-│   │   ├── run_oversold_rebound.py
-│   │   ├── run_limit_up_leader.py
-│   │   ├── run_fund_flow_tracking.py
-│   │   ├── run_chan_stock_selector.py      # 缠论背驰选股（内嵌引擎）
-│   │   └── run_multi_factor.py             # 多因子横截面选股
 │   ├── chan_theory_v2/              # 缠论引擎（内嵌）
-│   ├── ml-prediction/                # ML训练脚本
-│   │   └── run_model_train.py            # 趋势预测模型训练（桥接）
+│   ├── run_chan_stock_selector.py    # 缠论背驰选股（内嵌引擎）
+│   ├── run_trend_model_train.py      # 趋势预测模型训练（桥接）
 │   ├── market-query-cli.py           # 实时行情查询CLI
 │   ├── business-query-cli.py         # 经营数据查询CLI
 │   ├── management-query-cli.py       # 股东管理查询CLI
@@ -183,12 +172,14 @@ kk-stock-analysis/
 
 ## 多因子横截面选股
 
+多因子选股脚本位于 `kk-selection-strategies` 技能包根目录：
+
 ```bash
 # 多因子选股（默认 Top10 等权组合）
-python3 scripts/selection-strategies/run_multi_factor.py --json
+python3 run_multi_factor.py --json
 
 # 自定义 TopN 和动量窗口
-python3 scripts/selection-strategies/run_multi_factor.py --top-n 20 --momentum-window 10 --json
+python3 run_multi_factor.py --top-n 20 --momentum-window 10 --json
 ```
 
 ## 打包发布
