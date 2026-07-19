@@ -48,7 +48,7 @@ describe("coding diff workflow", () => {
     expect(workbench).toContain("<CodeViewer");
     expect(workbench).toContain('aria-label="代码区视图"');
     expect(workbench).toContain('handleSelectWorkbenchTab("changes")');
-    expect(workbench).toContain("activeCodeTab === \"changes\"");
+    expect(workbench).toContain('activeCodeTab === "changes"');
     expect(workbench).toContain('label="变更"');
     // The old separate diff/task-changes tabs are gone.
     expect(workbench).not.toContain('handleSelectWorkbenchTab("diff")');
@@ -99,6 +99,10 @@ describe("coding diff workflow", () => {
     expect(panel).toContain(
       "files.some((file) => file.path === selectedDiffFile)",
     );
+    expect(panel).toContain("aria-expanded={selectedDiffFile === file.path}");
+    expect(panel).toContain("data-testid={`coding-diff-file-${file.path}`}");
+    expect(panel).toContain("selectedDiffFile === file.path && (");
+    expect(panel).not.toContain('className="w-72 shrink-0 border-r"');
 
     // The split-view mode was removed: only the unified renderer remains.
     expect(panel).not.toContain("diffViewMode");

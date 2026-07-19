@@ -123,15 +123,10 @@ export function CodingDiffPanel({
         <div className="shrink-0 border-b px-4 py-2">
           <Skeleton className="h-5 w-28" />
         </div>
-        <div className="flex min-h-0 flex-1">
-          <div className="w-64 shrink-0 space-y-2 border-r p-3">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton key={index} className="h-8 w-full" />
-            ))}
-          </div>
-          <div className="flex-1 p-4">
-            <Skeleton className="h-full w-full" />
-          </div>
+        <div className="min-h-0 flex-1 space-y-2 p-3">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="h-10 w-full" />
+          ))}
         </div>
       </div>
     );
@@ -202,19 +197,26 @@ export function CodingDiffPanel({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <ScrollArea className="w-72 shrink-0 border-r">
-          <div className="space-y-1 p-2">
-            {selectedWorkspaceFileHasNoDiff && (
-              <div className="text-muted-foreground border-b px-2 py-2 text-xs">
-                当前文件暂无变更，已显示项目中的其他变更。
-              </div>
-            )}
-            {files.map((file) => (
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-2 p-2">
+          {selectedWorkspaceFileHasNoDiff && (
+            <div className="text-muted-foreground border-b px-2 py-2 text-xs">
+              当前文件暂无变更，已显示项目中的其他变更。
+            </div>
+          )}
+          {files.map((file) => (
+            <article
+              key={file.path}
+              data-testid={`coding-diff-file-${file.path}`}
+              className={cn(
+                "overflow-hidden rounded-md border",
+                selectedDiffFile === file.path && "border-emerald-500/40",
+              )}
+            >
               <button
-                key={file.path}
+                aria-expanded={selectedDiffFile === file.path}
                 className={cn(
-                  "hover:bg-muted/60 flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm",
+                  "hover:bg-muted/60 flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm",
                   selectedDiffFile === file.path &&
                     "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
                 )}
@@ -225,92 +227,95 @@ export function CodingDiffPanel({
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">
                   {file.path}
                 </span>
-                <span className="text-muted-foreground shrink-0 text-xs">
-                  +{file.additions} -{file.deletions}
+                <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{file.additions}
+                  </span>{" "}
+                  <span className="text-red-600 dark:text-red-400">
+                    -{file.deletions}
+                  </span>
                 </span>
               </button>
-            ))}
-          </div>
-        </ScrollArea>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-10 shrink-0 items-center gap-2 border-b px-3 py-1.5">
-            <span className="min-w-0 flex-1 truncate font-mono text-sm">
-              {selectedFile?.path ?? "未选择文件"}
-            </span>
-            {selectedFile && <StatusBadge status={selectedFile.status} />}
-            {diffScope === "selected" && selectedFile && (
-              <span className="text-muted-foreground shrink-0 font-mono text-xs">
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  +{selectedFile.additions}
-                </span>{" "}
-                <span className="text-red-600 dark:text-red-400">
-                  -{selectedFile.deletions}
-                </span>
-              </span>
-            )}
-            <div className="ml-auto flex shrink-0 items-center gap-2 overflow-x-auto">
-              <div className="bg-muted text-muted-foreground inline-flex h-8 shrink-0 items-center rounded-md p-1">
-                <Button
-                  className="h-6 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  variant={diffScope === "selected" ? "secondary" : "ghost"}
-                  onClick={() => setDiffScope("selected")}
-                >
-                  当前文件
-                </Button>
-                <Button
-                  className="h-6 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  variant={diffScope === "all" ? "secondary" : "ghost"}
-                  onClick={() => setDiffScope("all")}
-                >
-                  全部变更
-                </Button>
-              </div>
-              {diffScope === "selected" && selectedFile && (
-                <Button
-                  className="h-7 px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
-                  disabled={discardProjectFileChange.isPending}
-                  size="sm"
-                  title="撤销此文件的未提交变更"
-                  type="button"
-                  variant="ghost"
-                  onClick={handleDiscardSelectedFile}
-                >
-                  <Undo2Icon className="mr-1 h-3 w-3" />
-                  {discardProjectFileChange.isPending ? "撤销中" : "撤销此文件"}
-                </Button>
+              {selectedDiffFile === file.path && (
+                <div className="border-t">
+                  <div className="flex min-h-10 flex-wrap items-center gap-2 border-b px-3 py-1.5">
+                    <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                      {file.path}
+                    </span>
+                    <div className="bg-muted text-muted-foreground inline-flex h-8 shrink-0 items-center rounded-md p-1">
+                      <Button
+                        className="h-6 px-2 text-xs"
+                        size="sm"
+                        type="button"
+                        variant={
+                          diffScope === "selected" ? "secondary" : "ghost"
+                        }
+                        onClick={() => setDiffScope("selected")}
+                      >
+                        当前文件
+                      </Button>
+                      <Button
+                        className="h-6 px-2 text-xs"
+                        size="sm"
+                        type="button"
+                        variant={diffScope === "all" ? "secondary" : "ghost"}
+                        onClick={() => setDiffScope("all")}
+                      >
+                        全部变更
+                      </Button>
+                    </div>
+                    {diffScope === "selected" && (
+                      <Button
+                        className="h-7 px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
+                        disabled={discardProjectFileChange.isPending}
+                        size="sm"
+                        title="撤销此文件的未提交变更"
+                        type="button"
+                        variant="ghost"
+                        onClick={handleDiscardSelectedFile}
+                      >
+                        <Undo2Icon className="mr-1 h-3 w-3" />
+                        {discardProjectFileChange.isPending
+                          ? "撤销中"
+                          : "撤销此文件"}
+                      </Button>
+                    )}
+                  </div>
+                  {discardError && (
+                    <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-700 dark:text-red-300">
+                      {discardError}
+                    </div>
+                  )}
+                  {isDiffTruncated && (
+                    <div className="flex shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+                      <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Diff 过大（{diffLines.length.toLocaleString()}{" "}
+                        行），为避免渲染崩溃仅显示前{" "}
+                        {MAX_DIFF_RENDER_LINES.toLocaleString()}{" "}
+                        行。建议在终端运行{" "}
+                        <code className="font-mono">git diff</code>{" "}
+                        查看完整内容。
+                      </span>
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    {renderUnifiedDiff(displayDiffText, focusedDiffLine)}
+                  </div>
+                </div>
               )}
-            </div>
-          </div>
-          {discardError && (
-            <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-700 dark:text-red-300">
-              {discardError}
-            </div>
-          )}
-          {isDiffTruncated && (
-            <div className="flex shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
-              <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                Diff 过大（{diffLines.length.toLocaleString()} 行），为避免渲染崩溃仅显示前{" "}
-                {MAX_DIFF_RENDER_LINES.toLocaleString()} 行。建议在左侧选择单个文件查看，或在终端运行{" "}
-                <code className="font-mono">git diff</code> 查看完整内容。
-              </span>
-            </div>
-          )}
-          <ScrollArea className="min-h-0 flex-1">
-            {renderUnifiedDiff(displayDiffText, focusedDiffLine)}
-          </ScrollArea>
+            </article>
+          ))}
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
 
-function renderUnifiedDiff(diffText: string, highlightedUnifiedLine: number | null) {
+function renderUnifiedDiff(
+  diffText: string,
+  highlightedUnifiedLine: number | null,
+) {
   if (!diffText) {
     return (
       <div className="text-muted-foreground p-4 text-sm">
@@ -344,20 +349,21 @@ function renderUnifiedDiff(diffText: string, highlightedUnifiedLine: number | nu
               ? newLineNumber
               : null;
         const highlighted =
-          highlightedUnifiedLine != null && lineNumber === highlightedUnifiedLine;
+          highlightedUnifiedLine != null &&
+          lineNumber === highlightedUnifiedLine;
         return (
           <pre
             key={`${index}-${line}`}
             className={cn(
-              "overflow-x-auto whitespace-pre px-2",
+              "overflow-x-auto px-2 whitespace-pre",
               line.startsWith("+") &&
-                !line.startsWith("+++ ") &&
+                !line.startsWith("+++") &&
                 "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
               line.startsWith("-") &&
-                !line.startsWith("--- ") &&
+                !line.startsWith("---") &&
                 "bg-red-500/10 text-red-700 dark:text-red-300",
               line.startsWith("@@") && "text-muted-foreground bg-muted/50",
-              highlighted && "ring-1 ring-amber-500/60 bg-amber-500/10",
+              highlighted && "bg-amber-500/10 ring-1 ring-amber-500/60",
             )}
           >
             {line || " "}
