@@ -883,6 +883,42 @@ export function useQiongqiStream<StateType extends Record<string, unknown>>(
     let cancelled = false;
     threadIdRef.current = threadId;
 
+    // When ensureThread() has just created this thread and already opened an
+    // SSE subscription (submit → ensureThread → subscribe), skip the
+    // destructive reset-and-resubscribe cycle.  Resetting the mirror here
+    // would wipe displayLengths tracking and abort the in-flight connection,
+    // causing the first assistant response to render all at once instead of
+    // animating through the smooth display pump.
+    const hasLiveSubscription = isSubscribedRef.current;
+
+    if (hasLiveSubscription) {
+      // Keep the live SSE stream intact; only refresh thread metadata.
+      void (async () => {
+        try {
+          const thread = await qiongqiClient.getThread(threadId);
+          if (cancelled) return;
+          workModeIdRef.current =
+            typeof thread.workModeId === "string" && thread.workModeId.trim()
+              ? thread.workModeId.trim()
+              : undefined;
+          workModeModuleIdRef.current =
+            typeof thread.workModeModuleId === "string" && thread.workModeModuleId.trim()
+              ? thread.workModeModuleId.trim()
+              : undefined;
+          syncState();
+        } catch {
+          // Metadata refresh is best-effort; the SSE stream is authoritative.
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        cancelScheduledSync();
+        abortRef.current?.abort();
+        isSubscribedRef.current = false;
+      };
+    }
+
     // Reset state for new thread
     cancelScheduledSync();
     mirrorRef.current.reset();

@@ -270,6 +270,7 @@ export class BackendManager extends EventEmitter {
     const runtimeDir = getQiongqiRuntimeDir();
     const packages = [
       "packages/adapters/adapter-model",
+      "packages/adapters/adapter-storage",
       "packages/http-layer/http",
       "packages/cli-layer/cli",
     ];
