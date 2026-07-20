@@ -462,11 +462,14 @@ function startGateway() {
   const kkworksHome = DESKTOP_HOME;
   const extensionsConfigPath = kkworksHome ? join(kkworksHome, "extensions_config.json") : undefined;
   const dataDir = kkworksHome ? join(kkworksHome, "data") : undefined;
+  // Unified runtime data dir — must match backend.ts buildEnv() which uses
+  // kworksUserWorkspacePaths(root, "runtime").userRoot = <root>/users/runtime.
+  const runtimeDataDir = kkworksHome ? join(kkworksHome, "users", "runtime") : undefined;
   const skillsPath = kkworksHome ? join(kkworksHome, "skills") : undefined;
 
   // Ensure the isolated state dir exists (matches backend.ts ensureDataDirs).
   if (kkworksHome) {
-    for (const sub of ["", "logs", "data", "threads", "agents"]) {
+    for (const sub of ["", "logs", "users/runtime", "system/data"]) {
       mkdirSync(join(kkworksHome, sub), { recursive: true });
     }
     // Ensure coding home exists (matches backend.ts ensureDataDirs).
@@ -482,6 +485,7 @@ function startGateway() {
   console.log(`[dev]   KWorks_CODING_HOME=${CODING_HOME}`);
   console.log(`[dev]   KWorks_EXTENSIONS_CONFIG_PATH=${extensionsConfigPath}`);
   console.log(`[dev]   KWorks_DATA_DIR=${dataDir}`);
+  console.log(`[dev]   QIONGQI_DATA_DIR=${runtimeDataDir}`);
   console.log(`[dev]   KWorks_SKILLS_PATH=${skillsPath}`);
   if (!resolveQiongqiLaunchConfig || !qiongqiStorageBackend || !qiongqiConfigFromLaunchConfig) {
     throw new Error("qiongqi launch config module was not loaded");
@@ -513,7 +517,7 @@ function startGateway() {
     "--port",
     GATEWAY_PORT,
     "--data-dir",
-    dataDir ? join(dataDir, "qiongqi") : join(QIONGQI_DIR, ".dev-data"),
+    runtimeDataDir ?? join(QIONGQI_DIR, ".dev-data"),
     "--storage-backend",
     storageBackend,
     "--insecure",
@@ -529,7 +533,7 @@ function startGateway() {
       KWorks_QIONGQI_REPO_PATH: QIONGQI_DIR,
       QIONGQI_HOST: "127.0.0.1",
       QIONGQI_PORT: GATEWAY_PORT,
-      QIONGQI_DATA_DIR: dataDir ? join(dataDir, "qiongqi") : join(QIONGQI_DIR, ".dev-data"),
+      QIONGQI_DATA_DIR: runtimeDataDir ?? join(QIONGQI_DIR, ".dev-data"),
       QIONGQI_STORAGE_BACKEND: storageBackend,
       QIONGQI_API_KEY: qiongqiLaunchConfig.apiKey,
       QIONGQI_BASE_URL: qiongqiLaunchConfig.baseUrl,
