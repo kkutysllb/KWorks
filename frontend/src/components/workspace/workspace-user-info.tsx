@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  DownloadIcon,
+  LoaderCircleIcon,
   LogOutIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UserIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   Avatar,
@@ -21,8 +24,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { isDesktop } from "@/core/config";
+import {
+  checkForUpdates,
+  installUpdate,
+  onUpdateReady,
+} from "@/core/desktop/updater";
 import { useI18n } from "@/core/i18n/hooks";
 
 function getRoleLabel(
@@ -40,6 +54,40 @@ export function WorkspaceUserInfo() {
   const router = useRouter();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+
+  // ── Update state ─────────────────────────────────────────────────
+  const [updateReady, setUpdateReady] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  const doCheck = useCallback(async () => {
+    const info = await checkForUpdates();
+    if (info?.available) {
+      setUpdateVersion(info.version ?? null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktop()) return;
+    const timer = setTimeout(() => void doCheck(), 5000);
+    return () => clearTimeout(timer);
+  }, [doCheck]);
+
+  useEffect(() => {
+    if (!isDesktop()) return;
+    return onUpdateReady((info) => {
+      setUpdateVersion(info.version);
+      setUpdateReady(true);
+    });
+  }, []);
+
+  const handleInstall = async () => {
+    setInstalling(true);
+    const ok = await installUpdate();
+    if (!ok) {
+      setInstalling(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -69,11 +117,33 @@ export function WorkspaceUserInfo() {
     </DropdownMenuLabel>
   );
 
+  const updateButton = (updateReady || installing) ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleInstall}
+          disabled={installing}
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-emerald-400 transition-colors hover:bg-sidebar-accent hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {installing ? (
+            <LoaderCircleIcon className="size-4 animate-spin" />
+          ) : (
+            <DownloadIcon className="size-4" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {installing ? "正在重启…" : `新版本 v${updateVersion ?? ""} 已就绪，点击安装`}
+      </TooltipContent>
+    </Tooltip>
+  ) : null;
+
   if (isCollapsed) {
     return (
       <div className="px-2 pt-2">
         <Separator className="mb-2" />
-        <div className="flex justify-center">
+        <div className="flex items-center justify-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <span className="inline-flex">
@@ -82,7 +152,7 @@ export function WorkspaceUserInfo() {
                 </button>
               </span>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="min-w-52">
+            <DropdownMenuContent side="top" align="center" sideOffset={8} className="min-w-52">
               {userInfoLabel}
               <DropdownMenuSeparator />
               {settingsMenuItem}
@@ -93,6 +163,7 @@ export function WorkspaceUserInfo() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {updateButton}
         </div>
       </div>
     );
@@ -101,28 +172,31 @@ export function WorkspaceUserInfo() {
   return (
     <div className="px-2 pt-2">
       <Separator className="mb-3" />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <span className="block w-full">
-            <button type="button" className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-              {avatar}
-              <span className="text-muted-foreground truncate text-xs leading-tight">
-                {getRoleLabel(user.system_role, t)}
-              </span>
-            </button>
-          </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="end" className="min-w-52">
-          {userInfoLabel}
-          <DropdownMenuSeparator />
-          {settingsMenuItem}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={logout}>
-            <LogOutIcon className="size-4 text-rose-500" />
-            {t.workspace.logout}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <span className="block min-w-0 flex-1">
+              <button type="button" className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                {avatar}
+                <span className="text-muted-foreground truncate text-xs leading-tight">
+                  {getRoleLabel(user.system_role, t)}
+                </span>
+              </button>
+            </span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-52">
+            {userInfoLabel}
+            <DropdownMenuSeparator />
+            {settingsMenuItem}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={logout}>
+              <LogOutIcon className="size-4 text-rose-500" />
+              {t.workspace.logout}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {updateButton}
+      </div>
     </div>
   );
 }

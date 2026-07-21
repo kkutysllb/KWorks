@@ -1,21 +1,14 @@
 "use client";
 
-import { DownloadIcon, LoaderCircleIcon } from "lucide-react";
+import { LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { isDesktop } from "@/core/config";
 import {
   checkForUpdates,
-  installUpdate,
   onUpdateDownloading,
   onUpdateReady,
 } from "@/core/desktop/updater";
-import { cn } from "@/lib/utils";
 
 type UpdateInfo = Awaited<ReturnType<typeof checkForUpdates>>;
 
@@ -40,8 +33,6 @@ type CheckState = "idle" | "checking" | "downloading" | "ready" | "no-update";
 export function UpdateChecker() {
   const [state, setState] = useState<CheckState>("idle");
   const [update, setUpdate] = useState<UpdateInfo>(null);
-  const [readyVersion, setReadyVersion] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
 
   const doCheck = useCallback(async (silent: boolean) => {
     if (!silent) setState("checking");
@@ -78,24 +69,13 @@ export function UpdateChecker() {
     return onUpdateDownloading(() => undefined);
   }, []);
 
-  // Push: download complete → show the update button.
+  // Push: download complete → sidebar icon handles the install UI.
   useEffect(() => {
     if (!isDesktop()) return;
-    return onUpdateReady((info) => {
-      setReadyVersion(info.version);
+    return onUpdateReady(() => {
       setState("ready");
     });
   }, []);
-
-  const handleInstall = async () => {
-    setInstalling(true);
-    const ok = await installUpdate();
-    if (!ok) {
-      setInstalling(false);
-      setState("idle");
-    }
-    // If ok, electron-updater restarts the app automatically.
-  };
 
   // ── Transient feedback states (manual check only) ──────────────
   // These show as a small spinner/badge in the bottom-left, auto-dismissing.
@@ -118,45 +98,11 @@ export function UpdateChecker() {
     );
   }
 
-  // ── Update ready — show the download icon button ───────────────
+  // ── Update ready — handled by sidebar icon in WorkspaceUserInfo ──
+  // The download icon in the sidebar bottom (workspace-user-info.tsx)
+  // listens to the same onUpdateReady event and shows the install button.
   if (state === "ready") {
-    const version = readyVersion ?? update?.version ?? "";
-    return (
-      <div className="fixed bottom-4 left-4 z-50">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleInstall}
-              disabled={installing}
-              className={cn(
-                "group flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2",
-                "text-xs font-medium text-primary shadow-lg backdrop-blur transition-all",
-                "hover:border-primary/50 hover:bg-primary/15",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-              )}
-            >
-              {installing ? (
-                <LoaderCircleIcon className="size-4 animate-spin" />
-              ) : (
-                <DownloadIcon className="size-4 transition-transform group-hover:translate-y-0.5" />
-              )}
-              <span>
-                {installing ? "正在重启…" : `新版本 v${version}`}
-              </span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="max-w-xs">
-            <p>新版本已下载完成，点击重启以完成安装。</p>
-            {update?.body && (
-              <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs opacity-80">
-                {update.body}
-              </p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    );
+    return null;
   }
 
   return null;

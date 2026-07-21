@@ -298,6 +298,18 @@ export async function registerUpdater(): Promise<void> {
       }
     } else {
       log.info("[updater] disabled in development (app.isPackaged=false)");
+      // DEV-ONLY: simulate update-ready so the sidebar icon can be tested.
+      // Remove this block before release.
+      if (process.env.KWORKS_SIMULATE_UPDATE) {
+        log.info("[updater] DEV simulate: KWORKS_SIMULATE_UPDATE detected, will broadcast updater:ready");
+        // Broadcast multiple times to handle race with frontend mount.
+        for (const delay of [6000, 12000, 20000]) {
+          setTimeout(() => {
+            log.info(`[updater] DEV simulate: broadcasting updater:ready (t=${delay}ms)`);
+            notifyAllWindows("updater:ready", { version: "99.0.0-dev", releaseDate: new Date().toISOString() });
+          }, delay);
+        }
+      }
     }
   } catch (e) {
     log.error(`[updater] failed to initialize: ${formatMsg(e)}`);
@@ -305,6 +317,10 @@ export async function registerUpdater(): Promise<void> {
 
   ipcMain.handle("updater:check", async (): Promise<UpdateInfo> => {
     if (!autoUpdater) {
+      // DEV simulate: return a fake update so the frontend knows one is "available".
+      if (process.env.KWORKS_SIMULATE_UPDATE) {
+        return { available: true, version: "99.0.0-dev", date: new Date().toISOString() };
+      }
       return { available: false };
     }
     try {
