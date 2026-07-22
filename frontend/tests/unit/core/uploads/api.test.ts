@@ -20,24 +20,27 @@ describe("uploadFiles", () => {
     vi.clearAllMocks();
   });
 
-  test("uploads files through the qiongqi-native attachments endpoint", async () => {
+  test("uploads files into the thread uploads directory", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          attachment: {
-            id: "att_123",
-            name: "note.txt",
-            mimeType: "text/plain",
-            byteSize: 5,
-            hash: "sha256:test",
-            threadIds: ["draft-thread"],
-            workspaces: [],
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
+          success: true,
+          files: [
+            {
+              filename: "note.txt",
+              size: 5,
+              path: "/tmp/kworks/threads/draft-thread/uploads/note.txt",
+              virtual_path: "/mnt/qiongqi/uploads/note.txt",
+              artifact_url:
+                "/api/threads/draft-thread/artifacts/mnt/qiongqi/uploads/note.txt",
+              extension: "txt",
+              modified: 1767225600000,
+            },
+          ],
+          message: "Uploaded 1 file",
         }),
         {
-          status: 201,
+          status: 200,
           headers: { "content-type": "application/json" },
         },
       ),
@@ -47,25 +50,20 @@ describe("uploadFiles", () => {
       new File(["hello"], "note.txt", { type: "text/plain" }),
     ]);
 
-    expect(fetchMock).toHaveBeenCalledWith("/v1/attachments", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/threads/draft-thread/uploads", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "note.txt",
-        mimeType: "text/plain",
-        dataBase64: "aGVsbG8=",
-        threadId: "draft-thread",
-      }),
+      body: expect.any(FormData),
     });
     expect(result.files).toEqual([
       {
         filename: "note.txt",
         size: 5,
-        path: "att_123",
-        virtual_path: "att_123",
-        artifact_url: "/v1/attachments/att_123/content",
+        path: "/tmp/kworks/threads/draft-thread/uploads/note.txt",
+        virtual_path: "/mnt/qiongqi/uploads/note.txt",
+        artifact_url:
+          "/api/threads/draft-thread/artifacts/mnt/qiongqi/uploads/note.txt",
         extension: "txt",
-        modified: Date.parse("2026-01-01T00:00:00.000Z"),
+        modified: 1767225600000,
       },
     ]);
   });
@@ -91,7 +89,7 @@ describe("uploadFiles", () => {
       ]),
     ).rejects.toThrow("Upload failed (404): thread not found: draft-thread");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/attachments",
+      "/api/threads/draft-thread/uploads",
       expect.objectContaining({ method: "POST" }),
     );
   });

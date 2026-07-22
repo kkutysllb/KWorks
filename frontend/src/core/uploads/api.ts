@@ -60,20 +60,27 @@ export async function uploadFiles(
   threadId: string,
   files: File[],
 ): Promise<UploadResponse> {
-  const uploaded = await Promise.all(
-    files.map((file) => uploadAttachment(threadId, file)),
+  const form = new FormData();
+  for (const file of files) {
+    form.append("files", file, file.name || "upload");
+  }
+
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/uploads`,
+    {
+      method: "POST",
+      body: form,
+    },
   );
-  return {
-    success: true,
-    files: uploaded,
-    message:
-      uploaded.length === 1
-        ? "Uploaded 1 file"
-        : `Uploaded ${uploaded.length} files`,
-  };
+
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, "Upload failed"));
+  }
+
+  return (await response.json()) as UploadResponse;
 }
 
-async function uploadAttachment(
+export async function uploadAttachment(
   threadId: string,
   file: File,
 ): Promise<UploadedFileInfo> {
