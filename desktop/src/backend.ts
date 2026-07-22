@@ -69,6 +69,8 @@ const HEALTH_CHECK_INTERVAL_MS = 500;
 const HEALTH_CHECK_TIMEOUT_SECS = 120;
 /** Maximum log lines retained in memory. */
 const MAX_LOG_LINES = 500;
+const MAX_BACKEND_LOG_LINE_CHARS = 16_384;
+const BACKEND_TERMINATION_GRACE_MS = 8_000;
 const RUNTIME_BOOTSTRAP_USER_ID = "runtime";
 
 export type BackendStatusKind = "stopped" | "starting" | "running" | "error";
@@ -88,6 +90,12 @@ export interface BackendStatus {
 export function resolveGatewayPort(): number {
   const fromEnv = Number.parseInt(process.env.GATEWAY_PORT ?? "", 10);
   return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_GATEWAY_PORT;
+}
+
+function sanitizeBackendLogLine(line: string): string {
+  if (line.length <= MAX_BACKEND_LOG_LINE_CHARS) return line;
+  const digest = createHash("sha256").update(line).digest("hex").slice(0, 16);
+  return `${line.slice(0, MAX_BACKEND_LOG_LINE_CHARS)}...[truncated ${line.length - MAX_BACKEND_LOG_LINE_CHARS} chars sha256=${digest}]`;
 }
 
 // ── BackendManager ───────────────────────────────────────────────────────
@@ -171,6 +179,7 @@ export class BackendManager extends EventEmitter {
       this.child = spawn(cmd.command, cmd.args, {
         env: this.buildEnv(port),
         stdio: ["ignore", "pipe", "pipe"],
+        detached: process.platform !== "win32",
         windowsHide: true,
       });
     } catch (e) {
@@ -442,7 +451,7 @@ export class BackendManager extends EventEmitter {
   }
 
   private appendLog(line: string): void {
-    const stamped = `[${new Date().toISOString()}] ${line}`;
+    const stamped = `[${new Date().toISOString()}] ${sanitizeBackendLogLine(line)}`;
     this.logs.push(stamped);
     if (this.logs.length > MAX_LOG_LINES) {
       this.logs.splice(0, this.logs.length - MAX_LOG_LINES);
@@ -581,9 +590,10 @@ export class BackendManager extends EventEmitter {
       return;
     }
 
-    // Unix: SIGTERM first, escalate to SIGKILL after a grace period.
+    // Unix: the backend is spawned detached, so -pid targets its process group
+    // and includes tool subprocesses started by the QiongQi runtime.
     try {
-      process.kill(child.pid, "SIGTERM");
+      process.kill(-child.pid, "SIGTERM");
     } catch {
       /* already dead */
     }
@@ -591,12 +601,12 @@ export class BackendManager extends EventEmitter {
     await new Promise<void>((resolveFn) => {
       const grace = setTimeout(() => {
         try {
-          child.kill("SIGKILL");
+          process.kill(-child.pid!, "SIGKILL");
         } catch {
           /* ignore */
         }
         resolveFn();
-      }, 500);
+      }, BACKEND_TERMINATION_GRACE_MS);
 
       child.once("exit", () => {
         clearTimeout(grace);

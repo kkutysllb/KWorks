@@ -637,7 +637,7 @@ async function forceQuitApp(): Promise<void> {
   isShuttingDown = true;
   destroyTray();
   closeWindowsForQuit();
-  await stopBackendWithTimeout(backend, 2000);
+  await stopBackendWithTimeout(backend, 10000);
   app.exit(0);
 }
 

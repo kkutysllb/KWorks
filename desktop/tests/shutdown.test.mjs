@@ -7,7 +7,8 @@ const shutdownSource = readFileSync(new URL("../src/shutdown.ts", import.meta.ur
 
 test("desktop quit path forces exit after backend stop timeout", () => {
   assert.match(shutdownSource, /stopBackendWithTimeout/);
-  assert.match(shutdownSource, /timeoutMs = 2000/);
+  assert.match(shutdownSource, /timeoutMs = 10000/);
   assert.match(mainSource, /stopBackendWithTimeout/);
+  assert.match(mainSource, /stopBackendWithTimeout\(backend,\s*10000\)/);
   assert.match(mainSource, /app\.exit\(0\)/);
 });

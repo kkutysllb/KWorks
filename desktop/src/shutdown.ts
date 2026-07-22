@@ -4,7 +4,7 @@ export interface StoppableBackend {
 
 export async function stopBackendWithTimeout(
   backend: StoppableBackend | null,
-  timeoutMs = 2000,
+  timeoutMs = 10000,
 ): Promise<boolean> {
   if (!backend) return true;
 
