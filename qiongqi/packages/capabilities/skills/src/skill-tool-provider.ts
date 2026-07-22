@@ -1,6 +1,36 @@
-import type { CapabilityToolProvider, LocalTool } from '@qiongqi/adapter-tools'
-import type { ToolHostContext } from '@qiongqi/ports'
+import type {
+  ToolCallLike,
+  ToolExecutionUpdate,
+  ToolHostContext,
+  ToolHostResult,
+  ToolProviderPolicy
+} from '@qiongqi/ports'
 import type { LoadedSkillPlugin } from './plugin-host.js'
+
+type LocalTool = {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+  toolKind: 'tool_call' | 'command_execution' | 'file_change'
+  policy: 'auto' | 'on-request' | 'suggest' | 'never' | 'untrusted'
+  shouldAdvertise?: (context: ToolHostContext) => boolean
+  execute: (
+    args: Record<string, unknown>,
+    context: ToolHostContext,
+    onUpdate?: (update: ToolExecutionUpdate) => Promise<void> | void
+  ) => Promise<{ output: unknown; isError?: boolean; semantic?: ToolHostResult['semantic'] }>
+  semantic?: (
+    args: Record<string, unknown>,
+    context: ToolHostContext,
+    result: { output: unknown; isError?: boolean },
+    call: ToolCallLike
+  ) => ToolHostResult['semantic'] | undefined
+  capabilityClass?: string
+}
+
+type CapabilityToolProvider = ToolProviderPolicy & {
+  tools: readonly LocalTool[]
+}
 
 export type ActiveSkillsLookup = (skillId: string, context: ToolHostContext) => readonly string[]
 

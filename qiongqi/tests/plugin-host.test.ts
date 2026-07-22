@@ -30,6 +30,31 @@ beforeAll(async () => {
   // legacy SKILL.md only
   await mkdir(join(root, 'mdonly'), { recursive: true })
   await writeFile(join(root, 'mdonly', 'SKILL.md'), '---\nid: mdonly\nname: MdOnly\n---\n# body')
+  await mkdir(join(root, 'comic'), { recursive: true })
+  await writeFile(join(root, 'comic', 'skill.json'), JSON.stringify({
+    specVersion: '1.0',
+    id: 'kk-comic',
+    name: 'Kk Comic',
+    description: '知识漫画创作器。触发词：知识漫画、教育漫画、传记漫画、教程漫画、科普漫画、Logicomix 风格、baoyu-comic、把这段内容画成漫画。',
+    activation: {
+      promptPatterns: [
+        '知识漫画创作器。触发词：知识漫画、教育漫画、传记漫画、教程漫画、科普漫画、Logicomix 风格、baoyu-comic、把这段内容画成漫画。'
+      ],
+      autoActivate: false
+    }
+  }))
+  await writeFile(join(root, 'comic', 'SKILL.md'), '# Comic\nCreate knowledge comics.')
+  await mkdir(join(root, 'badpattern'), { recursive: true })
+  await writeFile(join(root, 'badpattern', 'skill.json'), JSON.stringify({
+    specVersion: '1.0',
+    id: 'badpattern',
+    name: 'Bad Pattern',
+    activation: {
+      promptPatterns: ['['],
+      autoActivate: false
+    }
+  }))
+  await writeFile(join(root, 'badpattern', 'SKILL.md'), '# Bad Pattern')
 })
 afterAll(async () => { await rm(root, { recursive: true, force: true }) })
 
@@ -37,7 +62,7 @@ describe('SkillPluginHost.create', () => {
   it('discovers v1, legacy skill.json, and legacy SKILL.md', async () => {
     const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
     const ids = host.diagnostics().skills.map((s) => s.id).sort()
-    expect(ids).toEqual(['legacy', 'mdonly', 'tdd'])
+    expect(ids).toEqual(['badpattern', 'kk-comic', 'legacy', 'mdonly', 'tdd'])
   })
 
   it('marks v1 as non-legacy and migrated ones as legacy', async () => {
@@ -203,6 +228,31 @@ describe('SkillPluginHost.resolveTurn', () => {
     )
     const res = host.resolveTurn({ prompt: '/skill:tdd /skill:legacy', workspace: '' })
     expect(res.activeSkillIds.length).toBeLessThanOrEqual(1)
+  })
+
+  it('activates Chinese trigger phrases embedded in generated metadata', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    const res = host.resolveTurn({
+      prompt: '请把上传文档做成科技风格的技术普及漫画，最多 9 张。',
+      workspace: '',
+      effectiveSkillIds: ['kk-comic']
+    })
+
+    expect(res.activeSkillIds).toEqual(['kk-comic'])
+    expect(res.instructions.join('\n')).toContain('Create knowledge comics.')
+  })
+
+  it('does not treat invalid prompt pattern regexes as match-all triggers', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+
+    const res = host.resolveTurn({
+      prompt: 'ordinary request',
+      workspace: '',
+      effectiveSkillIds: ['badpattern']
+    })
+
+    expect(res.activeSkillIds).not.toContain('badpattern')
   })
 
   it('advertises enabled skills even when none activate for the prompt', async () => {

@@ -278,19 +278,21 @@ export class SkillPluginHost {
       // or the prompt contains a description keyword match (for legacy
       // SKILL.md packages that have no explicit triggers).
       const descKeyword = this.descriptionKeywordMatch(skill, prompt)
+      const command = skill.manifest.activation.commands.find((c) => lower.startsWith(c.toLowerCase()))
+      const pattern = skill.manifest.activation.promptPatterns.find((p) => promptPatternMatches(p, prompt))
+      const ft = skill.manifest.activation.fileTypes.find((t) => fileTypes.has(t.toLowerCase()))
       if (
         !skill.manifest.activation.autoActivate &&
         !this.isExplicitlyMentioned(skill, prompt) &&
-        !this.startsWithCommand(skill, lower) &&
+        !command &&
+        !pattern &&
+        !ft &&
         !descKeyword
       ) continue
       const explicit = this.explicitMention(skill, prompt)
       if (explicit) { matches.push({ skill, skillId: skill.id, reason: explicit, score: 1_000 + skill.manifest.priority }); continue }
-      const command = skill.manifest.activation.commands.find((c) => lower.startsWith(c.toLowerCase()))
       if (command) { matches.push({ skill, skillId: skill.id, reason: `command:${command}`, score: 900 + skill.manifest.priority }); continue }
-      const pattern = skill.manifest.activation.promptPatterns.find((p) => safePattern(p).test(prompt))
       if (pattern) { matches.push({ skill, skillId: skill.id, reason: `pattern:${pattern}`, score: 500 + skill.manifest.priority }); continue }
-      const ft = skill.manifest.activation.fileTypes.find((t) => fileTypes.has(t.toLowerCase()))
       if (ft) { matches.push({ skill, skillId: skill.id, reason: `fileType:${ft}`, score: 300 + skill.manifest.priority }); continue }
       if (descKeyword) { matches.push({ skill, skillId: skill.id, reason: `keyword:${descKeyword}`, score: 200 + skill.manifest.priority }) }
     }
@@ -311,6 +313,8 @@ export class SkillPluginHost {
   private descriptionKeywordMatch(skill: LoadedSkillPlugin, prompt: string): string | undefined {
     const desc = skill.manifest.description
     if (!desc || desc.length < 4) return undefined
+    const triggerPhrase = triggerPhraseMatch(desc, prompt)
+    if (triggerPhrase) return triggerPhrase
     // CJK matching: 3-char substring overlap.
     const cjkTerms = desc.match(/[\u4e00-\u9fff]{3,}/g) ?? []
     for (const term of cjkTerms) {
@@ -585,5 +589,63 @@ function emptyResolution(): SkillTurnResolution {
 }
 
 function safePattern(pattern: string): RegExp {
-  try { return new RegExp(pattern, 'i') } catch { return /(?:)/i }
+  try { return new RegExp(pattern, 'i') } catch { return /a^/i }
+}
+
+function promptPatternMatches(pattern: string, prompt: string): boolean {
+  if (safePattern(pattern).test(prompt)) return true
+  return Boolean(triggerPhraseMatch(pattern, prompt))
+}
+
+function triggerPhraseMatch(text: string, prompt: string): string | undefined {
+  const phraseBlock = triggerPhraseBlock(text)
+  if (!phraseBlock) return undefined
+  const lowerPrompt = prompt.toLowerCase()
+  for (const phrase of triggerPhrases(phraseBlock)) {
+    if (phrase.length >= 2 && lowerPrompt.includes(phrase.toLowerCase())) return phrase
+    for (const fragment of cjkTriggerFragments(phrase)) {
+      if (prompt.includes(fragment)) return fragment
+    }
+  }
+  return undefined
+}
+
+function triggerPhraseBlock(text: string): string | undefined {
+  const match = /(?:触发词|触发语|关键词|关键字|triggers?|keywords?)\s*[:：]\s*([\s\S]+)/i.exec(text)
+  return match?.[1]?.trim()
+}
+
+function triggerPhrases(block: string): string[] {
+  return block
+    .split(/[、,，;；\n]+/)
+    .map((part) => part.trim().replace(/[。.!！?？]+$/g, '').trim())
+    .filter(Boolean)
+}
+
+const CJK_TRIGGER_FRAGMENT_STOP_WORDS = new Set([
+  '这个',
+  '内容',
+  '文本',
+  '生成',
+  '创作',
+  '风格',
+  '分析',
+  '报告',
+  '数据',
+  '工具',
+  '技能',
+  '支持',
+  '使用',
+  '进行'
+])
+
+function cjkTriggerFragments(phrase: string): string[] {
+  const fragments = new Set<string>()
+  for (const term of phrase.match(/[\u4e00-\u9fff]{2,}/g) ?? []) {
+    for (let i = 0; i <= term.length - 2; i++) {
+      const fragment = term.slice(i, i + 2)
+      if (!CJK_TRIGGER_FRAGMENT_STOP_WORDS.has(fragment)) fragments.add(fragment)
+    }
+  }
+  return [...fragments]
 }

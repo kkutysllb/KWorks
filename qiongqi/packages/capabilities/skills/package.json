@@ -21,7 +21,6 @@
   "dependencies": {
     "@qiongqi/contracts": "workspace:*",
     "@qiongqi/ports": "workspace:*",
-    "@qiongqi/adapter-tools": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

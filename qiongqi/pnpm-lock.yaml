@@ -120,9 +120,6 @@ importers:
 
   packages/capabilities/skills:
     dependencies:
-      '@qiongqi/adapter-tools':
-        specifier: workspace:*
-        version: link:../../adapters/adapter-tools
       '@qiongqi/contracts':
         specifier: workspace:*
         version: link:../../foundation/contracts
