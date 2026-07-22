@@ -1,11 +1,12 @@
 import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import type { SessionStore } from '@qiongqi/ports'
-import type { RuntimeEvent } from '@qiongqi/contracts'
+import type { SessionEventLoadOptions, SessionStore } from '@qiongqi/ports'
+import { RuntimeEvent as RuntimeEventSchema, type RuntimeEvent } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
 import type { AgentSession } from '@qiongqi/domain'
 import { readJsonl } from './file-thread-store.js'
 import { atomicWriteFile } from './atomic-write.js'
+import { readLastJsonlRecord, readRecentJsonlRecords } from './jsonl-tail.js'
 
 const DEFAULT_USAGE_EVENT_COMPACTION_MAX_BYTES = 5 * 1024 * 1024
 const DEFAULT_USAGE_EVENT_RETENTION_DAYS = 365
@@ -144,8 +145,15 @@ export class FileSessionStore implements SessionStore {
     }
   }
 
-  async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
-    const all = await readJsonl<RuntimeEvent>(this.eventsPath(threadId))
+  async loadEventsSince(
+    threadId: string,
+    sinceSeq: number,
+    options: SessionEventLoadOptions = {}
+  ): Promise<RuntimeEvent[]> {
+    const limit = boundedLimit(options.limit)
+    const all = limit
+      ? await readRecentJsonlRecords(this.eventsPath(threadId), limit, parseRuntimeEvent)
+      : await readJsonl<RuntimeEvent>(this.eventsPath(threadId))
     return all
       .filter((event) => event.seq > sinceSeq)
       .sort((a, b) => a.seq - b.seq)
@@ -179,6 +187,8 @@ export class FileSessionStore implements SessionStore {
   }
 
   async highestSeq(threadId: string): Promise<number> {
+    const latest = await readLastJsonlRecord(this.eventsPath(threadId), parseRuntimeEvent)
+    if (latest) return latest.seq
     const events = await readJsonl<RuntimeEvent>(this.eventsPath(threadId))
     return events.reduce((max, event) => Math.max(max, event.seq), 0)
   }
@@ -310,4 +320,14 @@ function usageCoalescingBucket(event: RuntimeEvent): string {
 function warnUsageCompaction(threadId: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error)
   console.warn(`[qiongqi] usage event compaction failed for ${threadId}; keeping append-only log: ${message}`)
+}
+
+function boundedLimit(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined
+  if (!Number.isFinite(value)) return undefined
+  return Math.max(0, Math.floor(value))
+}
+
+function parseRuntimeEvent(value: unknown): RuntimeEvent {
+  return RuntimeEventSchema.parse(value)
 }

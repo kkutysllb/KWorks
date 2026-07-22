@@ -60,8 +60,8 @@ export class EffectCommitCoordinator {
     const queueKey = `${identity.ownerUserId}\0${identity.workspaceKey}\0${identity.threadId}\0${identity.turnId}\0${identity.runId}`
     const previous = this.appendQueues.get(queueKey) ?? Promise.resolve()
     const operation = previous.then(async () => {
-      const events = await this.options.events.listAfter(identity, 0)
-      return this.options.events.append({ eventId: randomUUID(), seq: Math.max(0, ...events.map((event) => event.seq)) + 1, ...identity, stepId: state.cursor.nodeId, nodeAttemptId: `${state.cursor.nodeId}:${state.cursor.attempt}`, eventType, idempotencyKey, payload, timestamp: this.nowIso() }, fence)
+      const seq = await this.options.events.highestSeq(identity) + 1
+      return this.options.events.append({ eventId: randomUUID(), seq, ...identity, stepId: state.cursor.nodeId, nodeAttemptId: `${state.cursor.nodeId}:${state.cursor.attempt}`, eventType, idempotencyKey, payload, timestamp: this.nowIso() }, fence)
     })
     const settled = operation.then(() => undefined, () => undefined)
     this.appendQueues.set(queueKey, settled)

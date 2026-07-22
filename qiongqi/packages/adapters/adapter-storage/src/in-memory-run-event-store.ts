@@ -50,4 +50,9 @@ export class InMemoryRunEventStore implements RunEventStore {
   async listAfter(identity: RunIdentity, seq: number): Promise<RunEventEnvelope[]> {
     return structuredClone((this.events.get(identityKey(identity)) ?? []).filter((event) => event.seq > seq))
   }
+
+  async highestSeq(identity: RunIdentity): Promise<number> {
+    return (this.events.get(identityKey(identity)) ?? [])
+      .reduce((max, event) => Math.max(max, event.seq), 0)
+  }
 }

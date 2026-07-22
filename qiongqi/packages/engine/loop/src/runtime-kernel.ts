@@ -866,8 +866,7 @@ export class RuntimeKernel {
     payload: unknown,
     fence?: LeaseFence
   ): Promise<RunEventEnvelope> {
-    const existing = await this.options.events.listAfter(identity, 0)
-    const seq = existing.reduce((max, event) => Math.max(max, event.seq), 0) + 1
+    const seq = await this.options.events.highestSeq(identity) + 1
     return this.options.events.append({
       eventId: randomUUID(),
       seq,

@@ -36,6 +36,16 @@ describe.each([
     await expect(store.listAfter(identity, 0)).resolves.toHaveLength(1)
     if (store instanceof FileRunEventStore) await rm(store.rootDir, { recursive: true, force: true })
   })
+
+  it('reports the highest sequence without changing replay order', async () => {
+    const store = await create()
+    await store.append(event(1))
+    await store.append(event(2))
+    await store.append(event(3))
+    await expect(store.highestSeq(identity)).resolves.toBe(3)
+    await expect(store.listAfter(identity, 1)).resolves.toMatchObject([{ seq: 2 }, { seq: 3 }])
+    if (store instanceof FileRunEventStore) await rm(store.rootDir, { recursive: true, force: true })
+  })
 })
 
 it('rejects stale fenced event appends at the file store boundary', async () => {

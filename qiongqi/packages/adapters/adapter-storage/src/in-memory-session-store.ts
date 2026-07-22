@@ -1,4 +1,4 @@
-import type { SessionStore } from '@qiongqi/ports'
+import type { SessionEventLoadOptions, SessionStore } from '@qiongqi/ports'
 import type { RuntimeEvent } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
 import type { AgentSession } from '@qiongqi/domain'
@@ -110,11 +110,18 @@ export class InMemorySessionStore implements SessionStore {
     return updated ? { item: updated, updated: true } : null
   }
 
-  async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
+  async loadEventsSince(
+    threadId: string,
+    sinceSeq: number,
+    options: SessionEventLoadOptions = {}
+  ): Promise<RuntimeEvent[]> {
     const list = this.events.get(threadId) ?? []
-    return list
+    const events = list
       .filter((event) => event.seq > sinceSeq)
       .sort((a, b) => a.seq - b.seq)
+    return options.limit !== undefined
+      ? events.slice(-Math.max(0, Math.floor(options.limit)))
+      : events
   }
 
   async loadItems(threadId: string): Promise<TurnItem[]> {

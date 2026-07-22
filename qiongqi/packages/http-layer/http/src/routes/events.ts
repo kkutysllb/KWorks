@@ -4,6 +4,8 @@ import type { SessionStore } from '@qiongqi/ports'
 import type { RuntimeEvent } from '@qiongqi/contracts'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
+const DEFAULT_BACKLOG_LIMIT = 500
+const MAX_BACKLOG_LIMIT = 5_000
 
 /**
  * Build an SSE response for `GET /v1/threads/{id}/events`.
@@ -24,6 +26,7 @@ export function buildEventStreamResponse(input: {
   const sinceSeqFromQuery = Number(url.searchParams.get('since_seq') ?? '0') || 0
   const sinceSeqFromHeader = Number(input.request.headers.get('Last-Event-ID') ?? '0') || 0
   const sinceSeq = sinceSeqFromQuery || sinceSeqFromHeader
+  const backlogLimit = boundedBacklogLimit(url.searchParams.get('backlog_limit'))
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined
@@ -46,7 +49,9 @@ export function buildEventStreamResponse(input: {
       }
       input.request.signal.addEventListener('abort', close)
       try {
-        const backlog = await input.sessionStore.loadEventsSince(input.threadId, sinceSeq)
+        const backlog = await input.sessionStore.loadEventsSince(input.threadId, sinceSeq, {
+          limit: backlogLimit
+        })
         for (const event of backlog) {
           controller.enqueue(encoder.encode(encodeSseEvent(event)))
         }
@@ -100,4 +105,10 @@ export function buildEventStreamResponse(input: {
       connection: 'keep-alive'
     }
   })
+}
+
+function boundedBacklogLimit(value: string | null): number {
+  const parsed = value === null ? DEFAULT_BACKLOG_LIMIT : Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return DEFAULT_BACKLOG_LIMIT
+  return Math.max(0, Math.min(MAX_BACKLOG_LIMIT, parsed))
 }

@@ -86,6 +86,25 @@ describe('FileSessionStore integration', () => {
     expect(event.seq).toBe(8)
   })
 
+  it('loads a bounded tail of recent events without changing full replay semantics', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    for (let seq = 1; seq <= 10; seq += 1) {
+      await sessionStore.appendEvent('thr_tail', {
+        kind: 'heartbeat',
+        seq,
+        timestamp: `2026-07-22T00:00:${String(seq).padStart(2, '0')}.000Z`,
+        threadId: 'thr_tail'
+      })
+    }
+
+    await expect(sessionStore.loadEventsSince('thr_tail', 0))
+      .resolves.toHaveLength(10)
+    await expect(sessionStore.loadEventsSince('thr_tail', 0, { limit: 3 }))
+      .resolves.toMatchObject([{ seq: 8 }, { seq: 9 }, { seq: 10 }])
+    await expect(sessionStore.loadEventsSince('thr_tail', 8, { limit: 3 }))
+      .resolves.toMatchObject([{ seq: 9 }, { seq: 10 }])
+  })
+
   it('survives a malformed JSONL line', async () => {
     const sessionStore = new FileSessionStore({ dataDir })
     await mkdir(join(dataDir, 'threads', 'thr_y'), { recursive: true })
@@ -96,6 +115,21 @@ describe('FileSessionStore integration', () => {
     )
     const events = await sessionStore.loadEventsSince('thr_y', 0)
     expect(events).toHaveLength(1)
+  })
+
+  it('finds the highest sequence from the last valid tail record', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    await mkdir(join(dataDir, 'threads', 'thr_highest'), { recursive: true })
+    await appendFile(
+      join(dataDir, 'threads', 'thr_highest', 'events.jsonl'),
+      [
+        '{"kind":"heartbeat","seq":1,"timestamp":"t","threadId":"thr_highest"}',
+        '{"kind":"heartbeat","seq":7,"timestamp":"t","threadId":"thr_highest"}',
+        '{bad json'
+      ].join('\n') + '\n',
+      'utf-8'
+    )
+    await expect(sessionStore.highestSeq('thr_highest')).resolves.toBe(7)
   })
 
   it('compacts usage events by retention window while preserving a carryover baseline', async () => {

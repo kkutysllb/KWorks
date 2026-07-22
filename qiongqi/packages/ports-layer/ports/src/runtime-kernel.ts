@@ -7,6 +7,7 @@ import type {
 export interface RunEventStore {
   append(event: RunEventEnvelope, fence?: LeaseFence): Promise<RunEventEnvelope>
   listAfter(identity: RunIdentity, seq: number): Promise<RunEventEnvelope[]>
+  highestSeq(identity: RunIdentity): Promise<number>
 }
 
 export interface RunSnapshotStore {

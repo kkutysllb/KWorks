@@ -20,6 +20,18 @@ test("backend log ingestion clamps oversized QiongQi event lines", () => {
   assert.match(backendSource, /sanitizeBackendLogLine\(line\)/);
 });
 
+test("backend gateway log file is rotated instead of growing without bound", () => {
+  assert.match(backendSource, /MAX_GATEWAY_LOG_BYTES\s*=\s*8 \* 1024 \* 1024/);
+  assert.match(backendSource, /MAX_GATEWAY_LOG_FILES\s*=\s*3/);
+  assert.match(backendSource, /function rotateLogFileIfNeeded/);
+  assert.match(backendSource, /rotateLogFileIfNeeded\(getGatewayLogPath\(\), MAX_GATEWAY_LOG_BYTES, MAX_GATEWAY_LOG_FILES\)/);
+  assert.match(backendSource, /rotateActiveLogStream\(\)/);
+});
+
+test("backend defaults gateway logs to info level", () => {
+  assert.match(backendSource, /GATEWAY_LOG_LEVEL:\s*process\.env\.GATEWAY_LOG_LEVEL \?\? "info"/);
+});
+
 test("windows backend termination waits for taskkill to finish or timeout", () => {
   assert.match(backendSource, /spawn\("taskkill"/);
   assert.match(backendSource, /taskkill\.once\("exit"/);

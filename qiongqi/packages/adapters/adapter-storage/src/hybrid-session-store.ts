@@ -1,7 +1,7 @@
 import type { RuntimeEvent } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
 import type { AgentSession } from '@qiongqi/domain'
-import type { SessionStore } from '@qiongqi/ports'
+import type { SessionEventLoadOptions, SessionStore } from '@qiongqi/ports'
 import { FileSessionStore } from './file-session-store.js'
 import type { HybridThreadStore } from './hybrid-thread-store.js'
 
@@ -58,8 +58,12 @@ export class HybridSessionStore implements SessionStore {
     return this.delegate.updateItemOnce(threadId, itemId, patch)
   }
 
-  async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
-    return this.delegate.loadEventsSince(threadId, sinceSeq)
+  async loadEventsSince(
+    threadId: string,
+    sinceSeq: number,
+    options?: SessionEventLoadOptions
+  ): Promise<RuntimeEvent[]> {
+    return this.delegate.loadEventsSince(threadId, sinceSeq, options)
   }
 
   async loadItems(threadId: string): Promise<TurnItem[]> {

@@ -2,6 +2,11 @@ import type { AgentSession } from '@qiongqi/domain'
 import type { RuntimeEvent } from '@qiongqi/contracts'
 import type { TurnItem } from '@qiongqi/contracts'
 
+export type SessionEventLoadOptions = {
+  /** Return at most this many newest events after `sinceSeq`. Omit for full replay. */
+  limit?: number
+}
+
 /**
  * Port for persisted per-thread activity.
  *
@@ -31,7 +36,7 @@ export interface SessionStore {
     itemId: string,
     patch: Partial<TurnItem>
   ): Promise<{ item: TurnItem; updated: boolean } | null>
-  loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]>
+  loadEventsSince(threadId: string, sinceSeq: number, options?: SessionEventLoadOptions): Promise<RuntimeEvent[]>
   loadItems(threadId: string): Promise<TurnItem[]>
   loadSession(threadId: string): Promise<AgentSession | null>
   upsertSession(session: AgentSession): Promise<void>

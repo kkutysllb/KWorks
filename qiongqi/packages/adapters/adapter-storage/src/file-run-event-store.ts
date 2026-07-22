@@ -4,6 +4,7 @@ import { RunEventEnvelopeSchema, type RunEventEnvelope, type RunIdentity } from 
 import type { LeaseFence, RunEventStore } from '@qiongqi/ports'
 import { withFileLock } from './file-lock.js'
 import { runtimeScopeDigest } from './runtime-store-utils.js'
+import { readLastJsonlRecord } from './jsonl-tail.js'
 
 export type FileRunEventStoreOptions = { requireFence?: boolean }
 
@@ -18,11 +19,14 @@ export class FileRunEventStore implements RunEventStore {
     const event = RunEventEnvelopeSchema.parse(input)
     return this.withLock(event, async () => {
       await this.assertFence(event, fence)
-      const existing = await this.readEvents(event)
-      const duplicate = existing.find((candidate) => candidate.eventId === event.eventId)
-      if (duplicate) return duplicate
-      if (existing.some((candidate) => candidate.seq === event.seq)) {
-        throw new Error(`duplicate run event sequence ${event.seq}`)
+      const latest = await readLastJsonlRecord(this.eventPath(event), parseRunEventEnvelope)
+      if (!latest || event.seq <= latest.seq) {
+        const existing = await this.readEvents(event)
+        const duplicate = existing.find((candidate) => candidate.eventId === event.eventId)
+        if (duplicate) return duplicate
+        if (existing.some((candidate) => candidate.seq === event.seq)) {
+          throw new Error(`duplicate run event sequence ${event.seq}`)
+        }
       }
       await mkdir(this.eventDir(), { recursive: true })
       await appendFile(this.eventPath(event), `${JSON.stringify(event)}\n`, 'utf8')
@@ -51,6 +55,12 @@ export class FileRunEventStore implements RunEventStore {
     return (await this.readEvents(identity)).filter((event) => event.seq > seq)
   }
 
+  async highestSeq(identity: RunIdentity): Promise<number> {
+    const latest = await readLastJsonlRecord(this.eventPath(identity), parseRunEventEnvelope)
+    if (latest) return latest.seq
+    return (await this.readEvents(identity)).reduce((max, event) => Math.max(max, event.seq), 0)
+  }
+
   private eventDir(): string {
     return join(this.rootDir, 'events')
   }
@@ -72,4 +82,8 @@ export class FileRunEventStore implements RunEventStore {
       throw new Error(`invalid run event log: ${String(error)}`)
     }
   }
+}
+
+function parseRunEventEnvelope(value: unknown): RunEventEnvelope {
+  return RunEventEnvelopeSchema.parse(value)
 }

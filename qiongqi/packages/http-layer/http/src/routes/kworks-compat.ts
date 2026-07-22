@@ -1235,9 +1235,14 @@ export async function kworksGetCodingSession(runtime: ServerRuntime, threadId: s
   })
 }
 
-export async function kworksListCodingSessionEvents(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
+export async function kworksListCodingSessionEvents(
+  runtime: ServerRuntime,
+  threadId: string,
+  request: Request
+): Promise<JsonResponse> {
   const thread = await runtime.threadService.get(threadId)
-  return jsonResponse({ thread_id: threadId, events: codingEventsFromThread(threadId, thread) })
+  const limit = boundedQueryLimit(new URL(request.url).searchParams.get('limit'), 100, 500)
+  return jsonResponse({ thread_id: threadId, events: codingEventsFromThread(threadId, thread, limit) })
 }
 
 export async function kworksListCodingSessionChanges(runtime: ServerRuntime, threadId: string): Promise<JsonResponse> {
@@ -2065,7 +2070,16 @@ function changeSummaryFromThread(thread: ThreadRecord): Record<string, unknown> 
   }
 }
 
-function codingEventsFromThread(threadId: string, thread: ThreadRecord | null): Array<Record<string, unknown>> {
+const CODING_EVENT_PAYLOAD_STRING_CHARS = 4_096
+const CODING_EVENT_PAYLOAD_JSON_BYTES = 16 * 1024
+const CODING_EVENT_PAYLOAD_ARRAY_ITEMS = 25
+const CODING_EVENT_PAYLOAD_OBJECT_KEYS = 50
+
+function codingEventsFromThread(
+  threadId: string,
+  thread: ThreadRecord | null,
+  limit?: number
+): Array<Record<string, unknown>> {
   if (!thread) return []
   const events: Array<Record<string, unknown>> = []
   for (const turn of thread.turns) {
@@ -2081,7 +2095,7 @@ function codingEventsFromThread(threadId: string, thread: ThreadRecord | null): 
           summary: item.summary ?? '',
           created_at: item.createdAt,
           finished_at: item.finishedAt ?? null,
-          payload: item.arguments
+          payload: codingInspectorPayload(item.arguments)
         })
       } else if (item.kind === 'tool_result') {
         events.push({
@@ -2094,12 +2108,66 @@ function codingEventsFromThread(threadId: string, thread: ThreadRecord | null): 
           is_error: item.isError,
           created_at: item.createdAt,
           finished_at: item.finishedAt ?? null,
-          payload: item.output
+          payload: codingInspectorPayload(item.output)
         })
       }
     }
   }
-  return events.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+  const sorted = events.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+  return limit === undefined ? sorted : sorted.slice(-limit)
+}
+
+function boundedQueryLimit(value: string | null, fallback: number, max: number): number {
+  const parsed = value === null ? fallback : Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(0, Math.min(max, parsed))
+}
+
+function codingInspectorPayload(value: unknown): Record<string, unknown> {
+  const compacted = compactInspectorValue(value, 0)
+  const encoded = JSON.stringify(compacted)
+  if (Buffer.byteLength(encoded, 'utf8') > CODING_EVENT_PAYLOAD_JSON_BYTES) {
+    return {
+      truncated: true,
+      original_bytes: Buffer.byteLength(JSON.stringify(value), 'utf8'),
+      preview: truncateString(encoded, CODING_EVENT_PAYLOAD_JSON_BYTES)
+    }
+  }
+  if (compacted && typeof compacted === 'object' && !Array.isArray(compacted)) {
+    return compacted as Record<string, unknown>
+  }
+  return { value: compacted }
+}
+
+function compactInspectorValue(value: unknown, depth: number): unknown {
+  if (typeof value === 'string') return truncateString(value, CODING_EVENT_PAYLOAD_STRING_CHARS)
+  if (typeof value !== 'object' || value === null) return value
+  if (depth >= 4) return '[truncated: max depth reached]'
+  if (Array.isArray(value)) {
+    const items = value
+      .slice(0, CODING_EVENT_PAYLOAD_ARRAY_ITEMS)
+      .map((item) => compactInspectorValue(item, depth + 1))
+    if (value.length > CODING_EVENT_PAYLOAD_ARRAY_ITEMS) {
+      items.push({ truncated_items: value.length - CODING_EVENT_PAYLOAD_ARRAY_ITEMS })
+    }
+    return items
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+  const out: Record<string, unknown> = {}
+  for (const [key, child] of entries.slice(0, CODING_EVENT_PAYLOAD_OBJECT_KEYS)) {
+    out[key] = compactInspectorValue(child, depth + 1)
+  }
+  if (entries.length > CODING_EVENT_PAYLOAD_OBJECT_KEYS) {
+    out.truncated_keys = entries.length - CODING_EVENT_PAYLOAD_OBJECT_KEYS
+  }
+  return out
+}
+
+function truncateString(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  const head = Math.floor(maxChars * 0.6)
+  const tail = Math.max(0, maxChars - head - 80)
+  return `${value.slice(0, head)}...[truncated ${value.length - head - tail} chars]...${value.slice(value.length - tail)}`
 }
 
 async function codingChangesFromThread(threadId: string, thread: ThreadRecord | null): Promise<Array<Record<string, unknown>>> {
@@ -4181,7 +4249,7 @@ export function kworksRunEventStream(runtime: ServerRuntime, request: Request, r
       }
       request.signal.addEventListener('abort', close)
       send('metadata', { run_id: run.run_id, thread_id: run.thread_id, runtime: 'qiongqi' })
-      const backlog = await runtime.sessionStore.loadEventsSince(run.thread_id, 0)
+      const backlog = await runtime.sessionStore.loadEventsSince(run.thread_id, 0, { limit: 500 })
       const handleEvent = (event: RuntimeEvent) => {
         if (closed) return
         if (event.turnId && run.turn_id && event.turnId !== run.turn_id) return

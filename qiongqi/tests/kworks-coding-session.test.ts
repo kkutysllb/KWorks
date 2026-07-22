@@ -74,7 +74,11 @@ describe('KWorks coding session compatibility bridge', () => {
     ])
     expect(sessionJson.session.roi.provider_usage.total_tokens).toBeGreaterThan(0)
 
-    const eventsResponse = await kworksListCodingSessionEvents(runtime, 'thread_coding')
+    const eventsResponse = await kworksListCodingSessionEvents(
+      runtime,
+      'thread_coding',
+      new Request('http://localhost/api/coding/sessions/thread_coding/events')
+    )
     const eventsJson = JSON.parse(eventsResponse.body)
 
     expect(eventsJson.events).toEqual([
@@ -92,6 +96,51 @@ describe('KWorks coding session compatibility bridge', () => {
     expect(roiJson.summary.provider_usage.skill_injection_bytes).toBe(2048)
     expect(roiJson.summary.tool_output.tool_catalog_tool_count).toBe(12)
     expect(roiJson.summary.derived.actual_tokens).toBeGreaterThan(0)
+  })
+
+  test('coding session events respect limit and cap large inspector payloads', async () => {
+    const turns = Array.from({ length: 8 }, (_, index) => ({
+      id: `turn_${index + 1}`,
+      threadId: 'thread_coding_limit',
+      status: 'completed',
+      prompt: 'inspect',
+      createdAt: `2026-07-01T07:59:0${index}.000Z`,
+      finishedAt: `2026-07-01T08:00:0${index}.000Z`,
+      items: [
+        {
+          id: `tool_result_${index + 1}`,
+          kind: 'tool_result',
+          turnId: `turn_${index + 1}`,
+          threadId: 'thread_coding_limit',
+          role: 'tool',
+          status: 'completed',
+          createdAt: `2026-07-01T07:59:0${index}.000Z`,
+          finishedAt: `2026-07-01T08:00:0${index}.000Z`,
+          toolName: 'bash',
+          callId: `call_${index + 1}`,
+          output: { stdout: 'x'.repeat(20_000), exit_code: 0 }
+        }
+      ]
+    }))
+    const runtime = runtimeWithThread({
+      id: 'thread_coding_limit',
+      workspace: '/tmp/project',
+      updatedAt: '2026-07-01T08:00:00.000Z',
+      turns
+    })
+
+    const response = await kworksListCodingSessionEvents(
+      runtime,
+      'thread_coding_limit',
+      new Request('http://localhost/api/coding/sessions/thread_coding_limit/events?limit=3')
+    )
+    const json = JSON.parse(response.body)
+
+    expect(json.events).toHaveLength(3)
+    expect(json.events.map((event: { event_id: string }) => event.event_id))
+      .toEqual(['tool_result_6', 'tool_result_7', 'tool_result_8'])
+    expect(JSON.stringify(json.events[0].payload).length).toBeLessThan(17_000)
+    expect(JSON.stringify(json.events[0].payload)).toContain('truncated')
   })
 
   test('compat coding review does not silently pass non-empty project diffs', async () => {

@@ -519,7 +519,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/api/coding/sessions/:threadId/events', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)
     if (!actor) return ERRORS.unauthorized()
-    return kworksListCodingSessionEvents(runtime, ctx.params.threadId)
+    return kworksListCodingSessionEvents(runtime, ctx.params.threadId, request)
   })
   router.add('GET', '/api/coding/sessions/:threadId/changes', async (request, ctx) => {
     const actor = await authenticateOrInternal(request, runtime)

@@ -18,8 +18,10 @@ import {
   rmSync,
   statSync,
   mkdirSync,
+  renameSync,
   readdirSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
   type WriteStream,
 } from "node:fs";
@@ -70,6 +72,8 @@ const HEALTH_CHECK_TIMEOUT_SECS = 120;
 /** Maximum log lines retained in memory. */
 const MAX_LOG_LINES = 500;
 const MAX_BACKEND_LOG_LINE_CHARS = 16_384;
+const MAX_GATEWAY_LOG_BYTES = 8 * 1024 * 1024;
+const MAX_GATEWAY_LOG_FILES = 3;
 const BACKEND_TERMINATION_GRACE_MS = 8_000;
 const RUNTIME_BOOTSTRAP_USER_ID = "runtime";
 
@@ -98,6 +102,30 @@ function sanitizeBackendLogLine(line: string): string {
   return `${line.slice(0, MAX_BACKEND_LOG_LINE_CHARS)}...[truncated ${line.length - MAX_BACKEND_LOG_LINE_CHARS} chars sha256=${digest}]`;
 }
 
+function existingFileSize(path: string): number {
+  try {
+    return statSync(path).size;
+  } catch {
+    return 0;
+  }
+}
+
+function rotateLogFileIfNeeded(path: string, maxBytes: number, maxFiles: number): void {
+  const size = existingFileSize(path);
+  if (size <= maxBytes) return;
+  for (let index = maxFiles; index >= 1; index -= 1) {
+    const source = index === 1 ? path : `${path}.${index - 1}`;
+    const target = `${path}.${index}`;
+    if (!existsSync(source)) continue;
+    try {
+      if (index === maxFiles && existsSync(target)) unlinkSync(target);
+      renameSync(source, target);
+    } catch {
+      // Best effort only; logging must not prevent the backend from starting.
+    }
+  }
+}
+
 // ── BackendManager ───────────────────────────────────────────────────────
 
 type StatusListener = (status: BackendStatus) => void;
@@ -117,6 +145,8 @@ export class BackendManager extends EventEmitter {
   };
   private logs: string[] = [];
   private logStream: WriteStream | null = null;
+  private logBytesWritten = 0;
+  private logRotationInFlight = false;
   private healthTimer: NodeJS.Timeout | null = null;
   private healthStartTime = 0;
 
@@ -403,7 +433,7 @@ export class BackendManager extends EventEmitter {
       // Gateway binding.
       GATEWAY_HOST: GATEWAY_HOST,
       GATEWAY_PORT: String(port),
-      GATEWAY_LOG_LEVEL: "debug",
+      GATEWAY_LOG_LEVEL: process.env.GATEWAY_LOG_LEVEL ?? "info",
       QIONGQI_HOST: GATEWAY_HOST,
       QIONGQI_PORT: String(port),
       KWORKS_WORKSPACE_DIR: kworksWorkspaceRoot,
@@ -456,13 +486,20 @@ export class BackendManager extends EventEmitter {
     if (this.logs.length > MAX_LOG_LINES) {
       this.logs.splice(0, this.logs.length - MAX_LOG_LINES);
     }
-    this.logStream?.write(stamped + "\n");
+    const payload = stamped + "\n";
+    this.logStream?.write(payload);
+    this.logBytesWritten += Buffer.byteLength(payload, "utf8");
+    if (this.logBytesWritten >= MAX_GATEWAY_LOG_BYTES) {
+      this.rotateActiveLogStream();
+    }
   }
 
   private openLogStream(): void {
     if (this.logStream) return;
     try {
       mkdirSync(getLogsDir(), { recursive: true });
+      rotateLogFileIfNeeded(getGatewayLogPath(), MAX_GATEWAY_LOG_BYTES, MAX_GATEWAY_LOG_FILES);
+      this.logBytesWritten = existingFileSize(getGatewayLogPath());
       this.logStream = createWriteStream(getGatewayLogPath(), {
         flags: "a",
       });
@@ -477,6 +514,23 @@ export class BackendManager extends EventEmitter {
     this.logStream = null;
     await new Promise<void>((resolveFn) => {
       stream.end(resolveFn);
+    });
+  }
+
+  private rotateActiveLogStream(): void {
+    if (this.logRotationInFlight) return;
+    const stream = this.logStream;
+    if (!stream) return;
+    this.logRotationInFlight = true;
+    this.logStream = null;
+    stream.end(() => {
+      try {
+        rotateLogFileIfNeeded(getGatewayLogPath(), 0, MAX_GATEWAY_LOG_FILES);
+      } finally {
+        this.logBytesWritten = 0;
+        this.logRotationInFlight = false;
+        this.openLogStream();
+      }
     });
   }
 
