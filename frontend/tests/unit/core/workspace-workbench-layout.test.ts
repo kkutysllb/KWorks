@@ -129,6 +129,10 @@ describe("workspace workbench layout", () => {
     expect(header).toContain("items-start");
     expect(header).toContain("pt-1.5");
     expect(header).toContain("useSidebar");
+    expect(header).toContain("workspace-header-title-slot");
+    expect(header).toContain("workspace-header-actions-slot");
+    expect(header).toContain("WorkspaceHeaderPortal");
+    expect(header).toContain("createPortal");
     expect(header).toContain('state === "collapsed" && "pl-[72px]"');
     expect(header).not.toContain("peer-data-[state=collapsed]:pl-[72px]");
     expect(header).not.toContain("KWorks");
@@ -183,6 +187,21 @@ describe("workspace workbench layout", () => {
 
     expect(chatPage).not.toContain("BackendStatusIndicator");
     expect(chatPage).not.toContain("@/components/desktop");
+  });
+
+  test("chat task title lives in the desktop titlebar instead of the message surface", () => {
+    const chatPage = readFileSync(
+      resolve(repoRoot, "src/app/workspace/chats/[thread_id]/page.tsx"),
+      "utf8",
+    );
+
+    expect(chatPage).toContain("WorkspaceHeaderPortal");
+    expect(chatPage).toContain('slot="title"');
+    expect(chatPage).toContain('slot="actions"');
+    expect(chatPage).not.toContain(
+      "absolute top-0 right-0 left-0 z-30 flex h-12",
+    );
+    expect(chatPage).not.toContain('!isNewThread && "pt-10"');
   });
 
   test("welcome surface no longer advertises legacy KWorks or runtime copy", () => {
@@ -265,9 +284,7 @@ describe("workspace workbench layout", () => {
     expect(inputBox).not.toContain("多代理协作");
     expect(hooks).toContain("delete submitContext.sandboxMode");
     expect(hooks).toContain("qiongqiModeForSubmitContext");
-    expect(hooks).toContain(
-      'is_plan_mode: mode === "plan"',
-    );
+    expect(hooks).toContain('is_plan_mode: mode === "plan"');
     expect(hooks).toContain(
       'subagent_enabled: submitContext.collaborationPolicy === "auto"',
     );

@@ -3,7 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { type PromptInputMessage, PromptInputProvider } from "@/components/ai-elements/prompt-input";
+import {
+  type PromptInputMessage,
+  PromptInputProvider,
+} from "@/components/ai-elements/prompt-input";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import {
   ChatBox,
@@ -23,6 +26,7 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
+import { WorkspaceHeaderPortal } from "@/components/workspace/workspace-header";
 import { replaceWorkspaceRouteInPlace } from "@/core/navigation/workspace-route";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadSettings } from "@/core/settings";
@@ -180,114 +184,110 @@ export default function ChatPage() {
           <FinanceHtmlArtifactReader threadId={threadId} />
         )}
         <ChatBox threadId={threadId}>
-        <div className="relative flex size-full min-h-0 justify-between">
-          <header
-            className={cn(
-              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
-              isNewThread
-                ? "bg-background/0 backdrop-blur-none"
-                : "bg-background/80 shadow-xs backdrop-blur",
-            )}
-          >
-            <div className="flex w-full items-center text-sm font-medium">
-              <ThreadTitle threadId={threadId} thread={thread} />
-            </div>
-            <div className="flex items-center gap-2">
-              <ArtifactTrigger />
-            </div>
-          </header>
-          <main className="flex min-h-0 max-w-full grow flex-col">
-            <div className="pointer-events-none absolute top-14 right-4 left-4 z-40 flex justify-end sm:right-6 sm:left-auto">
-              <TodoList
-                className="pointer-events-auto"
-                todos={thread.values.todos}
-                onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
-                variant="floating"
-              />
-            </div>
-            <div className="flex size-full justify-center transition-transform duration-200 ease-out">
-              <MessageList
-                className={cn(
-                  "size-full transition-transform duration-200 ease-out",
-                  !isNewThread && "pt-10",
-                  todoPanelContentOffsetClass,
-                )}
-                threadId={threadId}
-                thread={thread}
-                paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
-                hasMoreHistory={hasMoreHistory}
-                loadMoreHistory={loadMoreHistory}
-                isHistoryLoading={isHistoryLoading}
-                approvalStore={approvalStore}
-                onApprove={onApprove}
-                onDeny={onDeny}
-              />
-            </div>
-            <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
-              <div
-                className={cn(
-                  "relative w-full transition-transform duration-200 ease-out",
-                  isNewThread && "-translate-y-[calc(50vh-128px)]",
-                  isNewThread
-                    ? "max-w-[min(52rem,calc(100vw-2rem))]"
-                    : "max-w-[min(68rem,calc(100vw-2rem))]",
-                  todoPanelContentOffsetClass,
-                )}
-              >
-                {isNewThread && (
-                  <div
-                    className={cn(
-                      "mx-auto mb-9 w-full max-w-(--container-width-sm)",
-                    )}
-                  >
-                    <Welcome
-                      collaborationPolicy={
-                        chatContext.collaborationPolicy ?? "single"
-                      }
-                    />
-                  </div>
-                )}
-                {mountedRef.current ? (
-                  <InputBox
-                    className="bg-background/5 w-full"
-                    isNewThread={isNewThread}
-                    initialWorkModeId={searchParams.get("workModeId") ?? "office"}
-                    threadId={threadId}
-                    autoFocus={isNewThread}
-                    status={
-                      thread.error
-                        ? "error"
-                        : thread.isLoading
-                          ? "streaming"
-                          : "ready"
-                    }
-                    context={chatContext}
-                    disabled={isUploading}
-                    onContextChange={(context) =>
-                      setSettings("context", context)
-                    }
-                    onSubmit={handleSubmit}
-                    onStop={handleStop}
-                    pendingQueue={pendingQueue.map((entry) => ({
-                      id: entry.id,
-                      text: entry.message.text,
-                      createdAt: entry.createdAt,
-                    }))}
-                    onSteerPending={steerPending}
-                    onRemovePending={removePending}
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className={cn(
-                      "bg-background/5 h-32 w-full -translate-y-4 rounded-2xl",
-                    )}
-                  />
-                )}
+          <WorkspaceHeaderPortal slot="title">
+            <ThreadTitle
+              className="max-w-full"
+              threadId={threadId}
+              thread={thread}
+            />
+          </WorkspaceHeaderPortal>
+          <WorkspaceHeaderPortal slot="actions">
+            <ArtifactTrigger />
+          </WorkspaceHeaderPortal>
+          <div className="relative flex size-full min-h-0 justify-between">
+            <main className="flex min-h-0 max-w-full grow flex-col">
+              <div className="pointer-events-none absolute top-14 right-4 left-4 z-40 flex justify-end sm:right-6 sm:left-auto">
+                <TodoList
+                  className="pointer-events-auto"
+                  todos={thread.values.todos}
+                  onFloatingVisibilityChange={setTodoPanelOccupiesSpace}
+                  variant="floating"
+                />
               </div>
-            </div>
-          </main>
-        </div>
+              <div className="flex size-full justify-center transition-transform duration-200 ease-out">
+                <MessageList
+                  className={cn(
+                    "size-full transition-transform duration-200 ease-out",
+                    todoPanelContentOffsetClass,
+                  )}
+                  threadId={threadId}
+                  thread={thread}
+                  paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
+                  hasMoreHistory={hasMoreHistory}
+                  loadMoreHistory={loadMoreHistory}
+                  isHistoryLoading={isHistoryLoading}
+                  approvalStore={approvalStore}
+                  onApprove={onApprove}
+                  onDeny={onDeny}
+                />
+              </div>
+              <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
+                <div
+                  className={cn(
+                    "relative w-full transition-transform duration-200 ease-out",
+                    isNewThread && "-translate-y-[calc(50vh-128px)]",
+                    isNewThread
+                      ? "max-w-[min(52rem,calc(100vw-2rem))]"
+                      : "max-w-[min(68rem,calc(100vw-2rem))]",
+                    todoPanelContentOffsetClass,
+                  )}
+                >
+                  {isNewThread && (
+                    <div
+                      className={cn(
+                        "mx-auto mb-9 w-full max-w-(--container-width-sm)",
+                      )}
+                    >
+                      <Welcome
+                        collaborationPolicy={
+                          chatContext.collaborationPolicy ?? "single"
+                        }
+                      />
+                    </div>
+                  )}
+                  {mountedRef.current ? (
+                    <InputBox
+                      className="bg-background/5 w-full"
+                      isNewThread={isNewThread}
+                      initialWorkModeId={
+                        searchParams.get("workModeId") ?? "office"
+                      }
+                      threadId={threadId}
+                      autoFocus={isNewThread}
+                      status={
+                        thread.error
+                          ? "error"
+                          : thread.isLoading
+                            ? "streaming"
+                            : "ready"
+                      }
+                      context={chatContext}
+                      disabled={isUploading}
+                      onContextChange={(context) =>
+                        setSettings("context", context)
+                      }
+                      onSubmit={handleSubmit}
+                      onStop={handleStop}
+                      pendingQueue={pendingQueue.map((entry) => ({
+                        id: entry.id,
+                        text: entry.message.text,
+                        createdAt: entry.createdAt,
+                      }))}
+                      onSteerPending={steerPending}
+                      onRemovePending={removePending}
+                    />
+                  ) : (
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        "bg-background/5 h-32 w-full -translate-y-4 rounded-2xl",
+                      )}
+                    />
+                  )}
+                </div>
+              </div>
+            </main>
+          </div>
         </ChatBox>
       </ThreadContext.Provider>
     </PromptInputProvider>

@@ -5,11 +5,13 @@ import { useWorkModes } from "@/core/skills/hooks";
 import type { AgentThreadState } from "@/core/threads";
 import type { BaseStream } from "@/core/threads/qiongqi-types";
 import { displayTitleOfThread, textOfMessage } from "@/core/threads/utils";
+import { cn } from "@/lib/utils";
 
 import { useThreadChat } from "./chats";
 import { FlipDisplay } from "./flip-display";
 
 export function ThreadTitle({
+  className,
   threadId,
   thread,
 }: {
@@ -27,13 +29,16 @@ export function ThreadTitle({
     t.pages.untitled,
   );
   const displayTitle = title
-    ? displayTitleOfThread({
-        values: {
-          ...thread.values,
-          title,
+    ? displayTitleOfThread(
+        {
+          values: {
+            ...thread.values,
+            title,
+          },
+          context: { workModeId: thread.values.workModeId },
         },
-        context: { workModeId: thread.values.workModeId },
-      }, workModes)
+        workModes,
+      )
     : null;
 
   useEffect(() => {
@@ -62,8 +67,13 @@ export function ThreadTitle({
     return null;
   }
   return (
-    <FlipDisplay uniqueKey={threadId}>
-      {displayTitle}
+    <FlipDisplay
+      className={cn("text-foreground min-w-0 text-sm font-medium", className)}
+      uniqueKey={threadId}
+    >
+      <span className="block truncate" title={displayTitle}>
+        {displayTitle}
+      </span>
     </FlipDisplay>
   );
 }
@@ -75,7 +85,10 @@ function titleForDisplay(
   localizedUntitled: string,
 ): string | null {
   const trimmed = title?.trim() ?? "";
-  if (trimmed && !isPlaceholderTitle(trimmed, localizedNewChat, localizedUntitled)) {
+  if (
+    trimmed &&
+    !isPlaceholderTitle(trimmed, localizedNewChat, localizedUntitled)
+  ) {
     return trimmed;
   }
   return titleFromFirstUserMessage(messages);
