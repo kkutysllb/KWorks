@@ -231,7 +231,10 @@ export class SkillPluginHost {
       effectiveSkillIds ?? []
     )
     const remainingBudget = Math.max(0, this.options.instructionBudgetBytes - (catalog?.bytes ?? 0))
-    const injection = buildInjection(active, remainingBudget)
+    const injection = buildInjection(active, remainingBudget, {
+      workspace: input.workspace,
+      loadedSkills: this.plugins
+    })
     this.lastActivations = active.map(({ skill, reason, score }) => ({ skillId: skill.id, reason, score }))
     // NOTE: We intentionally do NOT return `allowedToolNames` here. A skill's
     // `tools.allowed` declares which built-in tools the skill *itself* needs
@@ -498,24 +501,29 @@ function errorMessage(error: unknown): string {
 
 function buildInjection(
   active: Array<SkillActivation & { skill: LoadedSkillPlugin }>,
-  budgetBytes: number
+  budgetBytes: number,
+  context: { workspace?: string; loadedSkills: readonly LoadedSkillPlugin[] }
 ): { activeSkillIds: string[]; instructions: string[]; allowedToolNames?: string[]; injectedBytes: number } {
   const instructions: string[] = []
   const activeSkillIds: string[] = []
   const allowed = new Set<string>()
   let injectedBytes = 0
+  const pathMappings = legacySkillPathMappings(context.loadedSkills)
   for (const match of active) {
     const skill = match.skill
+    const runtimePathNote = runtimePathMappingNote(skill, context.workspace)
+    const entry = rewriteLegacySandboxPaths(skill.entry, pathMappings, context.workspace)
     const text = [
       `Active Skill: ${skill.manifest.name} (${skill.id})`,
       `Activation: ${match.reason}`,
       `Skill package root: ${skill.root}`,
       `Skill entry file: ${skill.entryPath}`,
       'Resolve relative skill resource paths from this skill package root. Do not guess or search for this skill under the user workspace, project directory, or other home-directory paths.',
+      runtimePathNote,
       skill.manifest.description ? `Description: ${skill.manifest.description}` : '',
       skill.manifest.tools.allowed.length ? `Allowed tools: ${skill.manifest.tools.allowed.join(', ')}` : '',
       skill.assets.length ? `Assets:\n${skill.assets.map((a) => `- ${a}`).join('\n')}` : '',
-      skill.entry
+      entry
     ].filter(Boolean).join('\n\n')
     const bytes = Buffer.byteLength(text, 'utf8')
     if (injectedBytes + bytes > budgetBytes) continue
@@ -586,6 +594,59 @@ function uniqueStrings(values: readonly string[]): string[] {
 
 function emptyResolution(): SkillTurnResolution {
   return { activeSkillIds: [], activations: [], instructions: [], injectedBytes: 0 }
+}
+
+function legacySkillPathMappings(skills: readonly Pick<LoadedSkillPlugin, 'id' | 'root'>[]): Array<{ from: string; to: string }> {
+  const mappings: Array<{ from: string; to: string }> = []
+  for (const skill of skills) {
+    for (const prefix of [
+      '/mnt/skills/public',
+      '/mnt/skills/user',
+      '/mnt/skills/custom/shared',
+      '/mnt/skills/builtin/task',
+      '/mnt/skills/builtin/core',
+      '/mnt/skills/builtin/coding',
+      '/mnt/skills/builtin/finance'
+    ]) {
+      mappings.push({ from: `${prefix}/${skill.id}`, to: skill.root })
+    }
+  }
+  return mappings
+}
+
+function rewriteLegacySandboxPaths(
+  text: string,
+  skillMappings: readonly { from: string; to: string }[],
+  workspace?: string
+): string {
+  let out = text
+  for (const mapping of skillMappings) {
+    out = replaceAllLiteral(out, mapping.from, mapping.to)
+  }
+  const workspaceRoot = workspace?.trim()
+  if (workspaceRoot) {
+    out = replaceAllLiteral(out, '/mnt/user-data/workspace', workspaceRoot)
+    out = replaceAllLiteral(out, '/mnt/user-data/outputs', join(workspaceRoot, 'outputs'))
+  }
+  return out
+}
+
+function runtimePathMappingNote(skill: Pick<LoadedSkillPlugin, 'id' | 'root'>, workspace?: string): string {
+  const lines = [
+    'Runtime path mapping:',
+    `- Legacy sandbox skill paths for this skill resolve to this Skill package root: ${skill.root}.`,
+    '- If this skill references another loaded skill, use that loaded skill package root from the rewritten instructions.',
+    '- Legacy sandbox upload paths are not mounted in KWorks; use the attachment file paths supplied with the current turn.'
+  ]
+  const workspaceRoot = workspace?.trim()
+  if (workspaceRoot) {
+    lines.splice(3, 0, `- Legacy sandbox workspace paths resolve to: ${workspaceRoot}.`, `- Legacy sandbox output paths resolve to: ${join(workspaceRoot, 'outputs')}.`)
+  }
+  return lines.join('\n')
+}
+
+function replaceAllLiteral(text: string, needle: string, replacement: string): string {
+  return text.split(needle).join(replacement)
 }
 
 function safePattern(pattern: string): RegExp {

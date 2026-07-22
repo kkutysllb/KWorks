@@ -43,7 +43,23 @@ beforeAll(async () => {
       autoActivate: false
     }
   }))
-  await writeFile(join(root, 'comic', 'SKILL.md'), '# Comic\nCreate knowledge comics.')
+  await writeFile(join(root, 'comic', 'SKILL.md'), [
+    '# Comic',
+    'Create knowledge comics.',
+    'Use image generation:',
+    'python /mnt/skills/public/image-generation/scripts/generate.py --prompt-file /mnt/user-data/workspace/comic/prompt.json --output-file /mnt/user-data/outputs/comic/page.png'
+  ].join('\n'))
+  await mkdir(join(root, 'image-generation'), { recursive: true })
+  await writeFile(join(root, 'image-generation', 'skill.json'), JSON.stringify({
+    specVersion: '1.0',
+    id: 'image-generation',
+    name: 'Image Generation',
+    activation: { commands: ['/image'], autoActivate: false }
+  }))
+  await writeFile(join(root, 'image-generation', 'SKILL.md'), [
+    '# Image Generation',
+    'python /mnt/skills/public/image-generation/scripts/generate.py --prompt-file /mnt/user-data/workspace/prompt.json --output-file /mnt/user-data/outputs/out.png'
+  ].join('\n'))
   await mkdir(join(root, 'badpattern'), { recursive: true })
   await writeFile(join(root, 'badpattern', 'skill.json'), JSON.stringify({
     specVersion: '1.0',
@@ -62,7 +78,7 @@ describe('SkillPluginHost.create', () => {
   it('discovers v1, legacy skill.json, and legacy SKILL.md', async () => {
     const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
     const ids = host.diagnostics().skills.map((s) => s.id).sort()
-    expect(ids).toEqual(['badpattern', 'kk-comic', 'legacy', 'mdonly', 'tdd'])
+    expect(ids).toEqual(['badpattern', 'image-generation', 'kk-comic', 'legacy', 'mdonly', 'tdd'])
   })
 
   it('marks v1 as non-legacy and migrated ones as legacy', async () => {
@@ -119,6 +135,35 @@ describe('SkillPluginHost.resolveTurn', () => {
     expect(joined).toContain(`Skill package root: ${join(root, 'tdd')}`)
     expect(joined).toContain(`Skill entry file: ${join(root, 'tdd', 'SKILL.md')}`)
     expect(joined).toContain('Resolve relative skill resource paths from this skill package root')
+  })
+
+  it('rewrites legacy sandbox paths in active skill instructions', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+    const res = host.resolveTurn({ prompt: '/image generate', workspace: '/workspace/project' })
+
+    const joined = res.instructions.join('\n')
+    expect(joined).toContain(`${join(root, 'image-generation')}/scripts/generate.py`)
+    expect(joined).toContain('/workspace/project/prompt.json')
+    expect(joined).toContain('/workspace/project/outputs/out.png')
+    expect(joined).not.toContain('/mnt/skills/public/image-generation')
+    expect(joined).not.toContain('/mnt/user-data/workspace')
+    expect(joined).not.toContain('/mnt/user-data/outputs')
+  })
+
+  it('rewrites legacy paths to other loaded skill roots', async () => {
+    const host = await SkillPluginHost.create(cfg({ roots: [root] }), {})
+    const res = host.resolveTurn({
+      prompt: '请把上传文档做成科技风格的技术普及漫画，最多 9 张。',
+      workspace: '/workspace/project',
+      effectiveSkillIds: ['kk-comic']
+    })
+
+    const joined = res.instructions.join('\n')
+    expect(joined).toContain(`${join(root, 'image-generation')}/scripts/generate.py`)
+    expect(joined).toContain('/workspace/project/comic/prompt.json')
+    expect(joined).toContain('/workspace/project/outputs/comic/page.png')
+    expect(joined).toContain('Legacy sandbox upload paths are not mounted in KWorks')
+    expect(joined).not.toContain('/mnt/skills/public/image-generation')
   })
 
   it('respects enabledSkills=false to exclude a skill', async () => {

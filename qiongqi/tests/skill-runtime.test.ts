@@ -99,7 +99,7 @@ describe('SkillRuntime', () => {
       name: 'Small',
       triggers: { fileTypes: ['.ts'] }
     }, 'small instructions')
-    const runtime = await createRuntime({ instructionBudgetBytes: 600 })
+    const runtime = await createRuntime({ instructionBudgetBytes: 1_200 })
 
     const resolution = runtime.resolveTurn({
       prompt: 'Please handle TypeScript in src/app.ts',
@@ -109,6 +109,31 @@ describe('SkillRuntime', () => {
     expect(resolution.activations.map((activation) => activation.skillId)).toEqual(['big', 'small'])
     expect(resolution.activeSkillIds).toEqual(['small'])
     expect(resolution.instructions[0]).toContain('small instructions')
+  })
+
+  it('rewrites legacy sandbox paths in injected instructions', async () => {
+    await writeSkill('image-generation', {
+      id: 'image-generation',
+      name: 'Image Generation',
+      triggers: { commands: ['/image'] }
+    }, [
+      '# Image Generation',
+      'python /mnt/skills/public/image-generation/scripts/generate.py --prompt-file /mnt/user-data/workspace/prompt.json --output-file /mnt/user-data/outputs/out.png'
+    ].join('\n'))
+    const runtime = await createRuntime()
+
+    const resolution = runtime.resolveTurn({
+      prompt: '/image generate',
+      workspace: '/workspace/project'
+    })
+
+    const joined = resolution.instructions.join('\n')
+    expect(joined).toContain(`${join(root, 'image-generation')}/scripts/generate.py`)
+    expect(joined).toContain('/workspace/project/prompt.json')
+    expect(joined).toContain('/workspace/project/outputs/out.png')
+    expect(joined).not.toContain('/mnt/skills/public/image-generation')
+    expect(joined).not.toContain('/mnt/user-data/workspace')
+    expect(joined).not.toContain('/mnt/user-data/outputs')
   })
 
   it('injects allowed tool constraints and blocks omitted tools', async () => {
