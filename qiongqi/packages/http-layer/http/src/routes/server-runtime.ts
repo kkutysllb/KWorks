@@ -25,6 +25,9 @@ import type { ReviewTarget } from '@qiongqi/contracts'
 import type { AuthService } from '../auth-service.js'
 import type { QiongqiConfig } from '@qiongqi/contracts'
 import type { KWorksUserDataStore } from '../kworks-user-data-store.js'
+import type { PeerRegistry } from '@qiongqi/delegation'
+import type { EventedV2MultiAgentRuntime, EventedV2OutboxReconciler, EventedV2RemoteAgentScheduler, EventedV2RemoteAgentWorker, EventedV2RolloutController } from '@qiongqi/loop'
+import type { EventedV2WorkerRegistryStore } from '@qiongqi/ports'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -75,6 +78,13 @@ export type ServerRuntime = {
   memoryStore?: MemoryStore
   authService?: AuthService
   kworksUserDataStore?: KWorksUserDataStore
+  peerRegistry?: PeerRegistry
+  multiAgentRuntime?: EventedV2MultiAgentRuntime
+  multiAgentOutboxReconciler?: EventedV2OutboxReconciler
+  multiAgentWorkerRegistry?: EventedV2WorkerRegistryStore
+  multiAgentRemoteWorker?: EventedV2RemoteAgentWorker
+  multiAgentRemoteScheduler?: EventedV2RemoteAgentScheduler
+  eventedV2Rollout?: EventedV2RolloutController
   runTurn(threadId: string, turnId: string): Promise<'completed' | 'failed' | 'aborted'> | void
   cancelA2ATaskTurn?(input: { threadId: string; turnId: string }): Promise<void> | void
   runReview?(input: {
