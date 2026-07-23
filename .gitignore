@@ -166,8 +166,11 @@ findings.md
 progress.md
 task_plan.md
 desktop-tauri/
-docs/superpowers/
+# AI superpowers artifacts (planning/spec docs and session caches)
+superpowers/
 .superpowers/
+docs/superpowers/
 .qiongqi-data/
 .ruff_cache/
 .workbuddy/*
+.zcode/
